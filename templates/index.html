@@ -78,30 +78,10 @@
             </div>
         </div>
 
-        <!-- ═══ TABS DE FUENTE DE DATOS ══════════════════════════════════ -->
-        <ul class="nav nav-tabs mb-0" id="sourceTabs" role="tablist">
-            <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="tab-zk-btn"
-                    data-bs-toggle="tab" data-bs-target="#panel-zk"
-                    type="button" role="tab">
-                    Dispositivo Biométrico ZK
-                </button>
-            </li>
-            <li class="nav-item" role="presentation">
-                <button class="nav-link" id="tab-file-btn"
-                    data-bs-toggle="tab" data-bs-target="#panel-file"
-                    type="button" role="tab">
-                    Subir archivo .xlsx
-                </button>
-            </li>
-        </ul>
+        <!-- ═══ DISPOSITIVO BIOMÉTRICO ZK ════════════════════════════════ -->
+        <div class="tab-panel-content">
 
-        <div class="tab-content tab-panel-content" id="sourceTabContent">
-
-            <!-- ─── PANEL ZK ─────────────────────────────────────────── -->
-            <div class="tab-pane fade show active" id="panel-zk" role="tabpanel">
-
-                <!-- Tarjeta de estado del dispositivo -->
+            <!-- Tarjeta de estado del dispositivo -->
                 <div class="status-card mb-4">
                     <div class="d-flex align-items-center gap-2 mb-2">
                         <span class="status-dot dot-gray" id="status-dot"></span>
@@ -179,30 +159,7 @@
                     </details>
                 </div>
 
-            </div><!-- /panel-zk -->
-
-            <!-- ─── PANEL ARCHIVO ────────────────────────────────────── -->
-            <div class="tab-pane fade" id="panel-file" role="tabpanel">
-
-                <div class="upload-area" id="drop-zone">
-                    <input type="file" id="file-input" style="display:none"
-                           accept=".xlsx,.csv">
-                    <div class="upload-icon">📄</div>
-                    <h5 class="fw-bold text-slate-700">Arrastre su archivo aquí o haga clic</h5>
-                    <p class="text-muted mb-0">
-                        Se aceptan archivos .xlsx y .csv de control biométrico
-                    </p>
-                </div>
-
-                <div id="file-info">
-                    <span id="file-name"></span>
-                    <button type="button" class="btn btn-sm btn-outline-danger ms-3"
-                            id="btn-remove-file">Cambiar archivo</button>
-                </div>
-
-            </div><!-- /panel-file -->
-
-        </div><!-- /tab-content -->
+        </div><!-- /zk -->
 
         <!-- ═══ FORMULARIO DE REPORTE (COMPARTIDO) ═══════════════════════ -->
         <div id="report-form">
@@ -285,10 +242,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 // ESTADO GLOBAL
 // ══════════════════════════════════════════════════════════════════════════
-let currentSource       = 'zk';   // 'zk' | 'file'
-let currentFileId       = null;
-let currentOriginalName = null;
-let syncJobInterval     = null;
+let syncJobInterval = null;
 
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -308,14 +262,6 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchEstadoHorarios();
 });
 
-// Tracking de tab activo
-document.getElementById('tab-zk-btn').addEventListener('shown.bs.tab', () => {
-    currentSource = 'zk';
-});
-document.getElementById('tab-file-btn').addEventListener('shown.bs.tab', () => {
-    currentSource = 'file';
-});
-
 // Cambio de modo
 document.getElementById('modo').addEventListener('change', function () {
     const isPersona = this.value === 'persona';
@@ -323,12 +269,10 @@ document.getElementById('modo').addEventListener('change', function () {
     if (isPersona) loadPersonas();
 });
 
-// Recargar personas al cambiar fechas ZK (si modo es "persona")
+// Recargar personas al cambiar fechas (si modo es "persona")
 ['zk-fecha-inicio', 'zk-fecha-fin'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
-        if (document.getElementById('modo').value === 'persona' && currentSource === 'zk') {
-            loadPersonas();
-        }
+        if (document.getElementById('modo').value === 'persona') loadPersonas();
     });
 });
 
@@ -475,15 +419,12 @@ function resetSyncUI() {
 // SELECTOR DE PERSONAS
 // ══════════════════════════════════════════════════════════════════════════
 function loadPersonas() {
-    if (currentSource === 'zk') {
-        const fi = document.getElementById('zk-fecha-inicio').value;
-        const ff = document.getElementById('zk-fecha-fin').value;
-        if (!fi || !ff) return;
-        fetch('/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
-            .then(r => r.json())
-            .then(data => populatePersonaSelect(data.personas || []));
-    }
-    // Para fuente 'file' las personas ya se cargaron en /subir
+    const fi = document.getElementById('zk-fecha-inicio').value;
+    const ff = document.getElementById('zk-fecha-fin').value;
+    if (!fi || !ff) return;
+    fetch('/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
+        .then(r => r.json())
+        .then(data => populatePersonaSelect(data.personas || []));
 }
 
 function populatePersonaSelect(personas) {
@@ -502,29 +443,22 @@ function populatePersonaSelect(personas) {
 // GENERACIÓN DE REPORTE
 // ══════════════════════════════════════════════════════════════════════════
 function generarReporte() {
-    if (currentSource === 'zk') {
-        const fi = document.getElementById('zk-fecha-inicio').value;
-        const ff = document.getElementById('zk-fecha-fin').value;
-        if (!fi || !ff) {
-            showError('Seleccione el rango de fechas en la pestaña del dispositivo.');
-            return;
-        }
-        _ejecutarGenerar(true, fi, ff);
-    } else {
-        if (!currentFileId) {
-            showError('Primero suba un archivo en la pestaña "Subir archivo .xlsx".');
-            return;
-        }
-        _ejecutarGenerar(false);
+    const fi = document.getElementById('zk-fecha-inicio').value;
+    const ff = document.getElementById('zk-fecha-fin').value;
+    if (!fi || !ff) {
+        showError('Seleccione el rango de fechas antes de generar el reporte.');
+        return;
     }
-}
 
-function _ejecutarGenerar(fromDB, fechaInicio, fechaFin) {
-    const modo     = document.getElementById('modo').value;
-    const persona  = document.getElementById('persona').value;
+    const modo    = document.getElementById('modo').value;
+    const persona = document.getElementById('persona').value;
     const excluidos = document.getElementById('excluidos').value
         .split(',').map(s => s.trim()).filter(Boolean);
-    const config = {
+    const body = {
+        fecha_inicio:    fi,
+        fecha_fin:       ff,
+        modo,
+        persona,
         tardanza_leve:    document.getElementById('tardanza_leve').value,
         tardanza_severa:  document.getElementById('tardanza_severa').value,
         max_almuerzo_min: document.getElementById('max_almuerzo_min').value,
@@ -536,16 +470,7 @@ function _ejecutarGenerar(fromDB, fechaInicio, fechaFin) {
     document.getElementById('error-alert').style.display     = 'none';
     document.getElementById('success-alert').style.display   = 'none';
 
-    let url, body;
-    if (fromDB) {
-        url  = '/generar-desde-db';
-        body = { fecha_inicio: fechaInicio, fecha_fin: fechaFin, modo, persona, ...config };
-    } else {
-        url  = '/generar';
-        body = { file_id: currentFileId, original_name: currentOriginalName, modo, persona, ...config };
-    }
-
-    fetch(url, {
+    fetch('/generar-desde-db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -570,67 +495,6 @@ function _ejecutarGenerar(fromDB, fechaInicio, fechaFin) {
         document.getElementById('btn-submit').style.display      = 'block';
         document.getElementById('loading-spinner').style.display = 'none';
     });
-}
-
-
-// ══════════════════════════════════════════════════════════════════════════
-// SUBIDA DE ARCHIVO
-// ══════════════════════════════════════════════════════════════════════════
-const dropZone  = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
-
-['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev =>
-    dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); })
-);
-['dragenter', 'dragover'].forEach(ev =>
-    dropZone.addEventListener(ev, () => dropZone.classList.add('dragover'))
-);
-['dragleave', 'drop'].forEach(ev =>
-    dropZone.addEventListener(ev, () => dropZone.classList.remove('dragover'))
-);
-
-dropZone.addEventListener('drop',  e => handleFiles(e.dataTransfer.files));
-dropZone.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', function () { handleFiles(this.files); });
-document.getElementById('btn-remove-file').addEventListener('click', resetUpload);
-
-function handleFiles(files) {
-    if (!files.length) return;
-    const file = files[0];
-    const ext  = file.name.split('.').pop().toLowerCase();
-    if (!['xlsx', 'csv'].includes(ext)) {
-        showError('Por favor seleccione un archivo .xlsx o .csv válido');
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append('archivo', file);
-
-    dropZone.style.display = 'none';
-    document.getElementById('file-info').style.display = 'block';
-    document.getElementById('file-name').textContent   = '⏳ Subiendo: ' + file.name + '...';
-
-    fetch('/subir', { method: 'POST', body: formData })
-        .then(r => r.json())
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-            currentFileId       = data.file_id;
-            currentOriginalName = data.original_name;
-            document.getElementById('file-name').innerHTML =
-                '✅ <b>' + data.original_name + '</b> cargado correctamente.';
-            populatePersonaSelect(data.personas);
-        })
-        .catch(err => {
-            showError('Error al subir: ' + err.message);
-            resetUpload();
-        });
-}
-
-function resetUpload() {
-    fileInput.value = '';
-    currentFileId   = null;
-    document.getElementById('drop-zone').style.display  = 'block';
-    document.getElementById('file-info').style.display  = 'none';
 }
 
 

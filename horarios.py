@@ -121,26 +121,34 @@ def _expandir_celdas(celdas, teletype) -> list:
     """
     Extrae los valores de una fila ODS, expandiendo celdas repetidas
     (table:number-columns-repeated) y tipando los valores correctamente.
+
+    Usa celda.attributes (dict con claves (namespace, localname)) en lugar
+    de getAttribute() para compatibilidad con odfpy 1.4.x.
     """
     from odf.namespaces import OFFICENS, TABLENS
 
+    K_REP    = (TABLENS,  "number-columns-repeated")
+    K_TYPE   = (OFFICENS, "value-type")
+    K_TIME   = (OFFICENS, "time-value")
+    K_BOOL   = (OFFICENS, "boolean-value")
+    K_FLOAT  = (OFFICENS, "value")
+
     valores = []
     for celda in celdas:
-        rep          = celda.getAttribute((TABLENS, "number-columns-repeated"))
+        attrs        = celda.attributes
+        rep          = attrs.get(K_REP)
         repeticiones = int(rep) if rep else 1
 
-        tipo_val = celda.getAttribute((OFFICENS, "value-type"))
+        tipo_val = attrs.get(K_TYPE)
 
         if tipo_val == "time":
-            # Duración ISO 8601: "PT07H00M00S" → "07:00"
-            raw   = celda.getAttribute((OFFICENS, "time-value"))
+            raw   = attrs.get(K_TIME)
             valor = _iso_duration_to_hhmm(raw)
         elif tipo_val == "boolean":
-            raw   = celda.getAttribute((OFFICENS, "boolean-value"))
+            raw   = attrs.get(K_BOOL)
             valor = "TRUE" if raw == "true" else "FALSE"
         elif tipo_val == "float":
-            # Valores numéricos (p. ej. el ID)
-            raw   = celda.getAttribute((OFFICENS, "value"))
+            raw   = attrs.get(K_FLOAT)
             valor = raw  # string del número
         else:
             texto = teletype.extractText(celda).strip()

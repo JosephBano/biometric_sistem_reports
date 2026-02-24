@@ -6,7 +6,7 @@ from datetime import datetime, date
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from script import (
-    cargar_archivo, DEFAULT_CONFIG, filtrar_excluidos, deduplicar,
+    DEFAULT_CONFIG, filtrar_excluidos, deduplicar,
     analizar_dia, analizar_por_persona, generar_pdf, generar_pdf_persona,
 )
 from collections import defaultdict
@@ -51,9 +51,6 @@ threading.Thread(target=_cleanup_temp_files, daemon=True).start()
 # ══════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════
-
-ALLOWED_EXT = {".xlsx", ".csv"}
-
 
 def _parse_config(data: dict) -> dict:
     return {
@@ -133,69 +130,6 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
 @app.route('/')
 def index():
     return render_template('index.html')
-
-
-@app.route('/subir', methods=['POST'])
-def subir_archivo():
-    if 'archivo' not in request.files:
-        return jsonify({'error': 'No se envió ningún archivo'}), 400
-
-    file = request.files['archivo']
-    if file.filename == '':
-        return jsonify({'error': 'Archivo no seleccionado'}), 400
-
-    ext = os.path.splitext(file.filename)[1].lower()
-    if ext not in ALLOWED_EXT:
-        return jsonify({'error': 'Formato no soportado. Usa .xlsx o .csv'}), 400
-
-    filename  = secure_filename(file.filename)
-    save_name = f"{uuid.uuid4().hex}_{filename}"
-    filepath  = os.path.join(app.config['UPLOAD_FOLDER'], save_name)
-    file.save(filepath)
-
-    try:
-        registros = cargar_archivo(filepath)
-        nombres   = sorted(set(r["nombre"] for r in registros))
-        return jsonify({
-            'success':       True,
-            'file_id':       save_name,
-            'original_name': file.filename,
-            'personas':      nombres,
-        })
-    except Exception as e:
-        if os.path.exists(filepath):
-            os.remove(filepath)
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/generar', methods=['POST'])
-def generar_reporte():
-    data    = request.json
-    file_id = data.get('file_id')
-    modo    = data.get('modo', 'general')
-    persona = data.get('persona', '')
-    config  = _parse_config(data)
-
-    filepath = os.path.join(app.config['UPLOAD_FOLDER'], file_id)
-    if not os.path.exists(filepath):
-        return jsonify({'error': 'Archivo expiró o no existe. Vuelve a subirlo.'}), 400
-
-    try:
-        registros    = cargar_archivo(filepath)
-        pdf_filename = f"reporte_{uuid.uuid4().hex[:8]}.pdf"
-        pdf_path     = os.path.join(app.config['REPORTS_FOLDER'], pdf_filename)
-
-        _build_pdf(registros, config, modo, persona, pdf_path,
-                   data.get('original_name', 'archivo'))
-
-        label = 'Persona' if modo == 'persona' else 'General'
-        return jsonify({
-            'success':      True,
-            'download_url': f'/descargar/{pdf_filename}',
-            'filename':     f'Reporte_Biometrico_{label}.pdf',
-        })
-    except (ValueError, Exception) as e:
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/descargar/<filename>')
