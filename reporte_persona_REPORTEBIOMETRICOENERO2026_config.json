@@ -1,0 +1,7 @@
+{
+  "tardanza_leve": "08:00",
+  "tardanza_severa": "08:05",
+  "max_almuerzo_min": 60,
+  "duplicado_min": 10,
+  "excluidos": []
+}
