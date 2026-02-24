@@ -1,0 +1,81 @@
+body {
+    background-color: #f8f9fa;
+    font-family: 'Inter', sans-serif;
+    color: #333;
+}
+.container-main {
+    max-width: 800px;
+    margin: 40px auto;
+}
+.header-bg {
+    background: linear-gradient(135deg, #1a3a5c 0%, #2e6da4 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px 12px 0 0;
+    text-align: center;
+}
+.card-body {
+    background: white;
+    padding: 40px;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+}
+.upload-area {
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    background-color: #f8fafc;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-bottom: 25px;
+}
+.upload-area:hover, .upload-area.dragover {
+    border-color: #2e6da4;
+    background-color: #eff6ff;
+}
+.upload-icon {
+    font-size: 3rem;
+    color: #64748b;
+    margin-bottom: 15px;
+}
+.form-label {
+    font-weight: 600;
+    color: #475569;
+}
+.btn-primary {
+    background-color: #2e6da4;
+    border-color: #2e6da4;
+    padding: 12px 24px;
+    font-weight: 600;
+}
+.btn-primary:hover {
+    background-color: #1a3a5c;
+    border-color: #1a3a5c;
+}
+.config-panel {
+    background-color: #f1f5f9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 15px;
+}
+#file-info {
+    display: none;
+    margin-bottom: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    background-color: #e2e8f0;
+    text-align: center;
+    font-weight: 500;
+}
+#persona-group {
+    display: none;
+}
+.spinner-container {
+    display: none;
+    text-align: center;
+    padding: 20px;
+}
+.alert {
+    display: none;
+}
