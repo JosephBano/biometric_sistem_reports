@@ -1,3 +1,13 @@
+# Generación de PDF
 reportlab
 openpyxl
+
+# Servidor web
 Flask
+gunicorn
+
+# Dispositivo ZK
+pyzk
+
+# Scheduler para sync automático
+schedule

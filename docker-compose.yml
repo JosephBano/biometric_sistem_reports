@@ -1,0 +1,30 @@
+services:
+  rrhh-app:
+    build: .
+    container_name: rrhh-biometrico
+    env_file:
+      - .env
+    volumes:
+      # Volume nombrado: persiste la DB SQLite, uploads y reports
+      # entre reinicios, actualizaciones de imagen y docker compose down
+      - db_data:/data
+    restart: unless-stopped
+
+    # network_mode: host da al contenedor acceso directo a la red del host.
+    # Necesario para alcanzar el dispositivo ZK en ip_device:port_device.
+    # Solo funciona en Linux. Si usas Mac/Windows, comenta esta línea
+    # y descomenta el bloque 'ports' debajo.
+    network_mode: host
+
+    # Usar este bloque SOLO si NO se usa network_mode: host
+    # (Mac, Windows, o si se prefiere red bridge en Linux)
+    # ports:
+    #   - "5000:5000"
+    # extra_hosts:
+    #   - "zk-device:ip_device"
+
+volumes:
+  db_data:
+    # Volume nombrado gestionado por Docker.
+    # Para hacer backup: docker cp rrhh-biometrico:/data/asistencias.db ./backup.db
+    # Para ver la ruta física: docker volume inspect rrhh-biometrico_db_data

@@ -14,3 +14,12 @@ htmlcov/
 # Excel and PDFs
 *.xlsx
 *.pdf
+
+# Variables de entorno (credenciales)
+.env
+
+# Base de datos y datos en runtime
+*.db
+data/
+uploads/
+reports/
