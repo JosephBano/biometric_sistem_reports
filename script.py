@@ -22,10 +22,7 @@ import os
 import sys
 import csv
 import json
-import shutil
 import argparse
-import subprocess
-import tempfile
 from datetime import datetime, timedelta
 from collections import defaultdict
 
@@ -83,61 +80,17 @@ COLOR_MUTED      = colors.HexColor("#6c757d")   # Texto gris
 
 def cargar_archivo(ruta: str) -> list[dict]:
     """
-    Lee un archivo .xls, .xlsx o .csv y devuelve una lista de registros.
+    Lee un archivo .xlsx o .csv y devuelve una lista de registros.
     Cada registro es un dict con: nombre, fecha, hora, tipo_marcacion.
     """
     ext = os.path.splitext(ruta)[1].lower()
 
     if ext == ".csv":
         return _leer_csv(ruta)
-    elif ext in (".xls", ".xlsx"):
-        # Intentar con openpyxl primero (sólo funciona con .xlsx)
-        if ext == ".xlsx":
-            try:
-                return _leer_xlsx(ruta)
-            except Exception:
-                pass
-        # Para .xls convertir con LibreOffice
-        csv_tmp = _convertir_xls_a_csv(ruta)
-        registros = _leer_csv(csv_tmp)
-        os.unlink(csv_tmp)
-        return registros
+    elif ext == ".xlsx":
+        return _leer_xlsx(ruta)
     else:
-        raise ValueError(f"Formato no soportado: {ext}. Usa .xls, .xlsx o .csv")
-
-
-def _convertir_xls_a_csv(ruta_xls: str) -> str:
-    """Convierte .xls a .csv usando LibreOffice y devuelve la ruta del CSV."""
-    directorio_tmp = tempfile.mkdtemp()
-    try:
-        subprocess.run(
-            ["libreoffice", "--headless", "--convert-to", "csv",
-             ruta_xls, "--outdir", directorio_tmp],
-            check=True, capture_output=True
-        )
-    except FileNotFoundError:
-        raise RuntimeError(
-            "LibreOffice no está instalado. Instálalo con:\n"
-            "  sudo apt install libreoffice\n"
-            "O convierte el archivo a .xlsx manualmente."
-        )
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Error convirtiendo el archivo: {e.stderr.decode()}")
-
-    nombre_base = os.path.splitext(os.path.basename(ruta_xls))[0]
-    csv_path = os.path.join(directorio_tmp, nombre_base + ".csv")
-    if not os.path.exists(csv_path):
-        archivos = os.listdir(directorio_tmp)
-        if archivos:
-            csv_path = os.path.join(directorio_tmp, archivos[0])
-        else:
-            raise RuntimeError("No se generó el CSV desde el XLS.")
-
-    # Copiar a /tmp para que no se pierda al borrar el directorio
-    destino = tempfile.mktemp(suffix=".csv")
-    shutil.copy(csv_path, destino)
-    shutil.rmtree(directorio_tmp, ignore_errors=True)
-    return destino
+        raise ValueError(f"Formato no soportado: {ext}. Usa .xlsx o .csv")
 
 
 def _leer_csv(ruta: str) -> list[dict]:

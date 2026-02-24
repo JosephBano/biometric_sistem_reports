@@ -1,6 +1,6 @@
 # Sistema de Informes Biométricos — RRHH ISTPET
 
-Aplicación web para generar informes PDF de asistencia del personal a partir del sistema de control biométrico ZK. Permite obtener los datos directamente del dispositivo en red o mediante la carga manual de un archivo exportado `.xlsx`.
+Aplicación web para generar informes PDF de asistencia del personal a partir del sistema de control biométrico ZK. Obtiene los datos directamente del dispositivo en red o mediante la carga manual de un archivo exportado `.xlsx` / `.csv`.
 
 ---
 
@@ -12,10 +12,11 @@ Aplicación web para generar informes PDF de asistencia del personal a partir de
 4. [Instalación — modo producción (Docker)](#4-instalación--modo-producción-docker)
 5. [Configuración del archivo `.env`](#5-configuración-del-archivo-env)
 6. [Uso de la interfaz web](#6-uso-de-la-interfaz-web)
-7. [Uso por línea de comandos (script directo)](#7-uso-por-línea-de-comandos-script-directo)
-8. [Gestión y mantenimiento](#8-gestión-y-mantenimiento)
-9. [Referencia de la API](#9-referencia-de-la-api)
-10. [Solución de problemas](#10-solución-de-problemas)
+7. [Horarios personalizados por persona](#7-horarios-personalizados-por-persona)
+8. [Uso por línea de comandos (script directo)](#8-uso-por-línea-de-comandos-script-directo)
+9. [Gestión y mantenimiento](#9-gestión-y-mantenimiento)
+10. [Referencia de la API](#10-referencia-de-la-api)
+11. [Solución de problemas](#11-solución-de-problemas)
 
 ---
 
@@ -26,13 +27,9 @@ Aplicación web para generar informes PDF de asistencia del personal a partir de
 | Requisito | Versión mínima |
 |-----------|---------------|
 | Python | 3.12 |
-| LibreOffice | Cualquiera reciente (solo para archivos `.xls` binarios antiguos) |
 | Acceso a la red local donde está el dispositivo ZK | — |
 
-**Instalar LibreOffice en Ubuntu/Debian:**
-```bash
-sudo apt install libreoffice-calc
-```
+No se requiere ninguna dependencia externa del sistema operativo.
 
 ### Para modo producción (Docker)
 
@@ -60,6 +57,7 @@ script_informe_asistencia/
 ├── script.py               # Motor de análisis y generación de PDF
 ├── db.py                   # Capa de acceso a SQLite
 ├── sync.py                 # Conector al dispositivo ZK (pyzk)
+├── horarios.py             # Parser de horarios personalizados (.obd/.ods)
 │
 ├── templates/
 │   └── index.html          # Interfaz web de una sola página
@@ -81,17 +79,23 @@ script_informe_asistencia/
     └── reports/            # PDFs generados temporalmente (TTL: 15 min)
 ```
 
+**Tablas en la base de datos SQLite:**
+
+| Tabla | Contenido |
+|-------|-----------|
+| `asistencias` | Marcaciones del dispositivo ZK (Entrada/Salida por persona y fecha) |
+| `usuarios_zk` | Directorio de usuarios registrados en el dispositivo |
+| `sync_log` | Historial de sincronizaciones con el dispositivo |
+| `horarios_personal` | Horarios individuales por día de la semana (cargados desde `.obd`) |
+
 ---
 
 ## 3. Instalación — modo desarrollo (sin Docker)
-
-Este modo es para desarrollo local o para correr el sistema directamente en la máquina sin contenedor.
 
 ### Paso 1 — Clonar o descargar el proyecto
 
 ```bash
 cd /ruta/donde/quieras/instalar
-# Si usas git:
 git clone <url-del-repo> script_informe_asistencia
 cd script_informe_asistencia
 ```
@@ -117,12 +121,10 @@ cp .env.example .env
 
 Editar el archivo `.env` con los datos reales del dispositivo (ver [sección 5](#5-configuración-del-archivo-env)).
 
-> **Nota en modo desarrollo:** las rutas de datos (`DB_PATH`, `UPLOAD_FOLDER`, `REPORTS_FOLDER`) apuntan por defecto a `data/` dentro del directorio del proyecto. No es necesario cambiarlas para desarrollo local.
-
 ### Paso 5 — Iniciar el servidor
 
 ```bash
-# Con Flask en modo desarrollo (recomendado solo para desarrollo)
+# Con Flask en modo desarrollo (solo para desarrollo)
 python app.py
 
 # O con gunicorn (más cercano a producción)
@@ -152,11 +154,9 @@ docker compose up -d --build
 ```
 
 Este comando:
-- Construye la imagen Docker (descarga Python, instala LibreOffice y las dependencias)
+- Construye la imagen Docker (instala Python y las dependencias Python)
 - Crea el volumen `db_data` para persistencia de la base de datos
 - Inicia el contenedor en segundo plano
-
-> **Primera vez:** la construcción tarda varios minutos porque descarga e instala LibreOffice. Las veces siguientes es mucho más rápido gracias al cache de capas Docker.
 
 ### Paso 3 — Verificar que el contenedor está corriendo
 
@@ -169,9 +169,7 @@ La columna `Status` debe mostrar `Up`. El sistema queda disponible en `http://IP
 ### Actualizar a una nueva versión del código
 
 ```bash
-# Reconstruir la imagen con los cambios nuevos
 docker compose up -d --build
-
 # El volumen de datos NO se pierde en este proceso
 ```
 
@@ -226,11 +224,9 @@ FLASK_DEBUG=false          # Nunca true en producción
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
 
-Copiar el resultado y pegarlo como valor de `FLASK_SECRET_KEY`.
-
 ### Cómo encontrar la contraseña del dispositivo ZK
 
-La contraseña del dispositivo (`ZK_PASSWORD`) se configura en el menú del equipo físico, en `Menú → Opciones → Comunicación`. Si nunca se configuró, el valor predeterminado es `0`.
+La contraseña del dispositivo (`ZK_PASSWORD`) se configura en `Menú → Opciones → Comunicación` en la pantalla del equipo. Si nunca se configuró, el valor predeterminado es `0`.
 
 ---
 
@@ -238,13 +234,17 @@ La contraseña del dispositivo (`ZK_PASSWORD`) se configura en el menú del equi
 
 Abrir el navegador en `http://IP_SERVIDOR:5000`.
 
-### 6.1 Tab "Dispositivo Biométrico ZK"
+### 6.1 Horarios personalizados (card superior)
+
+Al abrir la página se muestra una card azul en la parte superior con el estado de los horarios individuales del personal. Ver [sección 7](#7-horarios-personalizados-por-persona) para el flujo completo.
+
+---
+
+### 6.2 Tab "Dispositivo Biométrico ZK"
 
 Este es el flujo principal. Conecta directamente al dispositivo para obtener los datos.
 
 #### Barra de estado
-
-Al cargar la página se muestra automáticamente:
 
 | Indicador | Significado |
 |-----------|-------------|
@@ -268,13 +268,11 @@ También muestra: total de registros en la base de datos local, cantidad de pers
 
 #### Generar informe desde la base de datos
 
-Una vez sincronizado (o si la base ya tiene datos), configurar y generar el informe:
-
-1. Seleccionar las fechas del período (pueden ser distintas al rango de sync).
-2. En la sección inferior, elegir el **Tipo de reporte**:
-   - `General (todos los días)` — un informe con todos los días del período, análisis de tardanzas y excesos de almuerzo
-   - `Por persona` — un informe con una sección por cada empleado mostrando su historial diario
-3. Si se seleccionó "Por persona", elegir en el selector si se quieren **Todas** las personas o una específica.
+1. Seleccionar las fechas del período.
+2. Elegir el **Tipo de reporte**:
+   - `General (todos los días)` — un informe con todos los días del período. Si hay horarios cargados, **solo incluye a las personas del archivo de horarios**.
+   - `Por persona` — un informe con una sección por cada empleado mostrando su historial diario con la hora programada de llegada.
+3. Si se seleccionó "Por persona", elegir en el selector **Todas** las personas o una específica.
 4. Expandir **Configuración avanzada** si se necesita ajustar parámetros (opcional).
 5. Hacer clic en **Generar Reporte PDF**. El archivo se descarga automáticamente.
 
@@ -292,22 +290,26 @@ Se recomienda hacer esto **una vez al mes**, después del informe mensual.
 
 ---
 
-### 6.2 Tab "Subir archivo .xlsx"
+### 6.3 Tab "Subir archivo .xlsx"
 
-Este flujo permite generar informes a partir de un archivo exportado manualmente desde el dispositivo. Útil como respaldo si el dispositivo no está en red, o para importar datos históricos.
+Este flujo genera informes a partir de un archivo exportado manualmente desde el dispositivo. Útil si el dispositivo no está en red o para importar datos históricos.
 
-1. Arrastrar el archivo `.xls`, `.xlsx` o `.csv` a la zona de carga, o hacer clic para buscarlo.
+**Formatos aceptados:** `.xlsx` y `.csv`
+
+1. Arrastrar el archivo a la zona de carga, o hacer clic para buscarlo.
 2. El sistema procesa el archivo y detecta automáticamente las personas.
-3. Configurar el tipo de reporte y las opciones (mismo proceso que en el flujo ZK).
+3. Configurar el tipo de reporte y las opciones.
 4. Hacer clic en **Generar Reporte PDF**.
 
 > Los archivos subidos se eliminan automáticamente a los 15 minutos.
 
 ---
 
-### 6.3 Configuración avanzada del reporte
+### 6.4 Configuración avanzada del reporte
 
-Disponible en ambos flujos expandiendo el panel **Configuración avanzada**:
+Disponible en ambos flujos expandiendo el panel **Configuración avanzada**.
+
+Estos valores son los **umbrales globales por defecto**. Si hay horarios personalizados cargados, estos umbrales solo aplican a personas que NO estén en el archivo de horarios.
 
 | Campo | Valor por defecto | Descripción |
 |-------|------------------|-------------|
@@ -318,7 +320,68 @@ Disponible en ambos flujos expandiendo el panel **Configuración avanzada**:
 
 ---
 
-## 7. Uso por línea de comandos (script directo)
+## 7. Horarios personalizados por persona
+
+El sistema soporta un archivo de horarios individuales (`.obd` o `.ods`) que define la hora de entrada programada de cada persona por día de la semana, y su derecho a almuerzo.
+
+### 7.1 Formato del archivo de horarios
+
+El archivo debe ser un OpenDocument Spreadsheet (`.ods` o `.obd`) con las siguientes columnas en la primera hoja:
+
+| Columna | Tipo | Descripción |
+|---------|------|-------------|
+| NOMBRES | Texto | Nombre completo del empleado |
+| ID | Número | ID del usuario en el dispositivo ZK |
+| LUNES (HORA ENTRADA) | Hora o `NO` | Hora programada de llegada el lunes |
+| MARTES (HORA ENTRADA) | Hora o `NO` | Hora programada de llegada el martes |
+| MIERCOLES (HORA ENTRADA) | Hora o `NO` | Ídem miércoles |
+| JUEVES (HORA ENTRADA) | Hora o `NO` | Ídem jueves |
+| VIERNES (HORA ENTRADA) | Hora o `NO` | Ídem viernes |
+| FIN DE SEMANA (HORA ENTRADA) | Hora o `NO` | Hora de llegada el sábado (domingo no aplica) |
+| ALMUERZO (TIENE) | `TRUE` / `FALSE` / `"30 min"` | Derecho a almuerzo |
+| NOTAS | Texto | Observaciones libres (opcional) |
+
+**Reglas del archivo:**
+
+| Valor | Efecto |
+|-------|--------|
+| `NO` en una columna de día | La persona no trabaja ese día — no se genera alerta de tardanza ni ausencia |
+| Hora (ej. `7:00:00 AM`) | Hora programada de llegada — la tardanza se mide contra este horario individual |
+| `ALMUERZO = TRUE` | 60 minutos de almuerzo permitidos (solo lunes a viernes) |
+| `ALMUERZO = FALSE` | Sin derecho a almuerzo — no se analiza el intervalo de almuerzo |
+| `ALMUERZO = "30 min"` | 30 minutos de almuerzo permitidos (solo lunes a viernes) |
+| Sábado (siempre) | Nunca se analiza almuerzo, independientemente del valor de ALMUERZO |
+| Domingo | Nunca genera alertas |
+
+### 7.2 Cómo cargar el archivo de horarios
+
+1. En la card azul **Horarios Personalizados** (parte superior de la página), hacer clic en **Actualizar horarios**.
+2. Seleccionar el archivo `.obd` o `.ods`.
+3. El sistema parsea el archivo, guarda los horarios en la base de datos y muestra cuántos se cargaron.
+4. Si algún ID del archivo no coincide con un usuario del dispositivo ZK, se muestra una advertencia (pero no impide la carga).
+
+Los horarios cargados **persisten entre reinicios** del servidor (se guardan en la base de datos SQLite).
+
+### 7.3 Ver los horarios cargados
+
+Hacer clic en el botón **Ver detalle** (visible cuando hay horarios cargados). Se despliega una tabla con todos los horarios: nombre, ID y hora programada por día.
+
+### 7.4 Efecto en los informes
+
+**Informe general:** cuando hay horarios cargados, el informe solo incluye a las personas presentes en el archivo de horarios. Las personas del dispositivo que no estén en el archivo se omiten.
+
+**Informe por persona:** cada empleado muestra en su tabla diaria:
+- **Prog.** — la hora programada de llegada para ese día
+- **Llegada** — la hora real de llegada según el dispositivo
+- Si la diferencia es de 1 a 5 minutos → *Tardanza leve (+Xm sobre HH:MM)*
+- Si la diferencia es mayor a 5 minutos → *Tardanza severa (+Xm sobre HH:MM)*
+- Si el día está marcado como `NO` → *Día libre según horario*
+
+**Compatibilidad:** si no se cargan horarios, el sistema funciona exactamente igual que antes, usando los umbrales globales para todos.
+
+---
+
+## 8. Uso por línea de comandos (script directo)
 
 El script puede ejecutarse directamente sin la interfaz web.
 
@@ -353,7 +416,7 @@ python script.py REPORTEBIOMETRICOENERO2026.xlsx --salida informe_enero.pdf
 
 | Argumento | Descripción | Ejemplo |
 |-----------|-------------|---------|
-| `archivo` | Archivo de entrada (obligatorio) | `REPORTE.xlsx` |
+| `archivo` | Archivo de entrada `.xlsx` o `.csv` (obligatorio) | `REPORTE.xlsx` |
 | `--modo` | `general` o `persona` | `--modo persona` |
 | `--persona` | Nombre exacto (solo si `--modo persona`) | `--persona "JUAN PEREZ"` |
 | `--tardanza1` | Hora de tardanza leve (HH:MM) | `--tardanza1 07:55` |
@@ -365,7 +428,7 @@ python script.py REPORTEBIOMETRICOENERO2026.xlsx --salida informe_enero.pdf
 
 ---
 
-## 8. Gestión y mantenimiento
+## 9. Gestión y mantenimiento
 
 ### Ver logs del contenedor en tiempo real
 
@@ -379,7 +442,7 @@ docker compose logs -f
 docker cp rrhh-biometrico:/data/asistencias.db ./backup_$(date +%Y%m%d).db
 ```
 
-Se recomienda automatizar este backup con un cron job en el servidor:
+Se recomienda automatizar con un cron job:
 
 ```bash
 # Backup diario a las 02:00
@@ -389,17 +452,9 @@ Se recomienda automatizar este backup con un cron job en el servidor:
 ### Restaurar un backup
 
 ```bash
-# Detener el contenedor
 docker compose down
-
-# Copiar el backup al volumen
-# Primero iniciar el contenedor para que el volumen sea accesible
 docker compose up -d
-
-# Copiar la DB al contenedor
 docker cp ./backup_20260101.db rrhh-biometrico:/data/asistencias.db
-
-# Reiniciar para que la app tome los datos nuevos
 docker compose restart
 ```
 
@@ -431,28 +486,22 @@ Luego reiniciar:
 docker compose restart
 ```
 
-Con `SYNC_AUTO=true`, el sistema sincroniza automáticamente y la base de datos siempre estará actualizada. Los informes se pueden generar en cualquier momento sin necesidad de hacer sync manual.
-
 ### Rutina mensual recomendada
-
-Al final de cada mes:
 
 1. Abrir la aplicación en el navegador.
 2. En la pestaña **Dispositivo ZK**, seleccionar el rango del mes completo y hacer clic en **Sincronizar**.
-3. Verificar que la sincronización completó correctamente (registros nuevos guardados).
+3. Verificar que la sincronización completó correctamente.
 4. Generar el informe general del mes y verificar que los datos son correctos.
 5. Expandir **Mantenimiento del dispositivo** → **Limpiar log del dispositivo** → confirmar.
 6. Hacer un backup manual de la base de datos.
 
 ---
 
-## 9. Referencia de la API
-
-Todos los endpoints son consumidos por la interfaz web. También pueden usarse directamente con herramientas como `curl` o Postman.
+## 10. Referencia de la API
 
 ### `GET /estado-sync`
 
-Retorna el estado del dispositivo y estadísticas de la base de datos.
+Estado del dispositivo y estadísticas de la base de datos.
 
 ```bash
 curl http://localhost:5000/estado-sync
@@ -485,10 +534,7 @@ curl -X POST http://localhost:5000/sincronizar \
 ```
 
 ```json
-{
-  "job_id": "a3f7c1d2e8b4",
-  "estado": "en_progreso"
-}
+{ "job_id": "a3f7c1d2e8b4", "estado": "en_progreso" }
 ```
 
 Si no se envían fechas, sincroniza todos los registros desde 2000-01-01 hasta hoy.
@@ -497,53 +543,32 @@ Si no se envían fechas, sincroniza todos los registros desde 2000-01-01 hasta h
 
 ### `GET /sync-status/<job_id>`
 
-Consulta el estado de un job de sincronización en curso.
-
-```bash
-curl http://localhost:5000/sync-status/a3f7c1d2e8b4
-```
-
-**Estados posibles:**
+Estado de un job de sincronización en curso.
 
 | `estado` | Descripción |
 |----------|-------------|
 | `conectando` | Estableciendo conexión con el dispositivo |
-| `obteniendo_usuarios` | Descargando lista de usuarios del dispositivo |
+| `obteniendo_usuarios` | Descargando lista de usuarios |
 | `descargando_marcaciones` | Descargando registros de asistencia |
 | `procesando` | Filtrando y transformando registros |
 | `completado` | Finalizado con éxito |
 | `error` | Falló — ver campo `detalle` |
 
-```json
-{
-  "estado": "completado",
-  "registros_procesados": 1240,
-  "total_dispositivo": 1240,
-  "registros_nuevos": 87
-}
-```
-
 ---
 
 ### `GET /personas-db`
 
-Retorna la lista de personas que tienen registros en la base de datos para un rango de fechas.
+Personas con registros en la base de datos para un rango de fechas.
 
 ```bash
 curl "http://localhost:5000/personas-db?fecha_inicio=2026-01-01&fecha_fin=2026-01-31"
-```
-
-```json
-{
-  "personas": ["GARCIA LOPEZ MARIA", "PEREZ JUAN", "RODRIGUEZ ANA"]
-}
 ```
 
 ---
 
 ### `POST /generar-desde-db`
 
-Genera un PDF usando los datos almacenados en la base de datos local.
+Genera un PDF usando datos de la base de datos local.
 
 ```bash
 curl -X POST http://localhost:5000/generar-desde-db \
@@ -560,34 +585,15 @@ curl -X POST http://localhost:5000/generar-desde-db \
   }'
 ```
 
-```json
-{
-  "success": true,
-  "download_url": "/descargar/reporte_a1b2c3d4.pdf",
-  "filename": "Reporte_Biometrico_General_DB.pdf"
-}
-```
-
-El PDF se descarga desde `GET /descargar/<filename>`.
-
 ---
 
 ### `POST /subir`
 
-Sube un archivo `.xls`, `.xlsx` o `.csv` para el flujo manual.
+Sube un archivo `.xlsx` o `.csv` para el flujo manual.
 
 ```bash
 curl -X POST http://localhost:5000/subir \
   -F "archivo=@REPORTEBIOMETRICOENERO2026.xlsx"
-```
-
-```json
-{
-  "success": true,
-  "file_id": "uuid_filename.xlsx",
-  "original_name": "REPORTEBIOMETRICOENERO2026.xlsx",
-  "personas": ["GARCIA LOPEZ MARIA", "PEREZ JUAN"]
-}
 ```
 
 ---
@@ -613,9 +619,59 @@ curl -X POST http://localhost:5000/generar \
 
 ---
 
+### `POST /cargar-horarios`
+
+Carga un archivo `.obd` o `.ods` de horarios personalizados.
+
+```bash
+curl -X POST http://localhost:5000/cargar-horarios \
+  -F "archivo=@horarios_personal_ingreso.obd"
+```
+
+```json
+{
+  "success": true,
+  "total_cargados": 62,
+  "sin_match_zk": [],
+  "fuente": "horarios_personal_ingreso.obd"
+}
+```
+
+El campo `sin_match_zk` lista los IDs del archivo que no se encontraron en el dispositivo ZK (advertencia, no error).
+
+---
+
+### `GET /estado-horarios`
+
+Estado actual de los horarios cargados.
+
+```bash
+curl http://localhost:5000/estado-horarios
+```
+
+```json
+{
+  "total": 62,
+  "fuente": "horarios_personal_ingreso.obd",
+  "actualizado_en": "2026-02-20 10:30:00"
+}
+```
+
+---
+
+### `GET /horarios`
+
+Lista completa de horarios por persona.
+
+```bash
+curl http://localhost:5000/horarios
+```
+
+---
+
 ### `POST /limpiar-dispositivo`
 
-Borra todos los registros de asistencia almacenados en el dispositivo ZK.
+Borra todos los registros de asistencia del dispositivo ZK.
 
 ```bash
 curl -X POST http://localhost:5000/limpiar-dispositivo \
@@ -624,110 +680,97 @@ curl -X POST http://localhost:5000/limpiar-dispositivo \
 ```
 
 ```json
-{
-  "success": true,
-  "registros_borrados": 15420
-}
+{ "success": true, "registros_borrados": 15420 }
 ```
 
-> Sin `"confirmar": true` el endpoint retorna error 400 y no ejecuta ninguna acción.
+> Sin `"confirmar": true` el endpoint retorna error 400.
 
 ---
 
-## 10. Solución de problemas
+## 11. Solución de problemas
 
 ### El dispositivo aparece como "no accesible"
 
 1. Verificar que el servidor y el dispositivo están en la misma red local.
-2. Comprobar la IP del dispositivo en `Menú → Opciones → Comunicación` en la pantalla del equipo.
-3. Probar conectividad básica desde el servidor:
+2. Comprobar la IP del dispositivo en `Menú → Opciones → Comunicación`.
+3. Probar conectividad básica:
    ```bash
    ping 192.168.X.X
-   ```
-4. Verificar que el puerto 4370 no está bloqueado por un firewall:
-   ```bash
    nc -zv 192.168.X.X 4370
    ```
-5. Si el contenedor Docker usa `network_mode: host`, verificar que el host tiene acceso a esa IP (no solo el contenedor).
+4. Con `network_mode: host`, verificar que el host tiene acceso a esa IP.
 
 ---
 
 ### La sincronización falla con "Error de conexión"
 
-- El dispositivo ZK solo admite **una conexión a la vez**. Si otra aplicación está conectada (el software del fabricante, otra instancia del sistema), la conexión fallará.
-- Esperar unos segundos y reintentar. Si persiste, reiniciar el dispositivo.
+El dispositivo ZK admite **una sola conexión a la vez**. Si el software del fabricante u otra instancia está conectada, la conexión fallará. Esperar unos segundos y reintentar.
 
 ---
 
 ### La sincronización es muy lenta
 
-El tiempo depende de cuántos registros históricos tenga acumulados el dispositivo. Con años de datos puede tomar varios minutos.
+El tiempo depende de cuántos registros históricos tenga el dispositivo acumulados.
 
-**Solución permanente:** hacer un sync completo, verificar los datos, y luego limpiar el log del dispositivo (ver [rutina mensual](#rutina-mensual-recomendada)). Después de limpiar, los syncs futuros serán casi instantáneos.
+**Solución permanente:** sync completo → verificar datos → limpiar log del dispositivo. Las sincronizaciones posteriores serán casi instantáneas.
 
 **Mejora rápida sin limpiar:** activar UDP en `.env`:
 ```ini
 ZK_UDP=true
 ```
-Reiniciar el contenedor y probar. UDP es entre 20% y 40% más rápido en redes locales.
+UDP es entre 20% y 40% más rápido en redes locales.
+
+---
+
+### El informe general no muestra a todas las personas
+
+Si hay horarios cargados, el informe general solo incluye a las personas del archivo de horarios. Las personas del dispositivo que no estén en ese archivo se omiten intencionalmente.
+
+Para incluir a todos independientemente, descargar los horarios no es una opción directa — se puede subir un archivo de horarios que incluya a todos, o generar el informe en modo "Por persona" que no aplica este filtro.
 
 ---
 
 ### El PDF se genera vacío o con pocos datos
 
-- Si se usa el flujo ZK: verificar que el rango de fechas en el formulario coincide con el rango que fue sincronizado.
-- Si se usa el flujo de archivo: verificar que el archivo exportado contiene datos del período seleccionado.
-- Llamar a `GET /personas-db?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD` para confirmar qué datos hay en la base.
+- **Flujo ZK:** verificar que el rango de fechas del formulario coincide con el período sincronizado.
+- **Flujo archivo:** verificar que el archivo `.xlsx`/`.csv` contiene datos del período.
+- Confirmar qué hay en la base: `GET /personas-db?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD`
 
 ---
 
 ### Error "Archivo expiró" al generar desde archivo subido
 
-Los archivos subidos tienen un TTL de 15 minutos. Subir el archivo de nuevo y generar el informe sin demora.
+Los archivos subidos tienen TTL de 15 minutos. Subir el archivo de nuevo y generar sin demora.
 
 ---
 
 ### La aplicación no arranca en Docker
 
-Ver los logs para diagnosticar:
 ```bash
 docker compose logs rrhh-app
 ```
 
 Causas comunes:
 - El archivo `.env` no existe o tiene variables mal formateadas.
-- El puerto 5000 ya está en uso por otro proceso en el host (con `network_mode: host`).
-  ```bash
-  sudo ss -tlnp | grep 5000
-  ```
-- Error al construir la imagen (falta de espacio en disco, problema de red).
+- El puerto 5000 ya está en uso (`sudo ss -tlnp | grep 5000`).
 
 ---
 
 ### Instalar Docker en Ubuntu (si no está instalado)
 
 ```bash
-# Remover versiones antiguas
 sudo apt remove docker docker-engine docker.io containerd runc
-
-# Instalar dependencias
 sudo apt update
 sudo apt install ca-certificates curl gnupg
-
-# Agregar repositorio oficial de Docker
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
   sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
   https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Instalar Docker Engine y Compose plugin
 sudo apt update
 sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Permitir usar Docker sin sudo (requiere cerrar y abrir sesión)
-sudo usermod -aG docker $USER
+sudo usermod -aG docker $USER   # cerrar y abrir sesión para que aplique
 ```
 
 ---

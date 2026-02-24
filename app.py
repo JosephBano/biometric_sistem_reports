@@ -52,7 +52,7 @@ threading.Thread(target=_cleanup_temp_files, daemon=True).start()
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════
 
-ALLOWED_EXT = {".xls", ".xlsx", ".csv"}
+ALLOWED_EXT = {".xlsx", ".csv"}
 
 
 def _parse_config(data: dict) -> dict:
@@ -146,7 +146,7 @@ def subir_archivo():
 
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXT:
-        return jsonify({'error': 'Formato no soportado. Usa .xls, .xlsx o .csv'}), 400
+        return jsonify({'error': 'Formato no soportado. Usa .xlsx o .csv'}), 400
 
     filename  = secure_filename(file.filename)
     save_name = f"{uuid.uuid4().hex}_{filename}"

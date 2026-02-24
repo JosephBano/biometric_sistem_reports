@@ -186,11 +186,11 @@
 
                 <div class="upload-area" id="drop-zone">
                     <input type="file" id="file-input" style="display:none"
-                           accept=".xls,.xlsx,.csv">
+                           accept=".xlsx,.csv">
                     <div class="upload-icon">📄</div>
                     <h5 class="fw-bold text-slate-700">Arrastre su archivo aquí o haga clic</h5>
                     <p class="text-muted mb-0">
-                        Se aceptan archivos .xls, .xlsx y .csv de control biométrico
+                        Se aceptan archivos .xlsx y .csv de control biométrico
                     </p>
                 </div>
 
@@ -598,8 +598,8 @@ function handleFiles(files) {
     if (!files.length) return;
     const file = files[0];
     const ext  = file.name.split('.').pop().toLowerCase();
-    if (!['xls', 'xlsx', 'csv'].includes(ext)) {
-        showError('Por favor seleccione un archivo .xls, .xlsx o .csv válido');
+    if (!['xlsx', 'csv'].includes(ext)) {
+        showError('Por favor seleccione un archivo .xlsx o .csv válido');
         return;
     }
 

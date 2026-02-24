@@ -1,12 +1,5 @@
 FROM python:3.12-slim
 
-# Dependencias del sistema
-# libreoffice-calc: conversión de archivos .xls antiguos (formato binario pre-2007)
-RUN apt-get update && apt-get install -y \
-        libreoffice-calc \
-    --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 # Instalar dependencias Python primero (aprovecha cache de capas Docker)
