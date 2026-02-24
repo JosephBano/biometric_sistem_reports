@@ -72,6 +72,22 @@ def init_db():
                 exito               INTEGER,
                 error_detalle       TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS horarios_personal (
+                id_usuario     TEXT    PRIMARY KEY,
+                nombre         TEXT    NOT NULL,
+                lunes          TEXT,
+                martes         TEXT,
+                miercoles      TEXT,
+                jueves         TEXT,
+                viernes        TEXT,
+                sabado         TEXT,
+                domingo        TEXT,
+                almuerzo_min   INTEGER DEFAULT 0,
+                notas          TEXT,
+                fuente         TEXT,
+                actualizado_en TEXT    DEFAULT (datetime('now'))
+            );
         """)
 
 
@@ -127,11 +143,11 @@ def insertar_asistencias(registros: list[dict]) -> int:
 def consultar_asistencias(fecha_inicio, fecha_fin) -> list[dict]:
     """
     Devuelve registros del rango en el formato que espera script.py:
-    { nombre, datetime, fecha, hora, tipo }
+    { id_usuario, nombre, datetime, fecha, hora, tipo }
     """
     with _conn() as conn:
         rows = conn.execute("""
-            SELECT nombre, fecha_hora, tipo
+            SELECT id_usuario, nombre, fecha_hora, tipo
             FROM asistencias
             WHERE fecha_hora >= ? AND fecha_hora <= ?
             ORDER BY nombre, fecha_hora
@@ -144,11 +160,12 @@ def consultar_asistencias(fecha_inicio, fecha_fin) -> list[dict]:
     for row in rows:
         dt = datetime.fromisoformat(row["fecha_hora"])
         registros.append({
-            "nombre":   row["nombre"],
-            "datetime": dt,
-            "fecha":    dt.date(),
-            "hora":     dt.time(),
-            "tipo":     row["tipo"],
+            "id_usuario": row["id_usuario"],
+            "nombre":     row["nombre"],
+            "datetime":   dt,
+            "fecha":      dt.date(),
+            "hora":       dt.time(),
+            "tipo":       row["tipo"],
         })
     return registros
 
@@ -210,3 +227,114 @@ def registrar_sync(
             1 if exito else 0,
             error,
         ))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# HORARIOS PERSONALIZADOS
+# ══════════════════════════════════════════════════════════════════════════
+
+def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
+    """
+    Inserta o reemplaza los horarios del lote.
+    El campo 'id_usuario' es la clave primaria.
+
+    Args:
+        horarios: Lista de dicts con id_usuario, nombre, lunes..sabado,
+                  almuerzo_min, notas.
+        fuente:   Nombre del archivo origen (para auditoría).
+
+    Returns:
+        Cantidad de filas procesadas.
+    """
+    with _conn() as conn:
+        for h in horarios:
+            conn.execute("""
+                INSERT INTO horarios_personal
+                    (id_usuario, nombre, lunes, martes, miercoles, jueves,
+                     viernes, sabado, domingo, almuerzo_min, notas, fuente,
+                     actualizado_en)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                ON CONFLICT(id_usuario) DO UPDATE SET
+                    nombre        = excluded.nombre,
+                    lunes         = excluded.lunes,
+                    martes        = excluded.martes,
+                    miercoles     = excluded.miercoles,
+                    jueves        = excluded.jueves,
+                    viernes       = excluded.viernes,
+                    sabado        = excluded.sabado,
+                    domingo       = excluded.domingo,
+                    almuerzo_min  = excluded.almuerzo_min,
+                    notas         = excluded.notas,
+                    fuente        = excluded.fuente,
+                    actualizado_en = datetime('now')
+            """, (
+                str(h["id_usuario"]),
+                h["nombre"],
+                h.get("lunes"),
+                h.get("martes"),
+                h.get("miercoles"),
+                h.get("jueves"),
+                h.get("viernes"),
+                h.get("sabado"),
+                h.get("domingo"),
+                int(h.get("almuerzo_min", 0)),
+                h.get("notas", ""),
+                fuente,
+            ))
+    return len(horarios)
+
+
+def get_horarios() -> dict:
+    """
+    Retorna todos los horarios cargados en dos índices:
+      "by_id"     → {id_usuario: horario_dict}
+      "by_nombre" → {NOMBRE_UPPER: horario_dict}
+
+    El índice by_nombre permite buscar cuando los registros provienen
+    de un archivo .xlsx y no tienen id_usuario.
+    """
+    with _conn() as conn:
+        rows = conn.execute("""
+            SELECT id_usuario, nombre, lunes, martes, miercoles, jueves,
+                   viernes, sabado, domingo, almuerzo_min, notas
+            FROM horarios_personal
+        """).fetchall()
+
+    by_id     = {}
+    by_nombre = {}
+
+    for row in rows:
+        h = dict(row)
+        by_id[h["id_usuario"]]          = h
+        by_nombre[h["nombre"].upper()]   = h
+
+    return {"by_id": by_id, "by_nombre": by_nombre}
+
+
+def get_ids_usuarios_zk() -> set:
+    """Retorna el conjunto de id_usuario registrados en el dispositivo ZK."""
+    with _conn() as conn:
+        rows = conn.execute("SELECT id_usuario FROM usuarios_zk").fetchall()
+    return {row["id_usuario"] for row in rows}
+
+
+def get_estado_horarios() -> dict:
+    """
+    Retorna un resumen del estado de los horarios cargados.
+    """
+    with _conn() as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM horarios_personal"
+        ).fetchone()[0]
+        ultima = conn.execute("""
+            SELECT fuente, actualizado_en
+            FROM horarios_personal
+            ORDER BY actualizado_en DESC
+            LIMIT 1
+        """).fetchone()
+
+    return {
+        "total":          total,
+        "fuente":         ultima["fuente"]        if ultima else None,
+        "actualizado_en": ultima["actualizado_en"] if ultima else None,
+    }

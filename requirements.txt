@@ -11,3 +11,6 @@ pyzk
 
 # Scheduler para sync automático
 schedule
+
+# Lectura de archivos .ods/.obd (OpenDocument Spreadsheet)
+odfpy

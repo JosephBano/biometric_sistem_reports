@@ -12,6 +12,7 @@ from script import (
 from collections import defaultdict
 import db as db_module
 import sync as sync_module
+import horarios as horarios_module
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
@@ -69,16 +70,41 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
     """
     Aplica filtros, deduplicación, análisis y genera el PDF.
     Centraliza la lógica compartida entre /generar y /generar-desde-db.
+
+    Carga automáticamente los horarios personalizados desde la DB si existen.
+    En modo 'general', si hay horarios cargados, solo incluye a las personas
+    presentes en el archivo de horarios.
     """
     if config["excluidos"]:
         registros = filtrar_excluidos(registros, config["excluidos"])
+
+    # Cargar horarios personalizados (None si no hay ninguno cargado)
+    horarios = db_module.get_horarios()
+    if not horarios["by_id"]:
+        horarios = None  # Sin horarios → modo global (comportamiento original)
+
+    # Filtrar al conjunto de personas del archivo de horarios (solo modo general)
+    if horarios is not None and modo == "general":
+        ids_h    = set(horarios["by_id"].keys())
+        nom_h    = set(horarios["by_nombre"].keys())
+        registros = [
+            r for r in registros
+            if (r.get("id_usuario") in ids_h)
+               or (r["nombre"].upper() in nom_h)
+        ]
+        if not registros:
+            raise ValueError(
+                "Ningún registro del período pertenece a personas "
+                "del archivo de horarios cargado."
+            )
+
     registros, log_dup = deduplicar(registros, config["duplicado_min"])
 
     if not registros:
         raise ValueError("No quedaron registros después de aplicar los filtros.")
 
     if modo == "persona":
-        analisis = analizar_por_persona(registros, config)
+        analisis = analizar_por_persona(registros, config, horarios=horarios)
         if persona and persona != "TODAS":
             if persona not in analisis:
                 raise ValueError(f"No se encontraron registros para '{persona}'")
@@ -95,6 +121,7 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                 config["tardanza_leve"],
                 config["tardanza_severa"],
                 config["max_almuerzo_min"],
+                horarios=horarios,
             )
         generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen)
 
@@ -286,6 +313,83 @@ def limpiar_dispositivo():
         return jsonify({'success': True, 'registros_borrados': total_borrado})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# RUTAS DE HORARIOS PERSONALIZADOS
+# ══════════════════════════════════════════════════════════════════════════
+
+ALLOWED_HORARIOS_EXT = {".obd", ".ods"}
+
+
+@app.route('/cargar-horarios', methods=['POST'])
+def cargar_horarios():
+    """
+    Recibe un archivo .obd/.ods, lo parsea e inserta los horarios en la DB.
+    Retorna cuántos horarios se cargaron y cuántos IDs no se encontraron en ZK.
+    """
+    if 'archivo' not in request.files:
+        return jsonify({'error': 'No se envió ningún archivo'}), 400
+
+    file = request.files['archivo']
+    if file.filename == '':
+        return jsonify({'error': 'Archivo no seleccionado'}), 400
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_HORARIOS_EXT:
+        return jsonify({'error': 'Formato no soportado. Use .obd o .ods'}), 400
+
+    filename  = secure_filename(file.filename)
+    save_name = f"{uuid.uuid4().hex}_{filename}"
+    filepath  = os.path.join(app.config['UPLOAD_FOLDER'], save_name)
+    file.save(filepath)
+
+    try:
+        horarios_lista = horarios_module.parsear_obd(filepath)
+
+        if not horarios_lista:
+            return jsonify({'error': 'El archivo no contiene datos de horarios válidos'}), 400
+
+        # Verificar qué IDs del archivo existen en usuarios_zk
+        ids_zk = db_module.get_ids_usuarios_zk()
+
+        ids_sin_match = [
+            h["id_usuario"]
+            for h in horarios_lista
+            if h["id_usuario"] not in ids_zk
+        ]
+
+        db_module.upsert_horarios(horarios_lista, fuente=file.filename)
+
+        return jsonify({
+            'success':        True,
+            'total_cargados': len(horarios_lista),
+            'sin_match_zk':   ids_sin_match,
+            'fuente':         file.filename,
+        })
+
+    except RuntimeError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+
+@app.route('/estado-horarios')
+def estado_horarios():
+    """Retorna el estado actual de los horarios cargados."""
+    return jsonify(db_module.get_estado_horarios())
+
+
+@app.route('/horarios')
+def ver_horarios():
+    """Retorna todos los horarios cargados (por persona)."""
+    horarios = db_module.get_horarios()
+    # Convertir a lista ordenada para la UI
+    lista = sorted(horarios["by_id"].values(), key=lambda h: h["nombre"])
+    return jsonify({'horarios': lista, 'total': len(lista)})
 
 
 # ══════════════════════════════════════════════════════════════════════════
