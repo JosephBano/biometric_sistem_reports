@@ -205,7 +205,7 @@ El archivo `.env` concentra toda la configuración sensible. **Nunca subir este 
 # ── Dispositivo biométrico ZK ──────────────────────
 ZK_IP=192.168.X.X          # IP del dispositivo en la red local
 ZK_PORT=4370               # Puerto del protocolo ZK (casi siempre 4370)
-ZK_PASSWORD=XXXX           # Contraseña numérica del dispositivo (ver pantalla del equipo)
+ZK_PASSWORD=XXXX           # Contraseña del dispositivo (Menú → Opciones → Comunicación). Fábrica: 0
 ZK_TIMEOUT=5               # Segundos de espera para conectar
 ZK_UDP=false               # true = protocolo UDP (más rápido, probar primero)
 
@@ -235,6 +235,8 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 ### Cómo encontrar la contraseña del dispositivo ZK
 
 La contraseña del dispositivo (`ZK_PASSWORD`) se configura en `Menú → Opciones → Comunicación` en la pantalla del equipo. Si nunca se configuró, el valor predeterminado es `0`.
+
+> **Atención:** un `ZK_PASSWORD` incorrecto produce el error `Unauthenticated` internamente — el dispositivo aparecerá como "no accesible" aunque el ping y el puerto respondan. Siempre verificar el valor real en la pantalla del equipo.
 
 ---
 
@@ -605,13 +607,22 @@ curl -X POST http://localhost:5000/limpiar-dispositivo \
 
 ### El dispositivo aparece como "no accesible"
 
-1. Verificar que la máquina y el dispositivo están en la misma red local.
-2. Comprobar la IP del dispositivo en `Menú → Opciones → Comunicación`.
-3. Probar conectividad básica desde la máquina host (no desde el contenedor):
+Seguir este orden:
+
+1. **Verificar IP** — comprobar en la pantalla del dispositivo: `Menú → Opciones → Comunicación`.
+
+2. **Probar conectividad desde la máquina host** (no desde el contenedor):
    ```bash
    ping 192.168.X.X
+   nc -zv -w 3 192.168.X.X 4370   # Linux
    ```
-4. Si el ping responde pero la app no conecta, probar UDP: `ZK_UDP=true` en `.env` y reiniciar.
+   En Windows: `Test-NetConnection -ComputerName IP_ZK -Port 4370`
+
+3. **Verificar la contraseña del dispositivo** — si el puerto responde pero la app no conecta, el error suele ser de autenticación (`ZK_PASSWORD` incorrecto). Confirmarlo en `Menú → Opciones → Comunicación → Contraseña del dispositivo` y actualizar `.env`. La contraseña de fábrica es `0`, pero muchos equipos la tienen modificada.
+
+4. **Probar con UDP:** `ZK_UDP=true` en `.env` y `docker compose restart`.
+
+5. **Una sola conexión simultánea:** si el software del fabricante está abierto, cerrarlo.
 
 ---
 
@@ -623,9 +634,11 @@ El dispositivo ZK admite **una sola conexión a la vez**. Si el software del fab
 
 ### La sincronización es muy lenta
 
-El tiempo depende de cuántos registros históricos tenga el dispositivo acumulados.
+El tiempo depende de cuántos registros históricos tenga el dispositivo acumulados. El protocolo ZK descarga **todos** los registros en cada sync; no permite filtrar por fecha en el dispositivo.
 
-**Solución permanente:** sync completo → verificar datos → limpiar log del dispositivo. Las sincronizaciones posteriores serán casi instantáneas.
+Referencia orientativa: ~8 500 registros (170 usuarios, varios meses) tarda unos 20 segundos en red local.
+
+**Solución permanente:** sync completo → verificar datos → limpiar log del dispositivo. Las sincronizaciones posteriores serán casi instantáneas porque habrá pocos registros acumulados.
 
 **Mejora rápida sin limpiar:** activar UDP en `.env`:
 ```ini

@@ -68,7 +68,7 @@ def _make_zk() -> "ZK":
         timeout=ZK_TIMEOUT,
         password=ZK_PASSWORD,
         force_udp=ZK_UDP,
-        ommit_ping=False,
+        ommit_ping=True,
     )
 
 
@@ -95,7 +95,7 @@ def ping_dispositivo() -> bool:
     try:
         zk = ZK(
             ZK_IP, port=ZK_PORT, timeout=2,
-            password=ZK_PASSWORD, force_udp=ZK_UDP, ommit_ping=False,
+            password=ZK_PASSWORD, force_udp=ZK_UDP, ommit_ping=True,
         )
         conn = zk.connect()
         conn.disconnect()
