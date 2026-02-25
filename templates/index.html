@@ -12,6 +12,10 @@
 
 <div class="container container-main">
     <div class="header-bg">
+        <form method="POST" action="/logout" style="position:absolute;top:14px;right:16px;">
+            <button type="submit" class="btn btn-sm btn-outline-light"
+                    style="font-size:0.75rem;opacity:0.85;">Cerrar sesión</button>
+        </form>
         <h2 class="mb-1 fw-bold">GENERADOR DE INFORMES BIOMÉTRICOS</h2>
         <h5 class="fw-normal opacity-75">Sistema RRHH · ISTPET</h5>
     </div>
@@ -31,13 +35,23 @@
                         Verificando horarios...
                     </span>
                 </div>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 flex-wrap">
                     <label class="btn btn-sm btn-outline-secondary mb-0" for="horarios-input"
-                           title="Cargar archivo .obd o .ods de horarios">
-                        Actualizar horarios
+                           title="Importar archivo de horarios (.csv, .obd, .ods)">
+                        Importar
                         <input type="file" id="horarios-input" style="display:none"
-                               accept=".obd,.ods">
+                               accept=".obd,.ods,.csv">
                     </label>
+                    <button class="btn btn-sm btn-outline-secondary"
+                            onclick="exportarHorariosCsv()" id="btn-exportar-csv"
+                            title="Descargar horarios como CSV" style="display:none">
+                        Descargar CSV
+                    </button>
+                    <button class="btn btn-sm btn-outline-success"
+                            onclick="abrirModalCrear()" id="btn-agregar-persona"
+                            title="Agregar persona manualmente">
+                        + Agregar persona
+                    </button>
                     <button class="btn btn-sm btn-outline-primary"
                             onclick="verHorarios()" id="btn-ver-horarios"
                             style="display:none">
@@ -66,6 +80,7 @@
                                 <th>L</th><th>M</th><th>X</th>
                                 <th>J</th><th>V</th><th>S</th>
                                 <th>Almuerzo</th>
+                                <th>Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="horarios-tbody"></tbody>
@@ -236,6 +251,150 @@
 
     </div><!-- /card-body -->
 </div><!-- /container -->
+
+<!-- ══ Modal: Crear / Editar horario ═══════════════════════════════════ -->
+<div class="modal fade" id="modal-horario" tabindex="-1"
+     aria-labelledby="modal-horario-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-horario-titulo">Horario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                        aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="mh-modo"><!-- "crear" | "editar" -->
+                <div id="mh-error" class="alert alert-danger py-2 small mb-3"
+                     style="display:none"></div>
+                <div class="row g-3">
+                    <!-- ID y Nombre -->
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold">ID ZK</label>
+                        <input type="number" class="form-control form-control-sm"
+                               id="mh-id" min="1" placeholder="Ej: 5">
+                    </div>
+                    <div class="col-md-9">
+                        <label class="form-label small fw-semibold">Nombre</label>
+                        <input type="text" class="form-control form-control-sm"
+                               id="mh-nombre" placeholder="Apellidos, Nombres">
+                    </div>
+                    <!-- Días L–V -->
+                    <div class="col-12">
+                        <p class="form-label small fw-semibold mb-2">
+                            Hora de entrada por día (vacío o marcar "Libre" = día no laborable)
+                        </p>
+                        <div class="row g-2">
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small">Lunes</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="time" class="form-control form-control-sm"
+                                           id="mh-lunes" style="flex:1">
+                                    <div class="form-check mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="mh-libre-lunes"
+                                               onchange="toggleDia('lunes')">
+                                        <label class="form-check-label small"
+                                               for="mh-libre-lunes">Libre</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small">Martes</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="time" class="form-control form-control-sm"
+                                           id="mh-martes" style="flex:1">
+                                    <div class="form-check mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="mh-libre-martes"
+                                               onchange="toggleDia('martes')">
+                                        <label class="form-check-label small"
+                                               for="mh-libre-martes">Libre</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small">Miércoles</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="time" class="form-control form-control-sm"
+                                           id="mh-miercoles" style="flex:1">
+                                    <div class="form-check mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="mh-libre-miercoles"
+                                               onchange="toggleDia('miercoles')">
+                                        <label class="form-check-label small"
+                                               for="mh-libre-miercoles">Libre</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small">Jueves</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="time" class="form-control form-control-sm"
+                                           id="mh-jueves" style="flex:1">
+                                    <div class="form-check mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="mh-libre-jueves"
+                                               onchange="toggleDia('jueves')">
+                                        <label class="form-check-label small"
+                                               for="mh-libre-jueves">Libre</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small">Viernes</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="time" class="form-control form-control-sm"
+                                           id="mh-viernes" style="flex:1">
+                                    <div class="form-check mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="mh-libre-viernes"
+                                               onchange="toggleDia('viernes')">
+                                        <label class="form-check-label small"
+                                               for="mh-libre-viernes">Libre</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-4">
+                                <label class="form-label small">Sábado</label>
+                                <div class="d-flex gap-2 align-items-center">
+                                    <input type="time" class="form-control form-control-sm"
+                                           id="mh-sabado" style="flex:1">
+                                    <div class="form-check mb-0 ms-1">
+                                        <input class="form-check-input" type="checkbox"
+                                               id="mh-libre-sabado"
+                                               onchange="toggleDia('sabado')">
+                                        <label class="form-check-label small"
+                                               for="mh-libre-sabado">Libre</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Almuerzo y Notas -->
+                    <div class="col-md-4">
+                        <label class="form-label small fw-semibold">Almuerzo</label>
+                        <select class="form-select form-select-sm" id="mh-almuerzo">
+                            <option value="0">Sin almuerzo</option>
+                            <option value="30">30 min</option>
+                            <option value="60">60 min</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small fw-semibold">Notas</label>
+                        <textarea class="form-control form-control-sm" id="mh-notas"
+                                  rows="2" placeholder="Opcional"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm"
+                        data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm"
+                        onclick="guardarHorario()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -561,14 +720,16 @@ function fetchEstadoHorarios() {
 }
 
 function actualizarHorariosUI(data) {
-    const dot  = document.getElementById('horarios-dot');
-    const text = document.getElementById('horarios-status-text');
+    const dot    = document.getElementById('horarios-dot');
+    const text   = document.getElementById('horarios-status-text');
     const btnVer = document.getElementById('btn-ver-horarios');
+    const btnCsv = document.getElementById('btn-exportar-csv');
 
     if (!data || data.total === 0) {
         dot.className    = 'status-dot dot-gray';
         text.textContent = 'Horarios no cargados — se usarán umbrales globales';
         btnVer.style.display = 'none';
+        btnCsv.style.display = 'none';
         return;
     }
 
@@ -584,7 +745,11 @@ function actualizarHorariosUI(data) {
         (data.fuente ? ' · <span class="text-muted">' + data.fuente + '</span>' : '') +
         (fecha       ? ' · <span class="text-muted">' + fecha + '</span>'       : '');
     btnVer.style.display = 'inline-block';
+    btnCsv.style.display = 'inline-block';
 }
+
+// Almacén global de horarios para el modal de edición
+let _horariosData = {};
 
 function verHorarios() {
     const detalle = document.getElementById('horarios-detalle');
@@ -592,18 +757,25 @@ function verHorarios() {
         detalle.style.display = 'none';
         return;
     }
+    _cargarTablaHorarios();
+}
+
+function _cargarTablaHorarios() {
     fetch('/horarios')
         .then(r => r.json())
         .then(data => {
+            _horariosData = {};
             const tbody = document.getElementById('horarios-tbody');
             tbody.innerHTML = '';
             (data.horarios || []).forEach(h => {
+                _horariosData[h.id_usuario] = h;
                 const fmt = v => v || '—';
                 const alm = h.almuerzo_min > 0 ? h.almuerzo_min + ' min' : 'No';
+                const id  = h.id_usuario;
                 tbody.innerHTML +=
                     `<tr>
                         <td>${h.nombre}</td>
-                        <td>${h.id_usuario}</td>
+                        <td>${id}</td>
                         <td>${fmt(h.lunes)}</td>
                         <td>${fmt(h.martes)}</td>
                         <td>${fmt(h.miercoles)}</td>
@@ -611,12 +783,137 @@ function verHorarios() {
                         <td>${fmt(h.viernes)}</td>
                         <td>${fmt(h.sabado)}</td>
                         <td>${alm}</td>
+                        <td style="white-space:nowrap">
+                            <button class="btn btn-sm btn-outline-primary py-0 px-1"
+                                    onclick="abrirModalEditar(_horariosData['${id}'])"
+                                    title="Editar">&#9998;</button>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1"
+                                    onclick="eliminarHorario('${id}')"
+                                    title="Eliminar">&#128465;</button>
+                        </td>
                     </tr>`;
             });
-            detalle.style.display = 'block';
+            document.getElementById('horarios-detalle').style.display = 'block';
         })
         .catch(err => showError('Error cargando horarios: ' + err.message));
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// HORARIOS CRUD
+// ══════════════════════════════════════════════════════════════════════════
+const _DIAS_HORARIO = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+
+function abrirModalCrear() {
+    document.getElementById('mh-modo').value = 'crear';
+    document.getElementById('modal-horario-titulo').textContent = 'Agregar persona';
+    document.getElementById('mh-id').disabled = false;
+    document.getElementById('mh-id').value    = '';
+    document.getElementById('mh-nombre').value = '';
+    _DIAS_HORARIO.forEach(d => {
+        document.getElementById('mh-' + d).value    = '';
+        document.getElementById('mh-' + d).disabled = false;
+        document.getElementById('mh-libre-' + d).checked = false;
+    });
+    document.getElementById('mh-almuerzo').value = '0';
+    document.getElementById('mh-notas').value    = '';
+    document.getElementById('mh-error').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modal-horario')).show();
+}
+
+function abrirModalEditar(h) {
+    document.getElementById('mh-modo').value  = 'editar';
+    document.getElementById('modal-horario-titulo').textContent = 'Editar horario — ' + h.nombre;
+    document.getElementById('mh-id').disabled  = true;
+    document.getElementById('mh-id').value     = h.id_usuario;
+    document.getElementById('mh-nombre').value = h.nombre;
+    _DIAS_HORARIO.forEach(d => {
+        const val  = h[d] || '';
+        const libre = !val;
+        document.getElementById('mh-' + d).value          = val;
+        document.getElementById('mh-' + d).disabled       = libre;
+        document.getElementById('mh-libre-' + d).checked  = libre;
+    });
+    document.getElementById('mh-almuerzo').value = String(h.almuerzo_min || 0);
+    document.getElementById('mh-notas').value    = h.notas || '';
+    document.getElementById('mh-error').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('modal-horario')).show();
+}
+
+function toggleDia(dia) {
+    const libre = document.getElementById('mh-libre-' + dia).checked;
+    const input = document.getElementById('mh-' + dia);
+    input.disabled = libre;
+    if (libre) input.value = '';
+}
+
+function guardarHorario() {
+    const modo   = document.getElementById('mh-modo').value;
+    const id     = document.getElementById('mh-id').value.trim();
+    const nombre = document.getElementById('mh-nombre').value.trim();
+
+    const body = {
+        id_usuario:   id,
+        nombre:       nombre,
+        almuerzo_min: parseInt(document.getElementById('mh-almuerzo').value),
+        notas:        document.getElementById('mh-notas').value.trim(),
+    };
+    _DIAS_HORARIO.forEach(d => {
+        const val = document.getElementById('mh-' + d).value;
+        body[d] = val || null;
+    });
+
+    const url    = modo === 'crear' ? '/api/horarios' : '/api/horarios/' + id;
+    const method = modo === 'crear' ? 'POST' : 'PUT';
+
+    fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok) {
+            const errEl = document.getElementById('mh-error');
+            errEl.textContent    = data.error || 'Error desconocido.';
+            errEl.style.display  = 'block';
+            return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('modal-horario')).hide();
+        showSuccess(modo === 'crear' ? 'Persona agregada correctamente.' : 'Horario actualizado correctamente.');
+        fetchEstadoHorarios();
+        const detalle = document.getElementById('horarios-detalle');
+        if (detalle.style.display !== 'none') _cargarTablaHorarios();
+    })
+    .catch(err => {
+        const errEl = document.getElementById('mh-error');
+        errEl.textContent   = err.message;
+        errEl.style.display = 'block';
+    });
+}
+
+function eliminarHorario(id) {
+    if (!confirm('¿Eliminar el horario del empleado con ID ' + id + '?\nEsta acción no se puede deshacer.')) return;
+
+    fetch('/api/horarios/' + id, { method: 'DELETE' })
+    .then(r => r.json().then(data => ({ ok: r.ok, data })))
+    .then(({ ok, data }) => {
+        if (!ok) { showError(data.error || 'Error al eliminar.'); return; }
+        showSuccess('Horario eliminado correctamente.');
+        fetchEstadoHorarios();
+        const detalle = document.getElementById('horarios-detalle');
+        if (detalle.style.display !== 'none') _cargarTablaHorarios();
+    })
+    .catch(err => showError('Error al eliminar: ' + err.message));
+}
+
+function exportarHorariosCsv() {
+    window.location.href = '/exportar-horarios-csv';
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// SUBIDA DEL ARCHIVO DE HORARIOS (importar)
+// ══════════════════════════════════════════════════════════════════════════
 
 // Subida del archivo de horarios
 document.getElementById('horarios-input').addEventListener('change', function () {
@@ -638,8 +935,9 @@ document.getElementById('horarios-input').addEventListener('change', function ()
             }
             showSuccess(msg);
             fetchEstadoHorarios();
-            // Cerrar detalle si estaba abierto para refrescar
-            document.getElementById('horarios-detalle').style.display = 'none';
+            // Refrescar tabla si estaba visible
+            const detalle = document.getElementById('horarios-detalle');
+            if (detalle.style.display !== 'none') _cargarTablaHorarios();
         })
         .catch(err => showError('Error al cargar horarios: ' + err.message))
         .finally(() => {

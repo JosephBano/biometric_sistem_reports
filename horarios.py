@@ -236,6 +236,83 @@ def _normalizar_almuerzo(valor) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# PARSING DEL ARCHIVO CSV
+# ══════════════════════════════════════════════════════════════════════════
+
+def parsear_csv(ruta: str) -> list[dict]:
+    """
+    Lee un archivo CSV con horarios de personal y retorna una lista de dicts,
+    uno por persona.
+
+    Columnas esperadas (encabezado en primera fila):
+      id_usuario, nombre, lunes, martes, miercoles, jueves, viernes, sabado,
+      almuerzo_min, notas
+
+    Reglas:
+      - encoding utf-8-sig (soporta BOM de Excel)
+      - Celda vacía en columna de día → None (persona no trabaja ese día)
+      - almuerzo_min: 0, 30 ó 60
+
+    Raises:
+        RuntimeError: Si faltan columnas requeridas o no hay datos válidos.
+    """
+    import csv as _csv
+
+    COLUMNAS_REQ = {
+        "id_usuario", "nombre",
+        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado",
+        "almuerzo_min",
+    }
+
+    try:
+        with open(ruta, encoding="utf-8-sig", newline="") as f:
+            reader = _csv.DictReader(f)
+            columnas = set(reader.fieldnames or [])
+            faltantes = COLUMNAS_REQ - columnas
+            if faltantes:
+                raise RuntimeError(
+                    "El CSV no contiene las columnas requeridas: "
+                    + ", ".join(sorted(faltantes))
+                )
+
+            horarios = []
+            for fila in reader:
+                id_str = (fila.get("id_usuario") or "").strip()
+                nombre = (fila.get("nombre") or "").strip()
+                if not id_str or not nombre:
+                    continue
+                try:
+                    id_usuario = str(int(float(id_str)))
+                except (ValueError, TypeError):
+                    continue
+
+                horario = {
+                    "id_usuario":   id_usuario,
+                    "nombre":       nombre,
+                    "lunes":        _normalizar_hora(fila.get("lunes")),
+                    "martes":       _normalizar_hora(fila.get("martes")),
+                    "miercoles":    _normalizar_hora(fila.get("miercoles")),
+                    "jueves":       _normalizar_hora(fila.get("jueves")),
+                    "viernes":      _normalizar_hora(fila.get("viernes")),
+                    "sabado":       _normalizar_hora(fila.get("sabado")),
+                    "domingo":      None,
+                    "almuerzo_min": _normalizar_almuerzo(fila.get("almuerzo_min")),
+                    "notas":        (fila.get("notas") or "").strip(),
+                }
+                horarios.append(horario)
+
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"No se pudo leer el CSV de horarios: {e}")
+
+    if not horarios:
+        raise RuntimeError("El CSV no contiene filas de datos válidas.")
+
+    return horarios
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # CONSULTA DE HORARIO PARA UN DÍA CONCRETO
 # ══════════════════════════════════════════════════════════════════════════
 

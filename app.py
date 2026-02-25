@@ -1,10 +1,14 @@
 import os
 import uuid
+import re
+import csv
+import io
 import threading
 import time
 from datetime import datetime, date
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for, Response
 from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash
 from script import (
     DEFAULT_CONFIG, filtrar_excluidos, deduplicar,
     analizar_dia, analizar_por_persona, generar_pdf, generar_pdf_persona,
@@ -16,6 +20,8 @@ import horarios as horarios_module
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
+
+APP_PASSWORD_HASH = os.getenv("APP_PASSWORD_HASH", "").strip()
 
 UPLOAD_FOLDER  = os.getenv("UPLOAD_FOLDER",  "data/uploads")
 REPORTS_FOLDER = os.getenv("REPORTS_FOLDER", "data/reports")
@@ -46,6 +52,40 @@ def _cleanup_temp_files():
         time.sleep(300)
 
 threading.Thread(target=_cleanup_temp_files, daemon=True).start()
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# AUTENTICACIÓN
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.before_request
+def _require_auth():
+    if not APP_PASSWORD_HASH:          # auth deshabilitada (modo dev)
+        return None
+    if request.endpoint in ("login", "logout", "static"):
+        return None
+    if not session.get("autenticado"):
+        return redirect(url_for("login"))
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if APP_PASSWORD_HASH and session.get("autenticado"):
+        return redirect(url_for("index"))
+    error = None
+    if request.method == 'POST':
+        password = request.form.get("password", "")
+        if check_password_hash(APP_PASSWORD_HASH, password):
+            session["autenticado"] = True
+            return redirect(url_for("index"))
+        error = "Contraseña incorrecta. Intente nuevamente."
+    return render_template("login.html", error=error)
+
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -253,7 +293,7 @@ def limpiar_dispositivo():
 # RUTAS DE HORARIOS PERSONALIZADOS
 # ══════════════════════════════════════════════════════════════════════════
 
-ALLOWED_HORARIOS_EXT = {".obd", ".ods"}
+ALLOWED_HORARIOS_EXT = {".obd", ".ods", ".csv"}
 
 
 @app.route('/cargar-horarios', methods=['POST'])
@@ -271,7 +311,7 @@ def cargar_horarios():
 
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_HORARIOS_EXT:
-        return jsonify({'error': 'Formato no soportado. Use .obd o .ods'}), 400
+        return jsonify({'error': 'Formato no soportado. Use .csv, .obd o .ods'}), 400
 
     filename  = secure_filename(file.filename)
     save_name = f"{uuid.uuid4().hex}_{filename}"
@@ -279,7 +319,10 @@ def cargar_horarios():
     file.save(filepath)
 
     try:
-        horarios_lista = horarios_module.parsear_obd(filepath)
+        if ext == ".csv":
+            horarios_lista = horarios_module.parsear_csv(filepath)
+        else:
+            horarios_lista = horarios_module.parsear_obd(filepath)
 
         if not horarios_lista:
             return jsonify({'error': 'El archivo no contiene datos de horarios válidos'}), 400
@@ -324,6 +367,132 @@ def ver_horarios():
     # Convertir a lista ordenada para la UI
     lista = sorted(horarios["by_id"].values(), key=lambda h: h["nombre"])
     return jsonify({'horarios': lista, 'total': len(lista)})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# HORARIOS — CRUD API + EXPORTAR CSV
+# ══════════════════════════════════════════════════════════════════════════
+
+_HORA_RE = re.compile(r"^\d{2}:\d{2}$")
+_DIAS    = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado"]
+
+
+def _validar_horario_body(data: dict):
+    """
+    Valida y normaliza el cuerpo JSON para crear/editar un horario.
+    Retorna (horario_dict, error_str) — error_str es None si válido.
+    """
+    id_str = str(data.get("id_usuario", "")).strip()
+    nombre = str(data.get("nombre", "")).strip()
+
+    if not id_str:
+        return None, "El campo id_usuario es requerido."
+    try:
+        id_usuario = str(int(float(id_str)))
+    except (ValueError, TypeError):
+        return None, "id_usuario debe ser un número entero."
+    if not nombre:
+        return None, "El campo nombre es requerido."
+
+    horario = {
+        "id_usuario": id_usuario,
+        "nombre":     nombre,
+        "domingo":    None,
+        "notas":      str(data.get("notas", "")).strip(),
+    }
+    for dia in _DIAS:
+        val = data.get(dia)
+        if val is None or str(val).strip() == "":
+            horario[dia] = None
+        else:
+            val_s = str(val).strip()
+            if not _HORA_RE.match(val_s):
+                return None, f"El campo '{dia}' debe tener formato HH:MM o estar vacío."
+            horario[dia] = val_s
+
+    try:
+        almuerzo_min = int(data.get("almuerzo_min", 0))
+    except (ValueError, TypeError):
+        return None, "almuerzo_min debe ser un entero (0, 30 o 60)."
+    if almuerzo_min not in (0, 30, 60):
+        return None, "almuerzo_min debe ser 0, 30 o 60."
+    horario["almuerzo_min"] = almuerzo_min
+
+    return horario, None
+
+
+@app.route('/exportar-horarios-csv')
+def exportar_horarios_csv():
+    """Genera y descarga los horarios actuales como archivo CSV."""
+    horarios = db_module.get_horarios()
+    lista = sorted(horarios["by_id"].values(), key=lambda h: h["nombre"])
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id_usuario", "nombre", "lunes", "martes", "miercoles",
+                     "jueves", "viernes", "sabado", "almuerzo_min", "notas"])
+    for h in lista:
+        writer.writerow([
+            h["id_usuario"],
+            h["nombre"],
+            h.get("lunes")   or "",
+            h.get("martes")  or "",
+            h.get("miercoles") or "",
+            h.get("jueves")  or "",
+            h.get("viernes") or "",
+            h.get("sabado")  or "",
+            h.get("almuerzo_min", 0),
+            h.get("notas")   or "",
+        ])
+
+    content = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=horarios.csv"},
+    )
+
+
+@app.route('/api/horarios', methods=['POST'])
+def api_horarios_crear():
+    """Crea un nuevo registro de horario. 409 si el ID ya existe."""
+    data = request.json or {}
+    horario, error = _validar_horario_body(data)
+    if error:
+        return jsonify({'error': error}), 400
+
+    if db_module.get_horario(horario["id_usuario"]):
+        return jsonify({
+            'error': f"Ya existe un horario con ID {horario['id_usuario']}. "
+                     "Use PUT para actualizar."
+        }), 409
+
+    resultado = db_module.upsert_horario(horario, fuente="manual")
+    return jsonify({'success': True, 'horario': resultado}), 201
+
+
+@app.route('/api/horarios/<id_usuario>', methods=['PUT'])
+def api_horarios_actualizar(id_usuario):
+    """Actualiza el horario de una persona. 404 si no existe."""
+    if not db_module.get_horario(id_usuario):
+        return jsonify({'error': f"No existe horario con ID {id_usuario}."}), 404
+
+    data = request.json or {}
+    data['id_usuario'] = id_usuario   # asegurar que coincide con la URL
+    horario, error = _validar_horario_body(data)
+    if error:
+        return jsonify({'error': error}), 400
+
+    resultado = db_module.upsert_horario(horario, fuente="manual")
+    return jsonify({'success': True, 'horario': resultado})
+
+
+@app.route('/api/horarios/<id_usuario>', methods=['DELETE'])
+def api_horarios_eliminar(id_usuario):
+    """Elimina el horario de una persona. 404 si no existe."""
+    if not db_module.delete_horario(id_usuario):
+        return jsonify({'error': f"No existe horario con ID {id_usuario}."}), 404
+    return jsonify({'success': True})
 
 
 # ══════════════════════════════════════════════════════════════════════════

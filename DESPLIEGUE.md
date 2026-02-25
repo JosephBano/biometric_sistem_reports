@@ -1,14 +1,24 @@
 # Guía de Despliegue — Sistema Biométrico RRHH ISTPET
 
-Esta guía cubre la instalación y puesta en producción del sistema en tres entornos:
+Esta guía cubre la instalación, puesta en producción y distribución del sistema en todos los entornos posibles.
 
 | Escenario | Sistema | Docker |
 |-----------|---------|--------|
 | [A — Escritorio Linux](#escenario-a--escritorio-linux) | Ubuntu / Mint / Fedora (desktop) | Docker Engine |
 | [B — Servidor Linux](#escenario-b--servidor-linux) | Ubuntu / Debian (headless) | Docker Engine |
 | [C — Windows](#escenario-c--windows) | Windows 10 / 11 | Docker Desktop |
+| [D — Sin código fuente](#escenario-d--distribuir-la-imagen-sin-código-fuente) | Cualquier OS | Imagen `.tar` exportada |
 
 En todos los casos el flujo de despliegue y actualización es el mismo una vez que Docker está instalado. Los pasos que difieren se indican en cada escenario.
+
+---
+
+> **Inicio rápido** — Si ya tienes Docker y el `.env` configurado:
+> ```bash
+> docker compose up -d --build   # primera vez
+> docker compose up -d --build   # para aplicar actualizaciones
+> docker compose logs -f          # ver qué hace
+> ```
 
 ---
 
@@ -393,24 +403,226 @@ Si el contenedor no puede alcanzar el dispositivo ZK:
 
 ---
 
+# ESCENARIO D — Distribuir la imagen sin código fuente
+
+Usa este flujo cuando quieres instalar el sistema en otra PC **sin copiar el código fuente** — solo la imagen Docker compilada. Es el método más rápido para entregar la aplicación a máquinas de producción que no tienen acceso al repositorio.
+
+---
+
+## D1 — Construir y exportar la imagen (desde la PC de desarrollo)
+
+Primero asegurarse de que la imagen está construida:
+
+```bash
+docker compose build
+```
+
+Luego exportarla a un archivo `.tar`:
+
+```bash
+docker save -o ~/Desktop/rrhh-biometrico.tar script_informe_asistencia-rrhh-app
+```
+
+> El nombre de la imagen (`script_informe_asistencia-rrhh-app`) se puede confirmar con `docker images`.
+
+---
+
+## D2 — Archivos a transferir
+
+Copiar los siguientes tres archivos a la PC de destino (USB, Google Drive, etc.):
+
+| Archivo | Descripción |
+|---|---|
+| `rrhh-biometrico.tar` | Imagen Docker exportada (contiene toda la aplicación) |
+| `docker-compose.yml` | Configuración del contenedor |
+| `.env` | Variables de entorno (IP del ZK, contraseña, etc.) |
+
+Colocarlos todos en la misma carpeta, por ejemplo `C:\rrhh\` en Windows o `/opt/rrhh/` en Linux.
+
+> **Atención con el `.env`:** contiene la contraseña del dispositivo y `FLASK_SECRET_KEY`. Transferirlo por un medio seguro y no subirlo a repositorios públicos.
+
+---
+
+## D3 — Preparar el `docker-compose.yml` en la PC de destino
+
+En la PC de destino, abrir el `docker-compose.yml` y reemplazar la línea:
+
+```yaml
+build: .
+```
+
+por:
+
+```yaml
+image: script_informe_asistencia-rrhh-app
+```
+
+Esto es necesario porque en la PC de destino no existe el código fuente — solo se usará la imagen ya compilada.
+
+---
+
+## D4 — Cargar la imagen e iniciar (Linux)
+
+```bash
+docker load -i rrhh-biometrico.tar
+docker compose up -d
+```
+
+Verificar:
+
+```bash
+docker compose ps
+```
+
+Acceder en: `http://localhost:5000`
+
+---
+
+## D5 — Cargar la imagen e iniciar (Windows)
+
+Abrir PowerShell en la carpeta donde están los archivos:
+
+```powershell
+docker load -i rrhh-biometrico.tar
+docker compose up -d
+```
+
+Verificar:
+
+```powershell
+docker compose ps
+```
+
+Acceder en: `http://localhost:5000`
+
+---
+
+## D6 — Actualizar la aplicación (flujo sin código fuente)
+
+Cuando salga una nueva versión, repetir desde la PC de desarrollo:
+
+```bash
+# 1. Reconstruir con los últimos cambios
+docker compose build
+
+# 2. Exportar la nueva imagen
+docker save -o ~/Desktop/rrhh-biometrico-v2.tar script_informe_asistencia-rrhh-app
+```
+
+En la PC de destino:
+
+```bash
+# Detener el contenedor actual
+docker compose down
+
+# Cargar la nueva imagen (reemplaza la anterior)
+docker load -i rrhh-biometrico-v2.tar
+
+# Volver a levantar
+docker compose up -d
+```
+
+> La base de datos con los registros de asistencia **no se pierde** — el volumen `db_data` se mantiene entre actualizaciones.
+
+---
+
+---
+
 # Primer uso (todos los escenarios)
 
 Una vez que el sistema esté corriendo, estos pasos son iguales sin importar el sistema operativo.
 
-## 1 — Cargar los horarios del personal
+## 1 — Acceder a la aplicación
 
-1. Abrir el navegador en `http://localhost:5000` (escritorio/Windows) o `http://IP_SERVIDOR:5000` (servidor)
-2. En la card azul **Horarios Personalizados**, hacer clic en **Actualizar horarios**
-3. Seleccionar el archivo `horarios_personal_ingreso.obd`
-4. Verificar que muestra "83 horarios cargados"
+- **Escritorio o Windows:** abrir el navegador en `http://localhost:5000`
+- **Servidor:** abrir `http://IP_DEL_SERVIDOR:5000` desde cualquier PC en la red
 
-Los horarios quedan guardados en la base de datos y **no hay que volver a cargarlos** salvo que cambien.
+Si `APP_PASSWORD_HASH` está configurado en el `.env`, el sistema pedirá contraseña. Si está vacío, no hay autenticación (modo desarrollo).
 
-## 2 — Primera sincronización
+## 2 — Cargar los horarios del personal
+
+1. En la card azul **Horarios Personalizados**, hacer clic en **Importar**
+2. Seleccionar el archivo `horarios_personal_ingreso.obd` (o `.ods` / `.csv`)
+3. Verificar que muestra el número de horarios cargados correctamente
+
+Los horarios quedan guardados en la base de datos y **no hay que volver a cargarlos** salvo que cambien. También se pueden agregar o editar personas individualmente con el botón **+ Agregar persona**.
+
+## 3 — Primera sincronización
 
 1. Seleccionar el rango de fechas del mes actual en la interfaz web
 2. Hacer clic en **Sincronizar**
 3. Esperar a que complete — la primera vez puede tardar varios minutos si el dispositivo tiene muchos registros históricos acumulados
+
+---
+
+---
+
+# Activar autenticación en producción
+
+Por defecto, si `APP_PASSWORD_HASH` está vacío en el `.env`, el sistema no pide contraseña. Esto es conveniente durante el desarrollo pero **no debe usarse en redes donde otros usuarios tengan acceso a la app**.
+
+## Paso 1 — Generar el hash de la contraseña
+
+Ejecutar **una sola vez** desde cualquier PC que tenga Python instalado:
+
+```bash
+# Linux / macOS
+python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('TU_CONTRASEÑA_AQUI'))"
+```
+
+```powershell
+# Windows PowerShell
+python -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('TU_CONTRASEÑA_AQUI'))"
+```
+
+El comando imprime algo similar a:
+
+```
+scrypt:32768:8:1$abc123...$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Ese texto completo es el hash. **No es la contraseña en texto plano** — es seguro almacenarlo en el `.env`.
+
+## Paso 2 — Añadir el hash al `.env`
+
+Abrir el `.env` y pegar el hash en la variable correspondiente:
+
+```ini
+APP_PASSWORD_HASH=scrypt:32768:8:1$abc123...$xxxxxxxxxxxx...
+```
+
+No añadir comillas ni espacios alrededor del valor.
+
+## Paso 3 — Aplicar el cambio
+
+```bash
+# Basta con reiniciar, no hace falta reconstruir la imagen
+docker compose restart
+```
+
+Al acceder a `http://localhost:5000` (o `http://IP:5000`) el sistema mostrará la pantalla de login.
+
+## Cambiar la contraseña en el futuro
+
+Repetir el Paso 1 con la nueva contraseña, reemplazar el valor en `.env` y reiniciar:
+
+```bash
+docker compose restart
+```
+
+No hace falta reconstruir la imagen (`--build`) para este cambio.
+
+## Deshabilitar la autenticación temporalmente
+
+Dejar `APP_PASSWORD_HASH` vacío y reiniciar:
+
+```ini
+APP_PASSWORD_HASH=
+```
+
+```bash
+docker compose restart
+```
 
 ---
 
@@ -489,10 +701,13 @@ docker compose up -d --build
 Windows (PowerShell) — descomprimir con el explorador de archivos o con:
 ```powershell
 cd C:\rrhh-biometrico
-# Descomprimir actualizacion.tar.gz sobre la carpeta actual (sobreescribe el código)
 tar -xzf C:\ruta\actualizacion.tar.gz --strip-components=1
 docker compose up -d --build
 ```
+
+## Si distribuyes por imagen (Escenario D)
+
+Ver [sección D6](#d6--actualizar-la-aplicación-flujo-sin-código-fuente).
 
 ## Cuánto tarda la reconstrucción
 
@@ -523,6 +738,9 @@ docker compose restart
 
 # Detener el sistema (conserva los datos)
 docker compose down
+
+# Ver todas las imágenes disponibles
+docker images
 
 # Hacer backup de la base de datos
 docker cp rrhh-biometrico:/data/asistencias.db ./backup_$(date +%Y%m%d).db
@@ -586,6 +804,13 @@ FLASK_PORT=5000
 
 # Nunca activar debug en producción
 FLASK_DEBUG=false
+
+# ── Autenticación de acceso ────────────────────────────────────────────
+# Dejar vacío para deshabilitar la autenticación (modo desarrollo/interno)
+# Para generar el hash de tu contraseña:
+#   python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('tu_clave'))"
+# Luego pegar el resultado aquí:
+APP_PASSWORD_HASH=
 ```
 
 ---
@@ -636,7 +861,7 @@ Linux:
 ping IP_DEL_ZK
 ```
 Windows CMD:
-```bash
+```cmd
 ping IP_DEL_ZK
 ```
 
@@ -677,6 +902,16 @@ docker compose restart
 
 ---
 
+### El sistema redirige siempre al login
+
+Si configuraste `APP_PASSWORD_HASH` en el `.env` y el sistema no deja entrar:
+
+- Verificar que el hash fue generado correctamente con `werkzeug.security.generate_password_hash` y no copiado con espacios extra.
+- Verificar que `FLASK_SECRET_KEY` tiene un valor fijo y no cambia entre reinicios (si cambia, las sesiones existentes se invalidan).
+- Para deshabilitar temporalmente la autenticación: dejar `APP_PASSWORD_HASH=` vacío y reiniciar con `docker compose restart`.
+
+---
+
 ### Docker Desktop no arranca en Windows
 
 - Verificar que la virtualización está habilitada en la BIOS del PC.
@@ -697,6 +932,16 @@ git rm --cached .env
 git rm -r --cached data/
 git commit -m "excluir archivos locales del repo"
 git pull origin main
+```
+
+---
+
+### `docker load` falla con "no such file"
+
+Verificar que el archivo `.tar` y el `docker-compose.yml` están en la misma carpeta desde la que se ejecuta el comando. En Windows, usar la ruta completa si es necesario:
+
+```powershell
+docker load -i C:\rrhh\rrhh-biometrico.tar
 ```
 
 ---

@@ -318,6 +318,38 @@ def get_ids_usuarios_zk() -> set:
     return {row["id_usuario"] for row in rows}
 
 
+def get_horario(id_usuario: str) -> dict | None:
+    """Retorna el horario de una persona por su id_usuario, o None si no existe."""
+    with _conn() as conn:
+        row = conn.execute("""
+            SELECT id_usuario, nombre, lunes, martes, miercoles, jueves,
+                   viernes, sabado, domingo, almuerzo_min, notas
+            FROM horarios_personal
+            WHERE id_usuario = ?
+        """, (str(id_usuario),)).fetchone()
+    return dict(row) if row else None
+
+
+def upsert_horario(horario: dict, fuente: str = "manual") -> dict:
+    """
+    Inserta o actualiza un único registro de horario.
+    Retorna el horario tal como quedó en la DB.
+    """
+    upsert_horarios([horario], fuente)
+    return get_horario(str(horario["id_usuario"]))
+
+
+def delete_horario(id_usuario: str) -> bool:
+    """Elimina el horario de una persona. Retorna True si existía y fue eliminado."""
+    with _conn() as conn:
+        cursor = conn.execute(
+            "DELETE FROM horarios_personal WHERE id_usuario = ?",
+            (str(id_usuario),),
+        )
+        deleted = cursor.rowcount > 0
+    return deleted
+
+
 def get_estado_horarios() -> dict:
     """
     Retorna un resumen del estado de los horarios cargados.

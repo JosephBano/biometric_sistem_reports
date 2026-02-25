@@ -140,3 +140,34 @@ body {
     border-radius: 8px;
     padding: 12px 16px;
 }
+
+/* ── Header con posición relativa para botón logout ──────────────────── */
+.header-bg {
+    position: relative;
+}
+
+/* ── Página de login ──────────────────────────────────────────────────── */
+.login-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8f9fa;
+}
+.login-container {
+    width: 100%;
+    max-width: 380px;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+}
+.login-header {
+    background: linear-gradient(135deg, #1a3a5c 0%, #2e6da4 100%);
+    color: white;
+    padding: 28px 30px;
+    text-align: center;
+}
+.login-body {
+    background: white;
+    padding: 30px;
+}
