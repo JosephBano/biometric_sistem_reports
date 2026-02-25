@@ -10,18 +10,16 @@ services:
       - db_data:/data
     restart: unless-stopped
 
-    # network_mode: host da al contenedor acceso directo a la red del host.
-    # Necesario para alcanzar el dispositivo ZK en ip_device:port_device.
-    # Solo funciona en Linux. Si usas Mac/Windows, comenta esta línea
-    # y descomenta el bloque 'ports' debajo.
-    network_mode: host
+    # Mapeo de puerto: funciona en Linux, Windows y macOS.
+    # El contenedor alcanza el dispositivo ZK en la red local a través del NAT de Docker.
+    ports:
+      - "5000:5000"
 
-    # Usar este bloque SOLO si NO se usa network_mode: host
-    # (Mac, Windows, o si se prefiere red bridge en Linux)
-    # ports:
-    #   - "5000:5000"
-    # extra_hosts:
-    #   - "zk-device:ip_device"
+    # ALTERNATIVA solo para Linux con Docker Engine (no Docker Desktop):
+    # network_mode: host da acceso directo a la red del host sin NAT.
+    # Útil si el ZK está en una subnet que no es accesible por NAT.
+    # Para usarla: comentar el bloque 'ports' y descomentar esta línea.
+    # network_mode: host
 
 volumes:
   db_data:

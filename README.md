@@ -1,6 +1,6 @@
 # Sistema de Informes Biométricos — RRHH ISTPET
 
-Aplicación web para generar informes PDF de asistencia del personal a partir del sistema de control biométrico ZK. Obtiene los datos directamente del dispositivo en red o mediante la carga manual de un archivo exportado `.xlsx` / `.csv`.
+Aplicación web para generar informes PDF de asistencia del personal a partir del sistema de control biométrico ZK. Obtiene los datos directamente del dispositivo en red y los almacena en una base de datos local.
 
 ---
 
@@ -13,10 +13,9 @@ Aplicación web para generar informes PDF de asistencia del personal a partir de
 5. [Configuración del archivo `.env`](#5-configuración-del-archivo-env)
 6. [Uso de la interfaz web](#6-uso-de-la-interfaz-web)
 7. [Horarios personalizados por persona](#7-horarios-personalizados-por-persona)
-8. [Uso por línea de comandos (script directo)](#8-uso-por-línea-de-comandos-script-directo)
-9. [Gestión y mantenimiento](#9-gestión-y-mantenimiento)
-10. [Referencia de la API](#10-referencia-de-la-api)
-11. [Solución de problemas](#11-solución-de-problemas)
+8. [Gestión y mantenimiento](#8-gestión-y-mantenimiento)
+9. [Referencia de la API](#9-referencia-de-la-api)
+10. [Solución de problemas](#10-solución-de-problemas)
 
 ---
 
@@ -35,9 +34,9 @@ No se requiere ninguna dependencia externa del sistema operativo.
 
 | Requisito | Versión mínima |
 |-----------|---------------|
-| Docker Engine | 24.x |
+| Docker Engine (Linux) o Docker Desktop (Windows / macOS) | 24.x |
 | Docker Compose | v2 (`docker compose`, no `docker-compose`) |
-| Sistema operativo del servidor | Linux (requerido para `network_mode: host`) |
+| Sistema operativo | Linux, Windows 10/11, macOS |
 | Acceso a la red local donde está el dispositivo ZK | — |
 
 **Verificar versiones instaladas:**
@@ -70,12 +69,13 @@ script_informe_asistencia/
 │
 ├── Dockerfile              # Imagen Docker del servidor
 ├── docker-compose.yml      # Orquestación de servicios y volúmenes
+├── DESPLIEGUE.md           # Guía paso a paso de instalación y despliegue
 │
 ├── requirements.txt        # Dependencias Python
 │
 └── data/                   # Creado automáticamente en runtime
     ├── asistencias.db      # Base de datos SQLite (persistida en Docker volume)
-    ├── uploads/            # Archivos subidos temporalmente (TTL: 15 min)
+    ├── uploads/            # Archivos de horarios subidos temporalmente
     └── reports/            # PDFs generados temporalmente (TTL: 15 min)
 ```
 
@@ -137,34 +137,42 @@ El servidor queda disponible en `http://localhost:5000`.
 
 ## 4. Instalación — modo producción (Docker)
 
-Esta es la forma recomendada para un servidor permanente dentro de la red del instituto.
+Esta es la forma recomendada. El sistema corre en un contenedor Docker y funciona en **Linux (servidor o escritorio), Windows 10/11 y macOS**.
 
-### Paso 1 — Crear el archivo de configuración
+Para instrucciones detalladas paso a paso según tu sistema operativo, consultar **[DESPLIEGUE.md](DESPLIEGUE.md)**.
+
+### Instalación rápida (todos los sistemas)
+
+**1 — Crear el archivo de configuración:**
 
 ```bash
 cp .env.example .env
+# Editar .env con los datos del dispositivo ZK
 ```
 
-Editar `.env` con los datos reales (ver [sección 5](#5-configuración-del-archivo-env)).
-
-### Paso 2 — Construir e iniciar el contenedor
+**2 — Construir e iniciar el contenedor:**
 
 ```bash
 docker compose up -d --build
 ```
 
 Este comando:
-- Construye la imagen Docker (instala Python y las dependencias Python)
+- Descarga la imagen base de Python 3.12 e instala las dependencias
 - Crea el volumen `db_data` para persistencia de la base de datos
-- Inicia el contenedor en segundo plano
+- Inicia el contenedor en segundo plano (`restart: unless-stopped`)
 
-### Paso 3 — Verificar que el contenedor está corriendo
+La primera vez puede tardar 3–5 minutos.
+
+**3 — Verificar que está corriendo:**
 
 ```bash
 docker compose ps
 ```
 
-La columna `Status` debe mostrar `Up`. El sistema queda disponible en `http://IP_DEL_SERVIDOR:5000`.
+La columna `Status` debe mostrar `Up`. Abrir el navegador en:
+
+- Escritorio (Linux o Windows, misma máquina): `http://localhost:5000`
+- Servidor (desde otra máquina en la red): `http://IP_DEL_SERVIDOR:5000`
 
 ### Actualizar a una nueva versión del código
 
@@ -232,7 +240,7 @@ La contraseña del dispositivo (`ZK_PASSWORD`) se configura en `Menú → Opcion
 
 ## 6. Uso de la interfaz web
 
-Abrir el navegador en `http://IP_SERVIDOR:5000`.
+Abrir el navegador en `http://localhost:5000` (misma máquina) o `http://IP_SERVIDOR:5000` (desde la red).
 
 ### 6.1 Horarios personalizados (card superior)
 
@@ -240,9 +248,9 @@ Al abrir la página se muestra una card azul en la parte superior con el estado 
 
 ---
 
-### 6.2 Tab "Dispositivo Biométrico ZK"
+### 6.2 Panel del dispositivo biométrico ZK
 
-Este es el flujo principal. Conecta directamente al dispositivo para obtener los datos.
+Fuente única de datos. Conecta directamente al dispositivo para sincronizar y generar informes.
 
 #### Barra de estado
 
@@ -266,7 +274,7 @@ También muestra: total de registros en la base de datos local, cantidad de pers
 
 > **Por qué tarda:** el dispositivo ZK descarga todos sus registros históricos acumulados cada vez que se conecta. La primera vez es la más lenta. Para reducir los tiempos futuros, ver [Limpiar log del dispositivo](#limpiar-log-del-dispositivo).
 
-#### Generar informe desde la base de datos
+#### Generar informe
 
 1. Seleccionar las fechas del período.
 2. Elegir el **Tipo de reporte**:
@@ -282,7 +290,7 @@ Esta función **elimina todos los registros de marcaciones del dispositivo ZK** 
 
 > **Importante:** solo usar después de haber sincronizado y verificado que los datos están correctos en la base. Esta acción es irreversible.
 
-1. Expandir la sección **Mantenimiento del dispositivo** (al fondo del panel ZK).
+1. Expandir la sección **Mantenimiento del dispositivo** (al fondo del panel).
 2. Hacer clic en **Limpiar log del dispositivo**.
 3. Confirmar la acción en el diálogo de confirmación.
 
@@ -290,24 +298,9 @@ Se recomienda hacer esto **una vez al mes**, después del informe mensual.
 
 ---
 
-### 6.3 Tab "Subir archivo .xlsx"
+### 6.3 Configuración avanzada del reporte
 
-Este flujo genera informes a partir de un archivo exportado manualmente desde el dispositivo. Útil si el dispositivo no está en red o para importar datos históricos.
-
-**Formatos aceptados:** `.xlsx` y `.csv`
-
-1. Arrastrar el archivo a la zona de carga, o hacer clic para buscarlo.
-2. El sistema procesa el archivo y detecta automáticamente las personas.
-3. Configurar el tipo de reporte y las opciones.
-4. Hacer clic en **Generar Reporte PDF**.
-
-> Los archivos subidos se eliminan automáticamente a los 15 minutos.
-
----
-
-### 6.4 Configuración avanzada del reporte
-
-Disponible en ambos flujos expandiendo el panel **Configuración avanzada**.
+Disponible expandiendo el panel **Configuración avanzada**.
 
 Estos valores son los **umbrales globales por defecto**. Si hay horarios personalizados cargados, estos umbrales solo aplican a personas que NO estén en el archivo de horarios.
 
@@ -381,54 +374,7 @@ Hacer clic en el botón **Ver detalle** (visible cuando hay horarios cargados). 
 
 ---
 
-## 8. Uso por línea de comandos (script directo)
-
-El script puede ejecutarse directamente sin la interfaz web.
-
-```bash
-# Activar el entorno virtual primero
-source .venv/bin/activate
-
-# Reporte general (todos los días del archivo)
-python script.py REPORTEBIOMETRICOENERO2026.xlsx
-
-# Reporte por persona (todas las personas)
-python script.py REPORTEBIOMETRICOENERO2026.xlsx --modo persona
-
-# Reporte de una persona específica
-python script.py REPORTEBIOMETRICOENERO2026.xlsx --modo persona --persona "JUAN PEREZ"
-
-# Solo el día 15 del mes
-python script.py REPORTEBIOMETRICOENERO2026.xlsx --fecha 15
-
-# Cambiar horarios y excluir personas
-python script.py REPORTEBIOMETRICOENERO2026.xlsx \
-    --tardanza1 07:55 \
-    --tardanza2 08:00 \
-    --almuerzo 45 \
-    --excluir "DIRECTOR" "CONSERJE"
-
-# Especificar nombre del archivo de salida
-python script.py REPORTEBIOMETRICOENERO2026.xlsx --salida informe_enero.pdf
-```
-
-**Todos los argumentos disponibles:**
-
-| Argumento | Descripción | Ejemplo |
-|-----------|-------------|---------|
-| `archivo` | Archivo de entrada `.xlsx` o `.csv` (obligatorio) | `REPORTE.xlsx` |
-| `--modo` | `general` o `persona` | `--modo persona` |
-| `--persona` | Nombre exacto (solo si `--modo persona`) | `--persona "JUAN PEREZ"` |
-| `--tardanza1` | Hora de tardanza leve (HH:MM) | `--tardanza1 07:55` |
-| `--tardanza2` | Hora de tardanza severa (HH:MM) | `--tardanza2 08:05` |
-| `--almuerzo` | Minutos máximos de almuerzo | `--almuerzo 45` |
-| `--excluir` | Nombres a excluir | `--excluir "JUAN" "MARIA"` |
-| `--fecha` | Solo analizar este día del mes | `--fecha 15` |
-| `--salida` | Nombre del PDF de salida | `--salida informe.pdf` |
-
----
-
-## 9. Gestión y mantenimiento
+## 8. Gestión y mantenimiento
 
 ### Ver logs del contenedor en tiempo real
 
@@ -442,7 +388,7 @@ docker compose logs -f
 docker cp rrhh-biometrico:/data/asistencias.db ./backup_$(date +%Y%m%d).db
 ```
 
-Se recomienda automatizar con un cron job:
+Se recomienda automatizar con un cron job (Linux):
 
 ```bash
 # Backup diario a las 02:00
@@ -489,7 +435,7 @@ docker compose restart
 ### Rutina mensual recomendada
 
 1. Abrir la aplicación en el navegador.
-2. En la pestaña **Dispositivo ZK**, seleccionar el rango del mes completo y hacer clic en **Sincronizar**.
+2. Seleccionar el rango del mes completo y hacer clic en **Sincronizar**.
 3. Verificar que la sincronización completó correctamente.
 4. Generar el informe general del mes y verificar que los datos son correctos.
 5. Expandir **Mantenimiento del dispositivo** → **Limpiar log del dispositivo** → confirmar.
@@ -497,7 +443,7 @@ docker compose restart
 
 ---
 
-## 10. Referencia de la API
+## 9. Referencia de la API
 
 ### `GET /estado-sync`
 
@@ -587,38 +533,6 @@ curl -X POST http://localhost:5000/generar-desde-db \
 
 ---
 
-### `POST /subir`
-
-Sube un archivo `.xlsx` o `.csv` para el flujo manual.
-
-```bash
-curl -X POST http://localhost:5000/subir \
-  -F "archivo=@REPORTEBIOMETRICOENERO2026.xlsx"
-```
-
----
-
-### `POST /generar`
-
-Genera un PDF a partir de un archivo previamente subido con `/subir`.
-
-```bash
-curl -X POST http://localhost:5000/generar \
-  -H "Content-Type: application/json" \
-  -d '{
-    "file_id": "uuid_filename.xlsx",
-    "original_name": "REPORTEBIOMETRICOENERO2026.xlsx",
-    "modo": "general",
-    "persona": "TODAS",
-    "tardanza_leve": "08:00",
-    "tardanza_severa": "08:05",
-    "max_almuerzo_min": 60,
-    "excluidos": []
-  }'
-```
-
----
-
 ### `POST /cargar-horarios`
 
 Carga un archivo `.obd` o `.ods` de horarios personalizados.
@@ -631,7 +545,7 @@ curl -X POST http://localhost:5000/cargar-horarios \
 ```json
 {
   "success": true,
-  "total_cargados": 62,
+  "total_cargados": 83,
   "sin_match_zk": [],
   "fuente": "horarios_personal_ingreso.obd"
 }
@@ -651,9 +565,9 @@ curl http://localhost:5000/estado-horarios
 
 ```json
 {
-  "total": 62,
+  "total": 83,
   "fuente": "horarios_personal_ingreso.obd",
-  "actualizado_en": "2026-02-20 10:30:00"
+  "actualizado_en": "2026-02-24 10:30:00"
 }
 ```
 
@@ -687,18 +601,17 @@ curl -X POST http://localhost:5000/limpiar-dispositivo \
 
 ---
 
-## 11. Solución de problemas
+## 10. Solución de problemas
 
 ### El dispositivo aparece como "no accesible"
 
-1. Verificar que el servidor y el dispositivo están en la misma red local.
+1. Verificar que la máquina y el dispositivo están en la misma red local.
 2. Comprobar la IP del dispositivo en `Menú → Opciones → Comunicación`.
-3. Probar conectividad básica:
+3. Probar conectividad básica desde la máquina host (no desde el contenedor):
    ```bash
    ping 192.168.X.X
-   nc -zv 192.168.X.X 4370
    ```
-4. Con `network_mode: host`, verificar que el host tiene acceso a esa IP.
+4. Si el ping responde pero la app no conecta, probar UDP: `ZK_UDP=true` en `.env` y reiniciar.
 
 ---
 
@@ -724,23 +637,19 @@ UDP es entre 20% y 40% más rápido en redes locales.
 
 ### El informe general no muestra a todas las personas
 
-Si hay horarios cargados, el informe general solo incluye a las personas del archivo de horarios. Las personas del dispositivo que no estén en ese archivo se omiten intencionalmente.
+Si hay horarios cargados, el informe general solo incluye a las personas presentes en el archivo de horarios. Las personas del dispositivo que no estén en ese archivo se omiten intencionalmente.
 
-Para incluir a todos independientemente, descargar los horarios no es una opción directa — se puede subir un archivo de horarios que incluya a todos, o generar el informe en modo "Por persona" que no aplica este filtro.
+Para incluir a todos independientemente, generar el informe en modo **Por persona**, que no aplica este filtro.
 
 ---
 
 ### El PDF se genera vacío o con pocos datos
 
-- **Flujo ZK:** verificar que el rango de fechas del formulario coincide con el período sincronizado.
-- **Flujo archivo:** verificar que el archivo `.xlsx`/`.csv` contiene datos del período.
-- Confirmar qué hay en la base: `GET /personas-db?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD`
+Verificar que el rango de fechas del formulario coincide con el período sincronizado. Confirmar qué personas hay en la base:
 
----
-
-### Error "Archivo expiró" al generar desde archivo subido
-
-Los archivos subidos tienen TTL de 15 minutos. Subir el archivo de nuevo y generar sin demora.
+```bash
+curl "http://localhost:5000/personas-db?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD"
+```
 
 ---
 
@@ -751,27 +660,17 @@ docker compose logs rrhh-app
 ```
 
 Causas comunes:
-- El archivo `.env` no existe o tiene variables mal formateadas.
-- El puerto 5000 ya está en uso (`sudo ss -tlnp | grep 5000`).
+- El archivo `.env` no existe o tiene variables mal formateadas (espacios alrededor del `=`).
+- El puerto 5000 ya está en uso. En Linux: `sudo ss -tlnp | grep 5000`. En Windows: `netstat -ano | findstr :5000`.
 
 ---
 
-### Instalar Docker en Ubuntu (si no está instalado)
+### Instrucciones de instalación detalladas por sistema operativo
 
-```bash
-sudo apt remove docker docker-engine docker.io containerd runc
-sudo apt update
-sudo apt install ca-certificates curl gnupg
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-sudo apt update
-sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo usermod -aG docker $USER   # cerrar y abrir sesión para que aplique
-```
+Ver **[DESPLIEGUE.md](DESPLIEGUE.md)** para guías paso a paso en:
+- Linux escritorio (Ubuntu, Mint, Fedora)
+- Linux servidor (headless, con SSH)
+- Windows 10 / 11 con Docker Desktop
 
 ---
 
