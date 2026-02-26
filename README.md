@@ -12,6 +12,9 @@ Aplicación web para generar informes PDF de asistencia del personal a partir de
 4. [Instalación — modo producción (Docker)](#4-instalación--modo-producción-docker)
 5. [Configuración del archivo `.env`](#5-configuración-del-archivo-env)
 6. [Uso de la interfaz web](#6-uso-de-la-interfaz-web)
+   - [6.1 Horarios personalizados](#61-horarios-personalizados-card-superior)
+   - [6.2 Panel del dispositivo ZK](#62-panel-del-dispositivo-biométrico-zk)
+   - [6.3 Parámetros fijos del análisis](#63-parámetros-fijos-del-análisis)
 7. [Horarios personalizados por persona](#7-horarios-personalizados-por-persona)
 8. [Gestión y mantenimiento](#8-gestión-y-mantenimiento)
 9. [Referencia de la API](#9-referencia-de-la-api)
@@ -266,25 +269,30 @@ También muestra: total de registros en la base de datos local, cantidad de pers
 
 #### Sincronizar desde el dispositivo
 
-1. Seleccionar **Fecha inicio** y **Fecha fin** del período a sincronizar.
-2. Hacer clic en **Sincronizar**.
-3. Una barra de progreso mostrará el estado en tiempo real:
+1. Hacer clic en **Sincronizar**.
+2. Una barra de progreso mostrará el estado en tiempo real:
    - *Conectando al dispositivo...*
    - *Descargando marcaciones (puede tardar)...*
    - *Procesando y filtrando marcaciones...*
    - *Completado — N registros nuevos guardados.*
 
+La sincronización descarga **todos los registros históricos** del dispositivo. No requiere seleccionar un rango de fechas — el filtro de período se aplica al generar el informe, no al sincronizar.
+
 > **Por qué tarda:** el dispositivo ZK descarga todos sus registros históricos acumulados cada vez que se conecta. La primera vez es la más lenta. Para reducir los tiempos futuros, ver [Limpiar log del dispositivo](#limpiar-log-del-dispositivo).
 
 #### Generar informe
 
-1. Seleccionar las fechas del período.
+> **Requisito previo:** los horarios del personal deben estar cargados (card azul superior). Sin horarios, el botón **Generar Reporte PDF** queda deshabilitado.
+
+1. En la card **Período del informe**, seleccionar **Fecha inicio** y **Fecha fin**.
 2. Elegir el **Tipo de reporte**:
-   - `General (todos los días)` — un informe con todos los días del período. Si hay horarios cargados, **solo incluye a las personas del archivo de horarios**.
-   - `Por persona` — un informe con una sección por cada empleado mostrando su historial diario con la hora programada de llegada.
-3. Si se seleccionó "Por persona", elegir en el selector **Todas** las personas o una específica.
-4. Expandir **Configuración avanzada** si se necesita ajustar parámetros (opcional).
-5. Hacer clic en **Generar Reporte PDF**. El archivo se descarga automáticamente.
+   - `General (todos, por día)` — informe organizado por día; solo incluye personas del archivo de horarios; omite días sin incidencias.
+   - `Por persona (una sola)` — historial diario de un empleado con hora programada vs. real; omite días sin incidencias; si no hay ninguna, muestra "Sin novedades".
+   - `Por varias personas` — igual que el anterior pero para un subconjunto seleccionado.
+3. Si se eligió **Por persona**, seleccionar el empleado en el desplegable.
+4. Si se eligió **Por varias personas**, seleccionar los empleados en la lista múltiple (Ctrl+clic para selección múltiple; los botones **Seleccionar todas** / **Deseleccionar todas** agilizan la selección).
+5. Opcionalmente, escribir nombres en **Personas a excluir** (separados por coma).
+6. Hacer clic en **Generar Reporte PDF**. El archivo se descarga automáticamente.
 
 #### Limpiar log del dispositivo
 
@@ -300,18 +308,19 @@ Se recomienda hacer esto **una vez al mes**, después del informe mensual.
 
 ---
 
-### 6.3 Configuración avanzada del reporte
+### 6.3 Parámetros fijos del análisis
 
-Disponible expandiendo el panel **Configuración avanzada**.
+La lógica de tardanzas usa una **tolerancia fija de 5 minutos** sobre la hora programada de cada persona:
 
-Estos valores son los **umbrales globales por defecto**. Si hay horarios personalizados cargados, estos umbrales solo aplican a personas que NO estén en el archivo de horarios.
+| Retraso | Clasificación |
+|---------|--------------|
+| 0 min | Puntual — no aparece en el informe |
+| 1 – 5 min | Tardanza leve |
+| > 5 min | Tardanza severa |
 
-| Campo | Valor por defecto | Descripción |
-|-------|------------------|-------------|
-| Tardanza Leve | `08:00` | Hora a partir de la cual se reporta tardanza leve |
-| Tardanza Severa | `08:05` | Hora a partir de la cual se reporta tardanza severa |
-| Max. Almuerzo (min) | `60` | Minutos máximos de almuerzo antes de reportar exceso |
-| Personas a excluir | *(vacío)* | Nombres separados por coma — excluye personas del análisis |
+El límite de almuerzo se toma del archivo de horarios de cada persona (0, 30 ó 60 minutos). Estos valores no son configurables desde la UI.
+
+El único parámetro ajustable es **Personas a excluir** — campo de texto visible siempre debajo del selector de modo.
 
 ---
 
@@ -363,16 +372,18 @@ Hacer clic en el botón **Ver detalle** (visible cuando hay horarios cargados). 
 
 ### 7.4 Efecto en los informes
 
-**Informe general:** cuando hay horarios cargados, el informe solo incluye a las personas presentes en el archivo de horarios. Las personas del dispositivo que no estén en el archivo se omiten.
+Los horarios son **obligatorios** para generar cualquier reporte. Las personas sin horario en el archivo no aparecen en ningún tipo de informe, independientemente de si tienen registros en el dispositivo.
 
-**Informe por persona:** cada empleado muestra en su tabla diaria:
+**Informe general:** organizado por día; solo incluye a las personas del archivo de horarios. Los días en que nadie tuvo incidencias se omiten del PDF. Si el período completo no tiene novedades, se genera una página única "Sin novedades en el período consultado."
+
+**Informe por persona / por varias personas:** cada empleado muestra en su tabla diaria:
 - **Prog.** — la hora programada de llegada para ese día
 - **Llegada** — la hora real de llegada según el dispositivo
-- Si la diferencia es de 1 a 5 minutos → *Tardanza leve (+Xm sobre HH:MM)*
-- Si la diferencia es mayor a 5 minutos → *Tardanza severa (+Xm sobre HH:MM)*
-- Si el día está marcado como `NO` → *Día libre según horario*
+- Retraso de 1 a 5 min → *Tardanza leve (+Xm sobre HH:MM)*
+- Retraso mayor a 5 min → *Tardanza severa (+Xm sobre HH:MM)*
+- Día marcado como `NO` en el horario → *Día libre según horario*
 
-**Compatibilidad:** si no se cargan horarios, el sistema funciona exactamente igual que antes, usando los umbrales globales para todos.
+Los días sin incidencias no generan fila en la tabla. Si una persona no tuvo ninguna novedad en el período, aparece con el mensaje "Sin novedades registradas en el período consultado."
 
 ---
 
@@ -437,11 +448,12 @@ docker compose restart
 ### Rutina mensual recomendada
 
 1. Abrir la aplicación en el navegador.
-2. Seleccionar el rango del mes completo y hacer clic en **Sincronizar**.
+2. Hacer clic en **Sincronizar** (sincronización completa, sin filtro de fechas).
 3. Verificar que la sincronización completó correctamente.
-4. Generar el informe general del mes y verificar que los datos son correctos.
-5. Expandir **Mantenimiento del dispositivo** → **Limpiar log del dispositivo** → confirmar.
-6. Hacer un backup manual de la base de datos.
+4. En la card **Período del informe**, seleccionar el rango del mes completo.
+5. Generar el informe general del mes y verificar que los datos son correctos.
+6. Expandir **Mantenimiento del dispositivo** → **Limpiar log del dispositivo** → confirmar.
+7. Hacer un backup manual de la base de datos.
 
 ---
 
@@ -473,19 +485,19 @@ curl http://localhost:5000/estado-sync
 
 ### `POST /sincronizar`
 
-Inicia una sincronización en segundo plano. Retorna un `job_id` para hacer polling.
+Inicia una sincronización completa en segundo plano. Retorna un `job_id` para hacer polling.
 
 ```bash
 curl -X POST http://localhost:5000/sincronizar \
   -H "Content-Type: application/json" \
-  -d '{"fecha_inicio": "2026-01-01", "fecha_fin": "2026-01-31"}'
+  -d '{}'
 ```
 
 ```json
 { "job_id": "a3f7c1d2e8b4", "estado": "en_progreso" }
 ```
 
-Si no se envían fechas, sincroniza todos los registros desde 2000-01-01 hasta hoy.
+El body puede incluir `fecha_inicio` y `fecha_fin` (formato `YYYY-MM-DD`) para restringir el rango de registros guardados en la DB, pero en uso normal se recomienda no filtrar y dejar que el sistema descargue todo.
 
 ---
 
@@ -516,21 +528,36 @@ curl "http://localhost:5000/personas-db?fecha_inicio=2026-01-01&fecha_fin=2026-0
 
 ### `POST /generar-desde-db`
 
-Genera un PDF usando datos de la base de datos local.
+Genera un PDF usando datos de la base de datos local. Requiere que haya horarios cargados; retorna 400 si no los hay.
+
+**Campos del body:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `fecha_inicio` | `"YYYY-MM-DD"` | Sí | Inicio del período |
+| `fecha_fin` | `"YYYY-MM-DD"` | Sí | Fin del período |
+| `modo` | `"general"` \| `"persona"` \| `"varias"` | No (default `"general"`) | Tipo de reporte |
+| `persona` | `string` | Sí si `modo == "persona"` | Nombre exacto del empleado |
+| `personas` | `string[]` | Sí si `modo == "varias"` | Lista de nombres de empleados |
+| `excluidos` | `string[]` | No | Personas a excluir del análisis |
+
+**Ejemplos:**
 
 ```bash
+# Reporte general
 curl -X POST http://localhost:5000/generar-desde-db \
   -H "Content-Type: application/json" \
-  -d '{
-    "fecha_inicio": "2026-01-01",
-    "fecha_fin": "2026-01-31",
-    "modo": "general",
-    "persona": "TODAS",
-    "tardanza_leve": "08:00",
-    "tardanza_severa": "08:05",
-    "max_almuerzo_min": 60,
-    "excluidos": []
-  }'
+  -d '{"fecha_inicio": "2026-01-01", "fecha_fin": "2026-01-31", "modo": "general"}'
+
+# Reporte por una persona
+curl -X POST http://localhost:5000/generar-desde-db \
+  -H "Content-Type: application/json" \
+  -d '{"fecha_inicio": "2026-01-01", "fecha_fin": "2026-01-31", "modo": "persona", "persona": "PEREZ GARCIA JUAN"}'
+
+# Reporte por varias personas
+curl -X POST http://localhost:5000/generar-desde-db \
+  -H "Content-Type: application/json" \
+  -d '{"fecha_inicio": "2026-01-01", "fecha_fin": "2026-01-31", "modo": "varias", "personas": ["PEREZ GARCIA JUAN", "LOPEZ TORRES ANA"]}'
 ```
 
 ---
@@ -648,11 +675,11 @@ UDP es entre 20% y 40% más rápido en redes locales.
 
 ---
 
-### El informe general no muestra a todas las personas
+### El informe no muestra a ciertas personas
 
-Si hay horarios cargados, el informe general solo incluye a las personas presentes en el archivo de horarios. Las personas del dispositivo que no estén en ese archivo se omiten intencionalmente.
+El sistema solo analiza a las personas presentes en el **archivo de horarios cargado**. Las personas del dispositivo que no estén en ese archivo se omiten en todos los modos de reporte.
 
-Para incluir a todos independientemente, generar el informe en modo **Por persona**, que no aplica este filtro.
+Si falta algún empleado, verificar que está incluido en el archivo de horarios (nombre o ID) y volver a importarlo.
 
 ---
 
