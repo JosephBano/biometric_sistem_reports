@@ -44,13 +44,6 @@ from reportlab.platypus import KeepTogether
 # ══════════════════════════════════════════════════════════════════════════
 
 DEFAULT_CONFIG = {
-    # Horas límite de llegada (HH:MM)
-    "tardanza_leve":    "08:00",   # Llegada después → tardanza leve
-    "tardanza_severa":  "08:05",   # Llegada después → tardanza severa
-
-    # Minutos máximos de almuerzo antes de reportar exceso
-    "max_almuerzo_min": 60,
-
     # Minutos máximos entre dos marcaciones consecutivas iguales
     # para considerar la segunda como duplicado por error
     "duplicado_min": 10,
@@ -58,6 +51,9 @@ DEFAULT_CONFIG = {
     # Personas a excluir del reporte (por nombre exacto o parcial)
     "excluidos": [],
 }
+
+# Tolerancia fija de entrada: 0–5 min → tardanza leve, >5 min → tardanza severa
+MARGEN_LEVE_MIN = 5
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -236,31 +232,19 @@ def deduplicar(registros: list[dict], max_min: int = 10) -> tuple[list[dict], li
 
 def analizar_dia(
     registros_dia: list[dict],
-    hora_tardanza_leve: str,
-    hora_tardanza_severa: str,
-    max_almuerzo_min: int,
-    horarios: dict = None,
+    horarios: dict,
 ) -> dict:
     """
     Analiza los registros de UN día y devuelve un dict con:
-      - tardanza_leve:   lista de personas con llegada tardía leve
-      - tardanza_severa: lista de personas con llegada tardía severa
-      - almuerzo_largo:  lista de personas con almuerzo > max_almuerzo_min
+      - tardanza_leve:   lista de personas con llegada tardía leve (1–5 min)
+      - tardanza_severa: lista de personas con llegada tardía severa (>5 min)
+      - almuerzo_largo:  lista de personas con almuerzo > su límite individual
       - registros_incompletos: personas con registros que no cuadran
       - resumen: dict con conteos
 
-    Si se pasa `horarios` (dict con "by_id" y "by_nombre"), aplica umbrales
-    de tardanza y almuerzo individuales por persona. En caso contrario usa
-    los parámetros globales (comportamiento original).
+    Requiere `horarios` (dict con "by_id" y "by_nombre"). Las personas sin
+    horario en el documento se omiten del análisis.
     """
-    h_leve   = datetime.strptime(hora_tardanza_leve,   "%H:%M").time()
-    h_severa = datetime.strptime(hora_tardanza_severa, "%H:%M").time()
-
-    # Minutos de gracia entre tardanza leve y severa (defecto 5 min)
-    grace_min = _minutos_diferencia(h_leve, h_severa)
-    if grace_min <= 0:
-        grace_min = 5
-
     # Agrupar por persona
     por_persona = defaultdict(list)
     for r in registros_dia:
@@ -274,67 +258,51 @@ def analizar_dia(
     for nombre, marcaciones in por_persona.items():
         marcaciones.sort(key=lambda x: x["datetime"])
 
-        # ── Obtener horario individual (si está disponible) ────────────
+        # ── Obtener horario individual ─────────────────────────────────
         id_usuario      = marcaciones[0].get("id_usuario")
         fecha_dia       = marcaciones[0]["fecha"]
         horario_persona = _buscar_horario(nombre, id_usuario, horarios)
 
-        if horario_persona is not None:
-            info = _get_info_dia(horario_persona, fecha_dia)
-            if not info["trabaja"]:
-                # Marcaciones en día libre — registrar como incompleto
-                incompletos.append({
-                    "nombre":    nombre,
-                    "registros": len(marcaciones),
-                    "detalle":   "Día libre según horario / " + " / ".join(
-                        f"{m['tipo']} {m['hora'].strftime('%H:%M')}"
-                        for m in marcaciones
-                    ),
-                })
-                continue
-            hora_prog        = info["hora_entrada"]
-            max_almuerzo_per = info["almuerzo_min"]
-        else:
-            hora_prog        = None
-            max_almuerzo_per = max_almuerzo_min
+        if horario_persona is None:
+            continue  # sin horario → omitir del análisis
+
+        info = _get_info_dia(horario_persona, fecha_dia)
+        if not info["trabaja"]:
+            # Marcaciones en día libre — registrar como incompleto
+            incompletos.append({
+                "nombre":    nombre,
+                "registros": len(marcaciones),
+                "detalle":   "Día libre según horario / " + " / ".join(
+                    f"{m['tipo']} {m['hora'].strftime('%H:%M')}"
+                    for m in marcaciones
+                ),
+            })
+            continue
+        hora_prog        = info["hora_entrada"]
+        max_almuerzo_per = info["almuerzo_min"]
 
         # ── Análisis de llegada (primer registro) ──────────────────────
         primera = marcaciones[0]
         if primera["tipo"] == "Entrada":
             hora_llegada = primera["hora"]
 
-            if hora_prog:
-                # Lógica relativa al horario individual
-                h_prog  = datetime.strptime(hora_prog, "%H:%M").time()
-                retraso = _minutos_diferencia(h_prog, hora_llegada)
-                if retraso > grace_min:
-                    tardanza_severa_lst.append({
-                        "nombre":  nombre,
-                        "hora":    hora_llegada.strftime("%H:%M"),
-                        "retraso": retraso,
-                        "programado": hora_prog,
-                    })
-                elif retraso > 0:
-                    tardanza_leve_lst.append({
-                        "nombre":  nombre,
-                        "hora":    hora_llegada.strftime("%H:%M"),
-                        "retraso": retraso,
-                        "programado": hora_prog,
-                    })
-            else:
-                # Lógica global (sin horario individual)
-                if hora_llegada > h_severa:
-                    tardanza_severa_lst.append({
-                        "nombre":  nombre,
-                        "hora":    hora_llegada.strftime("%H:%M"),
-                        "retraso": _minutos_diferencia(h_severa, hora_llegada),
-                    })
-                elif hora_llegada > h_leve:
-                    tardanza_leve_lst.append({
-                        "nombre":  nombre,
-                        "hora":    hora_llegada.strftime("%H:%M"),
-                        "retraso": _minutos_diferencia(h_leve, hora_llegada),
-                    })
+            # Lógica relativa al horario individual
+            h_prog  = datetime.strptime(hora_prog, "%H:%M").time()
+            retraso = _minutos_diferencia(h_prog, hora_llegada)
+            if retraso > MARGEN_LEVE_MIN:
+                tardanza_severa_lst.append({
+                    "nombre":  nombre,
+                    "hora":    hora_llegada.strftime("%H:%M"),
+                    "retraso": retraso,
+                    "programado": hora_prog,
+                })
+            elif retraso > 0:
+                tardanza_leve_lst.append({
+                    "nombre":  nombre,
+                    "hora":    hora_llegada.strftime("%H:%M"),
+                    "retraso": retraso,
+                    "programado": hora_prog,
+                })
 
         # ── Análisis de almuerzo ───────────────────────────────────────
         if max_almuerzo_per > 0:
@@ -393,18 +361,9 @@ def analizar_por_persona(
     """
     Analiza los registros de todas las personas, organizados por persona.
 
-    Si se pasa `horarios` (dict con "by_id" y "by_nombre"), aplica umbrales
-    de tardanza y almuerzo individuales. Sin horarios usa config global.
+    Requiere `horarios` (dict con "by_id" y "by_nombre"). Las personas sin
+    horario en el documento se omiten del resultado.
     """
-    h_leve   = datetime.strptime(config["tardanza_leve"],   "%H:%M").time()
-    h_severa = datetime.strptime(config["tardanza_severa"], "%H:%M").time()
-    max_almuerzo_min = config.get("max_almuerzo_min", 60)
-
-    # Minutos de gracia entre tardanza leve y severa (defecto 5 min)
-    grace_min = _minutos_diferencia(h_leve, h_severa)
-    if grace_min <= 0:
-        grace_min = 5
-
     # Agrupar por persona y luego por fecha
     por_persona_fecha = defaultdict(lambda: defaultdict(list))
     for r in registros:
@@ -420,8 +379,10 @@ def analizar_por_persona(
                 id_usuario = marcaciones_tmp[0]["id_usuario"]
                 break
 
-        # Buscar horario del empleado
+        # Buscar horario del empleado — omitir si no tiene
         horario_persona = _buscar_horario(nombre, id_usuario, horarios)
+        if horario_persona is None:
+            continue
 
         dias_list = []
         resumen = {
@@ -447,25 +408,20 @@ def analizar_por_persona(
             }
 
             # ── Resolver horario para este día ─────────────────────────
-            if horario_persona is not None:
-                info = _get_info_dia(horario_persona, fecha)
-                dia_info["hora_programada"] = info["hora_entrada"]
+            info = _get_info_dia(horario_persona, fecha)
+            dia_info["hora_programada"] = info["hora_entrada"]
 
-                if not info["trabaja"]:
-                    # Persona no trabaja este día según su horario
-                    dia_info["estado"] = "libre"
-                    dia_info["observaciones"].append("Día libre según horario")
-                    n = len(marcaciones)
-                    if marcaciones[0]["tipo"] == "Entrada":
-                        dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
-                    dias_list.append(dia_info)
-                    continue  # No se analiza tardanza ni almuerzo
+            if not info["trabaja"]:
+                # Persona no trabaja este día según su horario
+                dia_info["estado"] = "libre"
+                dia_info["observaciones"].append("Día libre según horario")
+                if marcaciones[0]["tipo"] == "Entrada":
+                    dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
+                dias_list.append(dia_info)   # día libre siempre se incluye
+                continue  # No se analiza tardanza ni almuerzo
 
-                hora_prog        = info["hora_entrada"]
-                max_almuerzo_per = info["almuerzo_min"]
-            else:
-                hora_prog        = None
-                max_almuerzo_per = max_almuerzo_min
+            hora_prog        = info["hora_entrada"]
+            max_almuerzo_per = info["almuerzo_min"]
 
             n = len(marcaciones)
             resumen["total_dias"] += 1
@@ -487,34 +443,22 @@ def analizar_por_persona(
                 if primera["tipo"] == "Entrada":
                     dia_info["llegada"] = primera["hora"].strftime("%H:%M")
 
-                    if hora_prog:
-                        # ── Tardanza relativa al horario individual ────
-                        h_prog  = datetime.strptime(hora_prog, "%H:%M").time()
-                        retraso = _minutos_diferencia(h_prog, primera["hora"])
-                        if retraso > grace_min:
-                            dia_info["estado"] = "severa"
-                            dia_info["observaciones"].append(
-                                f"Tardanza severa (+{retraso}m sobre {hora_prog})"
-                            )
-                            resumen["tardanza_severa"] += 1
-                        elif retraso > 0:
-                            if dia_info["estado"] == "ok":
-                                dia_info["estado"] = "leve"
-                            dia_info["observaciones"].append(
-                                f"Tardanza leve (+{retraso}m sobre {hora_prog})"
-                            )
-                            resumen["tardanza_leve"] += 1
-                    else:
-                        # ── Tardanza global ────────────────────────────
-                        if primera["hora"] > h_severa:
-                            dia_info["estado"] = "severa"
-                            dia_info["observaciones"].append("Tardanza severa")
-                            resumen["tardanza_severa"] += 1
-                        elif primera["hora"] > h_leve:
-                            if dia_info["estado"] == "ok":
-                                dia_info["estado"] = "leve"
-                            dia_info["observaciones"].append("Tardanza leve")
-                            resumen["tardanza_leve"] += 1
+                    # ── Tardanza relativa al horario individual ────────
+                    h_prog  = datetime.strptime(hora_prog, "%H:%M").time()
+                    retraso = _minutos_diferencia(h_prog, primera["hora"])
+                    if retraso > MARGEN_LEVE_MIN:
+                        dia_info["estado"] = "severa"
+                        dia_info["observaciones"].append(
+                            f"Tardanza severa (+{retraso}m sobre {hora_prog})"
+                        )
+                        resumen["tardanza_severa"] += 1
+                    elif retraso > 0:
+                        if dia_info["estado"] == "ok":
+                            dia_info["estado"] = "leve"
+                        dia_info["observaciones"].append(
+                            f"Tardanza leve (+{retraso}m sobre {hora_prog})"
+                        )
+                        resumen["tardanza_leve"] += 1
 
                 if ultima["tipo"] == "Salida":
                     dia_info["salida"] = ultima["hora"].strftime("%H:%M")
@@ -542,12 +486,15 @@ def analizar_por_persona(
                                     break
                             break
 
-            dias_list.append(dia_info)
+            # Solo incluir días con observaciones; omitir días perfectos
+            if dia_info["estado"] != "ok" or dia_info["observaciones"]:
+                dias_list.append(dia_info)
 
-        if dias_list:
+        if resumen["total_dias"] > 0:
             resultado[nombre] = {
-                "dias":    dias_list,
-                "resumen": resumen,
+                "dias":          dias_list,
+                "resumen":       resumen,
+                "sin_novedades": not dias_list,
             }
 
     return resultado
@@ -650,11 +597,19 @@ def generar_pdf(
     # ── Resumen ejecutivo del mes ──────────────────────────────────────
     story += _resumen_mensual(st, analisis_por_dia, config)
 
-    # ── Página por día ────────────────────────────────────────────────
-    dias_ordenados = sorted(analisis_por_dia.keys())
-    for i, dia in enumerate(dias_ordenados):
-        story.append(PageBreak())
-        story += _pagina_dia(st, dia, analisis_por_dia[dia], config)
+    # ── Página por día (solo días con novedades) ──────────────────────
+    dias_con_nov = [
+        d for d in sorted(analisis_por_dia.keys())
+        if any(analisis_por_dia[d]["resumen"][k] > 0
+               for k in ("tardanza_leve", "tardanza_severa", "almuerzo_largo", "incompletos"))
+    ]
+    if not dias_con_nov:
+        story.append(Spacer(1, 2*cm))
+        story.append(Paragraph("Sin novedades en el período consultado.", st["ok"]))
+    else:
+        for dia in dias_con_nov:
+            story.append(PageBreak())
+            story += _pagina_dia(st, dia, analisis_por_dia[dia], config)
 
     # ── Log de duplicados ─────────────────────────────────────────────
     if log_duplicados:
@@ -696,12 +651,11 @@ def generar_pdf_persona(
     story.append(Spacer(1, 1*cm))
 
     datos_portada = [
-        ["Archivo origen:",  os.path.basename(nombre_archivo_origen)],
-        ["Generado el:",     datetime.now().strftime("%d/%m/%Y %H:%M")],
-        ["Personas total:",  str(len(analisis_persona))],
-        ["Tardanza leve desde:", config.get("tardanza_leve", "")],
-        ["Tardanza severa desde:", config.get("tardanza_severa", "")],
-        ["Almuerzo máximo:", f"{config.get('max_almuerzo_min', '')} minutos"],
+        ["Archivo origen:",   os.path.basename(nombre_archivo_origen)],
+        ["Generado el:",      datetime.now().strftime("%d/%m/%Y %H:%M")],
+        ["Personas total:",   str(len(analisis_persona))],
+        ["Tolerancia entrada:", "5 minutos (fija)"],
+        ["Almuerzo:",          "Según horario individual"],
     ]
     t_portada = Table(datos_portada, colWidths=[6*cm, 10*cm])
     t_portada.setStyle(TableStyle([
@@ -761,8 +715,10 @@ def generar_pdf_persona(
         story.append(Spacer(1, 0.4*cm))
 
         datos = analisis_persona[nombre]["dias"]
-        if not datos:
-            story.append(Paragraph("Sin registros.", st["normal"]))
+        if analisis_persona[nombre].get("sin_novedades") or not datos:
+            story.append(Paragraph(
+                "Sin novedades registradas en el período consultado.", st["ok"]
+            ))
             continue
 
         # Determinar si hay horarios individuales para mostrar columna "Prog."
@@ -883,14 +839,13 @@ def _portada(st, origen, config, analisis):
 
     # Metadata
     datos = [
-        ["Archivo origen:",  os.path.basename(origen)],
-        ["Generado el:",     datetime.now().strftime("%d/%m/%Y %H:%M")],
-        ["Días analizados:", str(len(analisis))],
-        ["Tardanza leve desde:", config["tardanza_leve"]],
-        ["Tardanza severa desde:", config["tardanza_severa"]],
-        ["Tiempo máximo de almuerzo:", f"{config['max_almuerzo_min']} minutos"],
+        ["Archivo origen:",    os.path.basename(origen)],
+        ["Generado el:",       datetime.now().strftime("%d/%m/%Y %H:%M")],
+        ["Días analizados:",   str(len(analisis))],
+        ["Tolerancia entrada:", "5 minutos (fija)"],
+        ["Almuerzo:",           "Según horario individual"],
     ]
-    if config["excluidos"]:
+    if config.get("excluidos"):
         datos.append(["Personas excluidas:", ", ".join(config["excluidos"])])
 
     t = Table(datos, colWidths=[6*cm, 10*cm])
@@ -1011,7 +966,7 @@ def _pagina_dia(st, dia, datos, config):
     # ── Tardanza severa ────────────────────────────────────────────────
     story += _seccion_tardanza(
         st, "Tardanza Severa",
-        f"Llegadas después de las {config['tardanza_severa']}",
+        "Llegadas con más de 5 minutos de retraso sobre el horario programado",
         datos["tardanza_severa"],
         COLOR_ERROR, "🔴"
     )
@@ -1019,13 +974,13 @@ def _pagina_dia(st, dia, datos, config):
     # ── Tardanza leve ──────────────────────────────────────────────────
     story += _seccion_tardanza(
         st, "Tardanza Leve",
-        f"Llegadas entre {config['tardanza_leve']} y {config['tardanza_severa']}",
+        "Llegadas con 1 a 5 minutos de retraso sobre el horario programado",
         datos["tardanza_leve"],
         COLOR_WARN, "🟡"
     )
 
     # ── Exceso de almuerzo ─────────────────────────────────────────────
-    story += _seccion_almuerzo(st, datos["almuerzo_largo"], config)
+    story += _seccion_almuerzo(st, datos["almuerzo_largo"])
 
     # ── Registros incompletos ──────────────────────────────────────────
     story += _seccion_incompletos(st, datos["registros_incompletos"])
@@ -1054,11 +1009,11 @@ def _seccion_tardanza(st, titulo, descripcion, lista, color_bg, icono):
     return story
 
 
-def _seccion_almuerzo(st, lista, config):
+def _seccion_almuerzo(st, lista):
     story = []
     story.append(Paragraph("🍽️  Exceso de Almuerzo", st["seccion"]))
     story.append(Paragraph(
-        f"Personas cuyo almuerzo superó los {config['max_almuerzo_min']} minutos",
+        "Personas con exceso de tiempo de almuerzo según horario individual",
         st["pequeño"]
     ))
     story.append(Spacer(1, 0.2*cm))
@@ -1194,16 +1149,6 @@ def main():
     parser.add_argument("--excluir", nargs="+", metavar="NOMBRE",
         default=[],
         help='Personas a excluir (ej: --excluir "Juan Perez" "Maria Lopez")')
-    parser.add_argument("--tardanza1", default=DEFAULT_CONFIG["tardanza_leve"],
-        metavar="HH:MM",
-        help=f"Hora de tardanza leve (default: {DEFAULT_CONFIG['tardanza_leve']})")
-    parser.add_argument("--tardanza2", default=DEFAULT_CONFIG["tardanza_severa"],
-        metavar="HH:MM",
-        help=f"Hora de tardanza severa (default: {DEFAULT_CONFIG['tardanza_severa']})")
-    parser.add_argument("--almuerzo", type=int,
-        default=DEFAULT_CONFIG["max_almuerzo_min"],
-        metavar="MINUTOS",
-        help=f"Minutos máximos de almuerzo (default: {DEFAULT_CONFIG['max_almuerzo_min']})")
     parser.add_argument("--duplicado-min", type=int,
         default=DEFAULT_CONFIG["duplicado_min"],
         metavar="MINUTOS",
@@ -1221,11 +1166,8 @@ def main():
         sys.exit(1)
 
     config = {
-        "tardanza_leve":    args.tardanza1,
-        "tardanza_severa":  args.tardanza2,
-        "max_almuerzo_min": args.almuerzo,
-        "duplicado_min":    args.duplicado_min,
-        "excluidos":        args.excluir,
+        "duplicado_min": args.duplicado_min,
+        "excluidos":     args.excluir,
     }
 
     # ── Cargar datos ───────────────────────────────────────────────────
@@ -1252,7 +1194,7 @@ def main():
 
     if args.modo == "persona":
         print(f"\n📊 Analizando registros por persona...")
-        analisis_persona = analizar_por_persona(registros, config)
+        analisis_persona = analizar_por_persona(registros, config, {})
         
         if args.persona:
             if args.persona in analisis_persona:
@@ -1295,12 +1237,7 @@ def main():
         print(f"\n📊 Analizando {len(por_fecha)} día(s)...")
         analisis_por_dia = {}
         for fecha, regs in sorted(por_fecha.items()):
-            analisis_por_dia[fecha] = analizar_dia(
-                regs,
-                config["tardanza_leve"],
-                config["tardanza_severa"],
-                config["max_almuerzo_min"],
-            )
+            analisis_por_dia[fecha] = analizar_dia(regs, {})
             r = analisis_por_dia[fecha]["resumen"]
             print(f"   {fecha.strftime('%d/%m/%Y')}  →  "
                   f"{r['total_personas']} personas, "

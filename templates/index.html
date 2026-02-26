@@ -111,24 +111,12 @@
                     </div>
                 </div>
 
-                <!-- Rango de fechas -->
-                <div class="row g-3 mb-3">
-                    <div class="col-md-5">
-                        <label class="form-label small">Fecha inicio</label>
-                        <input type="date" class="form-control form-control-sm"
-                               id="zk-fecha-inicio">
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label small">Fecha fin</label>
-                        <input type="date" class="form-control form-control-sm"
-                               id="zk-fecha-fin">
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button class="btn btn-outline-primary btn-sm w-100"
-                                id="btn-sync" onclick="iniciarSync()">
-                            Sincronizar
-                        </button>
-                    </div>
+                <!-- Botón de sincronización -->
+                <div class="mb-3">
+                    <button class="btn btn-outline-primary btn-sm"
+                            id="btn-sync" onclick="iniciarSync()">
+                        Sincronizar
+                    </button>
                 </div>
 
                 <!-- Progreso de sync -->
@@ -176,60 +164,57 @@
 
         </div><!-- /zk -->
 
+        <!-- ═══ CARD PERÍODO DEL INFORME ════════════════════════════════ -->
+        <div class="status-card mb-4">
+            <div class="fw-semibold small mb-3">Período del informe</div>
+            <div class="row g-3">
+                <div class="col-md-5">
+                    <label class="form-label small">Fecha inicio</label>
+                    <input type="date" class="form-control form-control-sm"
+                           id="fecha-inicio">
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small">Fecha fin</label>
+                    <input type="date" class="form-control form-control-sm"
+                           id="fecha-fin">
+                </div>
+            </div>
+        </div>
+
         <!-- ═══ FORMULARIO DE REPORTE (COMPARTIDO) ═══════════════════════ -->
         <div id="report-form">
             <hr class="my-4">
 
-            <div class="row mb-4">
+            <div class="row g-3 mb-3">
                 <div class="col-md-6">
                     <label class="form-label">Tipo de reporte</label>
                     <select class="form-select" id="modo">
-                        <option value="general">General (todos los días)</option>
-                        <option value="persona">Por persona</option>
+                        <option value="general">General (todos, por día)</option>
+                        <option value="persona">Por persona (una sola)</option>
+                        <option value="varias">Por varias personas</option>
                     </select>
                 </div>
-                <div class="col-md-6" id="persona-group">
+                <div class="col-md-6" id="persona-group" style="display:none">
                     <label class="form-label">Persona</label>
-                    <select class="form-select" id="persona">
-                        <option value="TODAS">-- Todas las personas --</option>
-                    </select>
+                    <select class="form-select" id="persona"></select>
+                </div>
+                <div class="col-12" id="varias-group" style="display:none">
+                    <label class="form-label">Personas</label>
+                    <select class="form-select" id="personas-varias" multiple size="6"></select>
+                    <div class="mt-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary"
+                                onclick="seleccionarTodasPersonas()">Seleccionar todas</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary ms-1"
+                                onclick="deseleccionarTodasPersonas()">Deseleccionar todas</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="mb-4">
-                <button class="btn btn-link text-decoration-none p-0 small" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#configAvanzada">
-                    ▸ Configuración avanzada
-                </button>
-                <div class="collapse" id="configAvanzada">
-                    <div class="config-panel">
-                        <div class="row g-3">
-                            <div class="col-md-4">
-                                <label class="form-label small">Tardanza Leve (HH:MM)</label>
-                                <input type="time" class="form-control form-control-sm"
-                                       id="tardanza_leve" value="08:00">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small">Tardanza Severa (HH:MM)</label>
-                                <input type="time" class="form-control form-control-sm"
-                                       id="tardanza_severa" value="08:05">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label small">Max. Almuerzo (min)</label>
-                                <input type="number" class="form-control form-control-sm"
-                                       id="max_almuerzo_min" value="60" min="0">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label small">
-                                    Personas a excluir (separadas por coma)
-                                </label>
-                                <input type="text" class="form-control form-control-sm"
-                                       id="excluidos"
-                                       placeholder="Ej: Juan Perez, Maria Lopez">
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="mb-3">
+                <label class="form-label small">Personas a excluir (separadas por coma)</label>
+                <input type="text" class="form-control form-control-sm"
+                       id="excluidos"
+                       placeholder="Ej: Juan Perez, Maria Lopez">
             </div>
 
             <div class="d-grid">
@@ -413,8 +398,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const y       = now.getFullYear();
     const m       = String(now.getMonth() + 1).padStart(2, '0');
     const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
-    document.getElementById('zk-fecha-inicio').value = `${y}-${m}-01`;
-    document.getElementById('zk-fecha-fin').value    = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+    document.getElementById('fecha-inicio').value = `${y}-${m}-01`;
+    document.getElementById('fecha-fin').value    = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
 
     fetchStatus();
     setInterval(fetchStatus, 30000);
@@ -423,15 +408,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Cambio de modo
 document.getElementById('modo').addEventListener('change', function () {
-    const isPersona = this.value === 'persona';
-    document.getElementById('persona-group').style.display = isPersona ? 'block' : 'none';
-    if (isPersona) loadPersonas();
+    const v = this.value;
+    document.getElementById('persona-group').style.display = v === 'persona' ? 'block' : 'none';
+    document.getElementById('varias-group').style.display  = v === 'varias'  ? 'block' : 'none';
+    if (v === 'persona') loadPersonas();
+    if (v === 'varias')  loadPersonasVarias();
 });
 
-// Recargar personas al cambiar fechas (si modo es "persona")
-['zk-fecha-inicio', 'zk-fecha-fin'].forEach(id => {
+// Recargar personas al cambiar fechas
+['fecha-inicio', 'fecha-fin'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => {
-        if (document.getElementById('modo').value === 'persona') loadPersonas();
+        const v = document.getElementById('modo').value;
+        if (v === 'persona') loadPersonas();
+        if (v === 'varias')  loadPersonasVarias();
     });
 });
 
@@ -485,13 +474,6 @@ function updateStatusBar(data) {
 // SINCRONIZACIÓN
 // ══════════════════════════════════════════════════════════════════════════
 function iniciarSync() {
-    const fi = document.getElementById('zk-fecha-inicio').value;
-    const ff = document.getElementById('zk-fecha-fin').value;
-    if (!fi || !ff) {
-        showError('Seleccione el rango de fechas antes de sincronizar.');
-        return;
-    }
-
     document.getElementById('sync-progress').style.display = 'block';
     document.getElementById('btn-sync').disabled = true;
     updateSyncUI({ estado: 'conectando' });
@@ -499,7 +481,7 @@ function iniciarSync() {
     fetch('/sincronizar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha_inicio: fi, fecha_fin: ff }),
+        body: JSON.stringify({}),
     })
     .then(r => r.json())
     .then(data => {
@@ -523,7 +505,9 @@ function pollSyncJob(jobId) {
                     clearInterval(syncJobInterval);
                     resetSyncUI();
                     fetchStatus();
-                    if (document.getElementById('modo').value === 'persona') loadPersonas();
+                    const modoActual = document.getElementById('modo').value;
+                    if (modoActual === 'persona') loadPersonas();
+                    if (modoActual === 'varias')  loadPersonasVarias();
                     showSuccess(
                         'Sincronización completada. ' +
                         data.registros_nuevos + ' registro(s) nuevos guardados.'
@@ -578,17 +562,45 @@ function resetSyncUI() {
 // SELECTOR DE PERSONAS
 // ══════════════════════════════════════════════════════════════════════════
 function loadPersonas() {
-    const fi = document.getElementById('zk-fecha-inicio').value;
-    const ff = document.getElementById('zk-fecha-fin').value;
+    const fi = document.getElementById('fecha-inicio').value;
+    const ff = document.getElementById('fecha-fin').value;
     if (!fi || !ff) return;
     fetch('/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
         .then(r => r.json())
         .then(data => populatePersonaSelect(data.personas || []));
 }
 
+function loadPersonasVarias() {
+    const fi = document.getElementById('fecha-inicio').value;
+    const ff = document.getElementById('fecha-fin').value;
+    if (!fi || !ff) return;
+    fetch('/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
+        .then(r => r.json())
+        .then(data => {
+            const sel = document.getElementById('personas-varias');
+            sel.innerHTML = '';
+            (data.personas || []).forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                sel.appendChild(opt);
+            });
+        });
+}
+
+function seleccionarTodasPersonas() {
+    Array.from(document.getElementById('personas-varias').options)
+         .forEach(o => o.selected = true);
+}
+
+function deseleccionarTodasPersonas() {
+    Array.from(document.getElementById('personas-varias').options)
+         .forEach(o => o.selected = false);
+}
+
 function populatePersonaSelect(personas) {
     const sel = document.getElementById('persona');
-    sel.innerHTML = '<option value="TODAS">-- Todas las personas --</option>';
+    sel.innerHTML = '';
     personas.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p;
@@ -602,27 +614,35 @@ function populatePersonaSelect(personas) {
 // GENERACIÓN DE REPORTE
 // ══════════════════════════════════════════════════════════════════════════
 function generarReporte() {
-    const fi = document.getElementById('zk-fecha-inicio').value;
-    const ff = document.getElementById('zk-fecha-fin').value;
+    const fi = document.getElementById('fecha-inicio').value;
+    const ff = document.getElementById('fecha-fin').value;
     if (!fi || !ff) {
-        showError('Seleccione el rango de fechas antes de generar el reporte.');
+        showError('Seleccione el período antes de generar el reporte.');
         return;
     }
 
-    const modo    = document.getElementById('modo').value;
-    const persona = document.getElementById('persona').value;
+    const modo      = document.getElementById('modo').value;
     const excluidos = document.getElementById('excluidos').value
         .split(',').map(s => s.trim()).filter(Boolean);
-    const body = {
-        fecha_inicio:    fi,
-        fecha_fin:       ff,
-        modo,
-        persona,
-        tardanza_leve:    document.getElementById('tardanza_leve').value,
-        tardanza_severa:  document.getElementById('tardanza_severa').value,
-        max_almuerzo_min: document.getElementById('max_almuerzo_min').value,
-        excluidos,
-    };
+
+    const body = { fecha_inicio: fi, fecha_fin: ff, modo, excluidos };
+
+    if (modo === 'persona') {
+        const persona = document.getElementById('persona').value;
+        if (!persona) {
+            showError('Seleccione una persona para generar el reporte.');
+            return;
+        }
+        body.persona = persona;
+    } else if (modo === 'varias') {
+        const sel      = document.getElementById('personas-varias');
+        const personas = Array.from(sel.selectedOptions).map(o => o.value);
+        if (!personas.length) {
+            showError('Seleccione al menos una persona.');
+            return;
+        }
+        body.personas = personas;
+    }
 
     document.getElementById('btn-submit').style.display      = 'none';
     document.getElementById('loading-spinner').style.display = 'block';
@@ -725,9 +745,12 @@ function actualizarHorariosUI(data) {
     const btnVer = document.getElementById('btn-ver-horarios');
     const btnCsv = document.getElementById('btn-exportar-csv');
 
-    if (!data || data.total === 0) {
+    const sinHorarios = !data || data.total === 0;
+    document.getElementById('btn-submit').disabled = sinHorarios;
+
+    if (sinHorarios) {
         dot.className    = 'status-dot dot-gray';
-        text.textContent = 'Horarios no cargados — se usarán umbrales globales';
+        text.textContent = 'Horarios no cargados — los reportes no están disponibles';
         btnVer.style.display = 'none';
         btnCsv.style.display = 'none';
         return;

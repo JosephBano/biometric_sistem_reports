@@ -94,11 +94,8 @@ def logout():
 
 def _parse_config(data: dict) -> dict:
     return {
-        "tardanza_leve":    data.get("tardanza_leve",    DEFAULT_CONFIG["tardanza_leve"]),
-        "tardanza_severa":  data.get("tardanza_severa",  DEFAULT_CONFIG["tardanza_severa"]),
-        "max_almuerzo_min": int(data.get("max_almuerzo_min", DEFAULT_CONFIG["max_almuerzo_min"])),
-        "duplicado_min":    DEFAULT_CONFIG["duplicado_min"],
-        "excluidos":        data.get("excluidos", []),
+        "duplicado_min": DEFAULT_CONFIG["duplicado_min"],
+        "excluidos":     data.get("excluidos", []),
     }
 
 
@@ -106,46 +103,58 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                pdf_path: str, nombre_origen: str):
     """
     Aplica filtros, deduplicación, análisis y genera el PDF.
-    Centraliza la lógica compartida entre /generar y /generar-desde-db.
-
-    Carga automáticamente los horarios personalizados desde la DB si existen.
-    En modo 'general', si hay horarios cargados, solo incluye a las personas
-    presentes en el archivo de horarios.
+    Los horarios son obligatorios; lanza ValueError si no hay ninguno cargado.
+    Solo analiza las personas presentes en el archivo de horarios.
     """
     if config["excluidos"]:
         registros = filtrar_excluidos(registros, config["excluidos"])
 
-    # Cargar horarios personalizados (None si no hay ninguno cargado)
+    # Cargar horarios personalizados — obligatorios para generar cualquier reporte
     horarios = db_module.get_horarios()
     if not horarios["by_id"]:
-        horarios = None  # Sin horarios → modo global (comportamiento original)
+        raise ValueError(
+            "No se pueden generar reportes sin horarios cargados. "
+            "Suba el archivo de horarios primero."
+        )
 
-    # Filtrar al conjunto de personas del archivo de horarios (solo modo general)
-    if horarios is not None and modo == "general":
-        ids_h    = set(horarios["by_id"].keys())
-        nom_h    = set(horarios["by_nombre"].keys())
-        registros = [
-            r for r in registros
-            if (r.get("id_usuario") in ids_h)
-               or (r["nombre"].upper() in nom_h)
-        ]
-        if not registros:
-            raise ValueError(
-                "Ningún registro del período pertenece a personas "
-                "del archivo de horarios cargado."
-            )
+    # Filtrar al conjunto de personas del archivo de horarios (aplica siempre)
+    ids_h = set(horarios["by_id"].keys())
+    nom_h = set(horarios["by_nombre"].keys())
+    registros = [
+        r for r in registros
+        if (r.get("id_usuario") in ids_h)
+           or (r["nombre"].upper() in nom_h)
+    ]
+    if not registros:
+        raise ValueError(
+            "Ningún registro del período corresponde a personas "
+            "del archivo de horarios cargado."
+        )
 
     registros, log_dup = deduplicar(registros, config["duplicado_min"])
 
     if not registros:
         raise ValueError("No quedaron registros después de aplicar los filtros.")
 
-    if modo == "persona":
+    if modo in ("persona", "varias"):
         analisis = analizar_por_persona(registros, config, horarios=horarios)
-        if persona and persona != "TODAS":
+
+        if modo == "persona":
+            if not persona:
+                raise ValueError("Especifique una persona para el modo 'persona'.")
             if persona not in analisis:
-                raise ValueError(f"No se encontraron registros para '{persona}'")
+                raise ValueError(f"No se encontraron registros para '{persona}'.")
             analisis = {persona: analisis[persona]}
+        else:  # varias
+            personas_sel = set(config.get("personas", []))
+            if not personas_sel:
+                raise ValueError("Seleccione al menos una persona.")
+            analisis = {k: v for k, v in analisis.items() if k in personas_sel}
+            if not analisis:
+                raise ValueError(
+                    "Ninguna de las personas seleccionadas tiene registros en el período."
+                )
+
         generar_pdf_persona(pdf_path, analisis, config, nombre_origen)
     else:
         por_fecha = defaultdict(list)
@@ -153,13 +162,7 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
             por_fecha[r["fecha"]].append(r)
         analisis = {}
         for fecha, regs in sorted(por_fecha.items()):
-            analisis[fecha] = analizar_dia(
-                regs,
-                config["tardanza_leve"],
-                config["tardanza_severa"],
-                config["max_almuerzo_min"],
-                horarios=horarios,
-            )
+            analisis[fecha] = analizar_dia(regs, horarios)
         generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen)
 
 
@@ -244,8 +247,10 @@ def generar_desde_db():
         return jsonify({'error': 'Fechas requeridas en formato YYYY-MM-DD'}), 400
 
     modo    = data.get('modo', 'general')
-    persona = data.get('persona', 'TODAS')
+    persona = data.get('persona', '')
     config  = _parse_config(data)
+    if modo == 'varias':
+        config['personas'] = data.get('personas', [])
 
     registros = db_module.consultar_asistencias(fecha_inicio, fecha_fin)
     if not registros:
@@ -263,7 +268,8 @@ def generar_desde_db():
 
     try:
         _build_pdf(registros, config, modo, persona, pdf_path, nombre_origen)
-        label = 'Persona' if modo == 'persona' else 'General'
+        labels = {'general': 'General', 'persona': 'Persona', 'varias': 'Varias_Personas'}
+        label  = labels.get(modo, 'Reporte')
         return jsonify({
             'success':      True,
             'download_url': f'/descargar/{pdf_filename}',
