@@ -22,6 +22,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 
 APP_PASSWORD_HASH = os.getenv("APP_PASSWORD_HASH", "").strip()
+APP_MAINTENANCE_PASSWORD_HASH = os.getenv("APP_MAINTENANCE_PASSWORD_HASH", "").strip()
 
 UPLOAD_FOLDER  = os.getenv("UPLOAD_FOLDER",  "data/uploads")
 REPORTS_FOLDER = os.getenv("REPORTS_FOLDER", "data/reports")
@@ -80,6 +81,8 @@ def _require_auth():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if not APP_PASSWORD_HASH:
+        return redirect(url_for("index"))
     if APP_PASSWORD_HASH and session.get("autenticado"):
         return redirect(url_for("index"))
     error = None
@@ -357,9 +360,10 @@ def limpiar_dispositivo():
             'error': 'Se requiere { "confirmar": true } en el cuerpo de la solicitud.'
         }), 400
     # Verificar contraseña si la autenticación está habilitada
-    if APP_PASSWORD_HASH:
+    pwd_hash_check = APP_MAINTENANCE_PASSWORD_HASH or APP_PASSWORD_HASH
+    if pwd_hash_check:
         password = data.get('password', '')
-        if not password or not check_password_hash(APP_PASSWORD_HASH, password):
+        if not password or not check_password_hash(pwd_hash_check, password):
             return jsonify({'error': 'Contraseña incorrecta. Esta acción requiere autenticación.'}), 403
     try:
         total_borrado = sync_module.limpiar_log_dispositivo()
