@@ -161,9 +161,8 @@
                                 </p>
                                 <div class="mb-2">
                                     <label class="form-label small fw-semibold">Contraseña de administrador</label>
-                                    <input type="password" class="form-control form-control-sm"
-                                        id="limpiar-password" placeholder="Ingrese la contraseña"
-                                        style="max-width:260px">
+                                    <input type="password" class="form-control form-control-sm" id="limpiar-password"
+                                        placeholder="Ingrese la contraseña" style="max-width:260px">
                                 </div>
                                 <div id="limpiar-error" class="small text-danger mb-2" style="display:none"></div>
                                 <button class="btn btn-sm btn-danger me-2" onclick="ejecutarLimpiar()">
@@ -227,8 +226,8 @@
                                     placeholder="Ej: Certificado médico">
                             </div>
                             <div class="col-md-2">
-                                <button class="btn btn-sm btn-outline-success w-100"
-                                    onclick="agregarJustificacion()">+ Agregar</button>
+                                <button class="btn btn-sm btn-outline-success w-100" onclick="agregarJustificacion()">+
+                                    Agregar</button>
                             </div>
                         </div>
                         <div class="d-flex gap-2 mb-2">
@@ -267,8 +266,8 @@
                                 </select>
                             </div>
                             <div class="col-md-3">
-                                <button class="btn btn-sm btn-outline-success w-100"
-                                    onclick="agregarFeriado()">+ Agregar</button>
+                                <button class="btn btn-sm btn-outline-success w-100" onclick="agregarFeriado()">+
+                                    Agregar</button>
                             </div>
                         </div>
                         <div class="d-flex gap-2 mb-2 flex-wrap">
@@ -278,11 +277,11 @@
                             </label>
                             <button class="btn btn-sm btn-outline-secondary"
                                 onclick="window.location.href='/feriados/exportar'">Descargar CSV</button>
-                            <button class="btn btn-sm btn-outline-secondary"
-                                onclick="cargarFeriados()">Actualizar lista</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="cargarFeriados()">Actualizar
+                                lista</button>
                         </div>
-                        <div id="feriados-lista" class="table-responsive"
-                            style="max-height:220px;overflow-y:auto;"></div>
+                        <div id="feriados-lista" class="table-responsive" style="max-height:220px;overflow-y:auto;">
+                        </div>
                     </div>
                 </details>
             </div>
@@ -331,44 +330,43 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-ausencias" checked>
+                                        <input class="form-check-input" type="checkbox" id="f-ausencias" checked>
                                         <label class="form-check-label small" for="f-ausencias">Ausencias</label>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-tardanza-severa" checked>
-                                        <label class="form-check-label small" for="f-tardanza-severa">Tardanzas severas</label>
+                                        <input class="form-check-input" type="checkbox" id="f-tardanza-severa" checked>
+                                        <label class="form-check-label small" for="f-tardanza-severa">Tardanzas
+                                            severas</label>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-tardanza-leve" checked>
-                                        <label class="form-check-label small" for="f-tardanza-leve">Tardanzas leves</label>
+                                        <input class="form-check-input" type="checkbox" id="f-tardanza-leve" checked>
+                                        <label class="form-check-label small" for="f-tardanza-leve">Tardanzas
+                                            leves</label>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-almuerzo" checked>
-                                        <label class="form-check-label small" for="f-almuerzo">Excesos de almuerzo</label>
+                                        <input class="form-check-input" type="checkbox" id="f-almuerzo" checked>
+                                        <label class="form-check-label small" for="f-almuerzo">Excesos de
+                                            almuerzo</label>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-incompletos" checked>
-                                        <label class="form-check-label small" for="f-incompletos">Registros anómalos</label>
+                                        <input class="form-check-input" type="checkbox" id="f-incompletos" checked>
+                                        <label class="form-check-label small" for="f-incompletos">Registros
+                                            anómalos</label>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-todos-dias">
-                                        <label class="form-check-label small" for="f-todos-dias">Mostrar todos los días</label>
+                                        <input class="form-check-input" type="checkbox" id="f-todos-dias">
+                                        <label class="form-check-label small" for="f-todos-dias">Mostrar todos los
+                                            días</label>
                                     </div>
                                 </div>
                             </div>
@@ -376,9 +374,9 @@
                             <div class="row g-2 mb-3">
                                 <div class="col-6 col-md-4">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-tiempo-dentro">
-                                        <label class="form-check-label small" for="f-tiempo-dentro">Tiempo dentro de la institución</label>
+                                        <input class="form-check-input" type="checkbox" id="f-tiempo-dentro">
+                                        <label class="form-check-label small" for="f-tiempo-dentro">Tiempo dentro de la
+                                            institución</label>
                                     </div>
                                 </div>
                             </div>
@@ -386,8 +384,7 @@
                             <div class="row g-2">
                                 <div class="col-auto">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox"
-                                            id="f-sin-horario">
+                                        <input class="form-check-input" type="checkbox" id="f-sin-horario">
                                         <label class="form-check-label small" for="f-sin-horario">
                                             Listar personas en biométrico sin horario asignado
                                         </label>
@@ -759,14 +756,14 @@
 
         function leerFiltros() {
             return {
-                mostrar_ausencias:       document.getElementById('f-ausencias').checked,
+                mostrar_ausencias: document.getElementById('f-ausencias').checked,
                 mostrar_tardanza_severa: document.getElementById('f-tardanza-severa').checked,
-                mostrar_tardanza_leve:   document.getElementById('f-tardanza-leve').checked,
-                mostrar_almuerzo:        document.getElementById('f-almuerzo').checked,
-                mostrar_incompletos:     document.getElementById('f-incompletos').checked,
-                mostrar_todos_los_dias:  document.getElementById('f-todos-dias').checked,
-                columna_tiempo_dentro:   document.getElementById('f-tiempo-dentro').checked,
-                reporte_sin_horario:     document.getElementById('f-sin-horario').checked,
+                mostrar_tardanza_leve: document.getElementById('f-tardanza-leve').checked,
+                mostrar_almuerzo: document.getElementById('f-almuerzo').checked,
+                mostrar_incompletos: document.getElementById('f-incompletos').checked,
+                mostrar_todos_los_dias: document.getElementById('f-todos-dias').checked,
+                columna_tiempo_dentro: document.getElementById('f-tiempo-dentro').checked,
+                reporte_sin_horario: document.getElementById('f-sin-horario').checked,
             };
         }
 
@@ -807,7 +804,7 @@
             tomSelectPersona.setValue('');
             // Deshabilitar botón generar si no hay personas disponibles
             document.getElementById('btn-submit').disabled =
-                personas.length === 0 || !document.querySelector('#estado-horarios-ok');
+                personas.length === 0 || document.getElementById('btn-submit').dataset.horariosOk !== 'true';
         }
 
 
@@ -957,6 +954,7 @@
             const btnCsv = document.getElementById('btn-exportar-csv');
 
             const sinHorarios = !data || data.total === 0;
+            document.getElementById('btn-submit').dataset.horariosOk = !sinHorarios;
             document.getElementById('btn-submit').disabled = sinHorarios;
 
             if (sinHorarios) {
@@ -1182,8 +1180,10 @@
                 el.innerHTML = '<p class="small text-muted mt-1">Sin justificaciones en el período.</p>';
                 return;
             }
-            const _tipos = { ausencia:'Ausencia', tardanza:'Tardanza',
-                             almuerzo:'Exc. almuerzo', incompleto:'Reg. incompleto' };
+            const _tipos = {
+                ausencia: 'Ausencia', tardanza: 'Tardanza',
+                almuerzo: 'Exc. almuerzo', incompleto: 'Reg. incompleto'
+            };
             let html = `<table class="table table-sm table-bordered mb-0" style="font-size:0.78rem">
                 <thead class="table-dark"><tr>
                     <th>Persona</th><th>Fecha</th><th>Tipo</th><th>Motivo</th><th></th>
@@ -1207,7 +1207,7 @@
             const id_usuario = sel.value;
             const nombre = sel.options[sel.selectedIndex]?.dataset?.nombre || '';
             const fecha = document.getElementById('just-fecha').value;
-            const tipo  = document.getElementById('just-tipo').value;
+            const tipo = document.getElementById('just-tipo').value;
             const motivo = document.getElementById('just-motivo').value.trim();
             if (!id_usuario || !fecha) {
                 showError('Seleccione persona y fecha para la justificación.');
@@ -1257,7 +1257,7 @@
                 el.innerHTML = '<p class="small text-muted mt-1">Sin feriados registrados.</p>';
                 return;
             }
-            const _tipos = { nacional:'Nacional', local:'Local', institucional:'Institucional' };
+            const _tipos = { nacional: 'Nacional', local: 'Local', institucional: 'Institucional' };
             let html = `<table class="table table-sm table-bordered mb-0" style="font-size:0.78rem">
                 <thead class="table-dark"><tr>
                     <th>Fecha</th><th>Descripción</th><th>Tipo</th><th></th>
@@ -1277,8 +1277,8 @@
 
         function agregarFeriado() {
             const fecha = document.getElementById('feriado-fecha').value;
-            const desc  = document.getElementById('feriado-descripcion').value.trim();
-            const tipo  = document.getElementById('feriado-tipo').value;
+            const desc = document.getElementById('feriado-descripcion').value.trim();
+            const tipo = document.getElementById('feriado-tipo').value;
             if (!fecha || !desc) {
                 showError('Ingrese fecha y descripción del feriado.');
                 return;
