@@ -564,9 +564,14 @@ def analizar_por_persona(
 
         # ── Detectar ausencias: días que debían trabajar sin registros ─
         if fecha_inicio and fecha_fin:
-            from datetime import timedelta as _td
+            from datetime import timedelta as _td, date
+            hoy = date.today()
+            # No marcar inasistencia para hoy ni días futuros:
+            # se usa hoy-1 para evitar falsos ausentes cuando la jornada
+            # aún no ha terminado o el sync del día aún no se ha ejecutado.
+            fecha_fin_evaluacion = min(fecha_fin, hoy - _td(days=1))
             d = fecha_inicio
-            while d <= fecha_fin:
+            while d <= fecha_fin_evaluacion:
                 if d not in por_fecha and d not in feriados:
                     info = _get_info_dia(horario_persona, d)
                     if info["trabaja"] and not _esta_justificado("ausencia"):
@@ -730,16 +735,22 @@ def generar_pdf(
         ]
 
     if not dias_a_mostrar:
+        total_dias_con_reg = len(analisis_por_dia)
+        sufijo = "día con registros" if total_dias_con_reg == 1 else "días con registros"
         story.append(Spacer(1, 2*cm))
-        story.append(Paragraph("Sin novedades en el período consultado.", st["ok"]))
+        story.append(Paragraph(
+            f"✓ Sin novedades en el período consultado "
+            f"({total_dias_con_reg} {sufijo}).",
+            st["ok"]
+        ))
     else:
         for dia in dias_a_mostrar:
-            story.append(PageBreak())
+            story.append(Spacer(1, 1*cm))
             story += _pagina_dia(st, dia, analisis_por_dia[dia], config, _F)
 
     # ── Personas sin horario ──────────────────────────────────────────
     if sin_horario:
-        story.append(PageBreak())
+        story.append(Spacer(1, 1*cm))
         story.append(Paragraph("PERSONAS EN EL BIOMÉTRICO SIN HORARIO ASIGNADO", st["dia_titulo"]))
         story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
         story.append(Spacer(1, 0.3*cm))
@@ -752,7 +763,7 @@ def generar_pdf(
 
     # ── Log de duplicados ─────────────────────────────────────────────
     if log_duplicados:
-        story.append(PageBreak())
+        story.append(Spacer(1, 1*cm))
         story += _pagina_duplicados(st, log_duplicados)
 
     # Construir PDF
@@ -809,7 +820,7 @@ def generar_pdf_persona(
     story.append(Spacer(1, 1*cm))
 
     datos_portada = [
-        ["Archivo origen:",     os.path.basename(nombre_archivo_origen)],
+        ["Archivo origen:",     nombre_archivo_origen],
         ["Generado el:",        datetime.now().strftime("%d/%m/%Y %H:%M")],
         ["Personas analizadas:", str(len(analisis_persona))],
         ["Tolerancia entrada:", "5 minutos (fija)"],
@@ -855,7 +866,7 @@ def generar_pdf_persona(
 
     # ── Sección por persona ───────────────────────────────────────────
     for nombre in sorted(analisis_persona.keys()):
-        story.append(PageBreak())
+        story.append(Spacer(1, 1*cm))
         story.append(Paragraph(f"  {nombre}", st["dia_titulo"]))
         story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
         story.append(Spacer(1, 0.3*cm))
@@ -873,7 +884,13 @@ def generar_pdf_persona(
 
         datos = analisis_persona[nombre]["dias"]
         if analisis_persona[nombre].get("sin_novedades") or not datos:
-            story.append(Paragraph("Sin novedades registradas en el período consultado.", st["ok"]))
+            total_d = r.get("total_dias", 0)
+            sufijo  = "día analizado" if total_d == 1 else "días analizados"
+            story.append(Paragraph(
+                f"✓ Sin novedades en el período consultado "
+                f"({total_d} {sufijo} con registros).",
+                st["ok"]
+            ))
             continue
 
         # ── Ausencias ─────────────────────────────────────────────────
@@ -913,7 +930,7 @@ def generar_pdf_persona(
 
     # ── Personas sin horario ──────────────────────────────────────────
     if sin_horario:
-        story.append(PageBreak())
+        story.append(Spacer(1, 1*cm))
         story.append(Paragraph("PERSONAS EN EL BIOMÉTRICO SIN HORARIO ASIGNADO", st["dia_titulo"]))
         story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
         story.append(Spacer(1, 0.3*cm))
@@ -1035,11 +1052,14 @@ def _seccion_incompletos_persona(st, datos: list) -> list:
     else:
         filas = [["Fecha", "Día", "# Registros", "Detalle"]]
         for d in datos:
+            det_val = d.get("detalle_registros") or "—"
+            if det_val != "—":
+                det_val = Paragraph(det_val, st["pequeño"])
             filas.append([
                 d["fecha"].strftime("%d/%m/%Y"),
                 _dia_nombre_corto(d["fecha"]),
                 str(d.get("n_registros", "?")),
-                d.get("detalle_registros") or "—",
+                det_val,
             ])
         t = Table(filas, colWidths=[3*cm, 2*cm, 2.5*cm, 9*cm])
         t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_TABLA_ALT))
@@ -1062,10 +1082,10 @@ def _crear_estilos(base):
     return {
         "titulo":      ParagraphStyle("titulo",      fontName="Helvetica-Bold",
                                       fontSize=22, textColor=COLOR_HEADER,
-                                      alignment=TA_CENTER, spaceAfter=6),
+                                      alignment=TA_CENTER, spaceAfter=10, leading=28),
         "subtitulo":   ParagraphStyle("subtitulo",   fontName="Helvetica",
                                       fontSize=11, textColor=COLOR_MUTED,
-                                      alignment=TA_CENTER, spaceAfter=4),
+                                      alignment=TA_CENTER, spaceAfter=10, leading=14),
         "dia_titulo":  ParagraphStyle("dia_titulo",  fontName="Helvetica-Bold",
                                       fontSize=16, textColor=COLOR_HEADER,
                                       spaceBefore=8, spaceAfter=6),
@@ -1110,7 +1130,7 @@ def _portada(st, origen, config, analisis):
 
     # Metadata
     datos = [
-        ["Archivo origen:",    os.path.basename(origen)],
+        ["Archivo origen:",    origen],
         ["Generado el:",       datetime.now().strftime("%d/%m/%Y %H:%M")],
         ["Días analizados:",   str(len(analisis))],
         ["Tolerancia entrada:", "5 minutos (fija)"],
@@ -1321,7 +1341,10 @@ def _seccion_incompletos(st, lista):
     encabezado = ["Nombre", "# Registros", "Detalle"]
     filas = [encabezado]
     for p in lista:
-        filas.append([p["nombre"], str(p["registros"]), p["detalle"]])
+        det_val = p.get("detalle", "—")
+        if det_val and det_val != "—":
+            det_val = Paragraph(det_val, st["pequeño"])
+        filas.append([p["nombre"], str(p["registros"]), det_val])
     t = Table(filas, colWidths=[5.5*cm, 2.5*cm, 8.5*cm])
     t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_TABLA_ALT))
     story.append(t)

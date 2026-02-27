@@ -8,6 +8,8 @@ services:
       # Volume nombrado: persiste la DB SQLite, uploads y reports
       # entre reinicios, actualizaciones de imagen y docker compose down
       - db_data:/data
+      # Montar la zona horaria del host para que los reportes tengan la hora correcta
+      - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
 
     # Mapeo de puerto: funciona en Linux, Windows y macOS.

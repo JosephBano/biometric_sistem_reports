@@ -5,7 +5,7 @@ Todas las rutas se leen desde variables de entorno.
 
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from contextlib import contextmanager
 
 DB_PATH = os.getenv("DB_PATH", "data/asistencias.db")
@@ -163,15 +163,16 @@ def consultar_asistencias(fecha_inicio, fecha_fin) -> list[dict]:
     Devuelve registros del rango en el formato que espera script.py:
     { id_usuario, nombre, datetime, fecha, hora, tipo }
     """
+    fecha_tope = (fecha_fin + timedelta(days=1)).strftime('%Y-%m-%d')
     with _conn() as conn:
         rows = conn.execute("""
             SELECT id_usuario, nombre, fecha_hora, tipo
             FROM asistencias
-            WHERE fecha_hora >= ? AND fecha_hora <= ?
+            WHERE fecha_hora >= ? AND fecha_hora < ?
             ORDER BY nombre, fecha_hora
         """, (
             f"{fecha_inicio.strftime('%Y-%m-%d')}T00:00:00",
-            f"{fecha_fin.strftime('%Y-%m-%d')}T23:59:59",
+            f"{fecha_tope}T00:00:00",
         )).fetchall()
 
     registros = []
@@ -190,15 +191,16 @@ def consultar_asistencias(fecha_inicio, fecha_fin) -> list[dict]:
 
 def get_personas(fecha_inicio, fecha_fin) -> list[str]:
     """Devuelve nombres únicos en el rango de fechas."""
+    fecha_tope = (fecha_fin + timedelta(days=1)).strftime('%Y-%m-%d')
     with _conn() as conn:
         rows = conn.execute("""
             SELECT DISTINCT nombre
             FROM asistencias
-            WHERE fecha_hora >= ? AND fecha_hora <= ?
+            WHERE fecha_hora >= ? AND fecha_hora < ?
             ORDER BY nombre
         """, (
             f"{fecha_inicio.strftime('%Y-%m-%d')}T00:00:00",
-            f"{fecha_fin.strftime('%Y-%m-%d')}T23:59:59",
+            f"{fecha_tope}T00:00:00",
         )).fetchall()
     return [row["nombre"] for row in rows]
 
@@ -374,16 +376,17 @@ def delete_horario(id_usuario: str) -> bool:
 
 def get_personas_con_id(fecha_inicio, fecha_fin) -> list[dict]:
     """Devuelve lista de {id_usuario, nombre} únicos en el rango de fechas."""
+    fecha_tope = (fecha_fin + timedelta(days=1)).strftime('%Y-%m-%d')
     with _conn() as conn:
         rows = conn.execute("""
             SELECT id_usuario, nombre
             FROM asistencias
-            WHERE fecha_hora >= ? AND fecha_hora <= ?
+            WHERE fecha_hora >= ? AND fecha_hora < ?
             GROUP BY nombre
             ORDER BY nombre
         """, (
             f"{fecha_inicio.strftime('%Y-%m-%d')}T00:00:00",
-            f"{fecha_fin.strftime('%Y-%m-%d')}T23:59:59",
+            f"{fecha_tope}T00:00:00",
         )).fetchall()
     return [{"id_usuario": row["id_usuario"], "nombre": row["nombre"]} for row in rows]
 
