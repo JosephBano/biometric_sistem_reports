@@ -88,6 +88,24 @@ def init_db():
                 fuente         TEXT,
                 actualizado_en TEXT    DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS justificaciones (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_usuario    TEXT    NOT NULL,
+                nombre        TEXT    NOT NULL,
+                fecha         TEXT    NOT NULL,
+                tipo          TEXT    NOT NULL,
+                motivo        TEXT,
+                aprobado_por  TEXT,
+                creado_en     TEXT    DEFAULT (datetime('now')),
+                UNIQUE (id_usuario, fecha, tipo)
+            );
+
+            CREATE TABLE IF NOT EXISTS feriados (
+                fecha        TEXT PRIMARY KEY,
+                descripcion  TEXT NOT NULL,
+                tipo         TEXT DEFAULT 'nacional'
+            );
         """)
 
 
@@ -152,8 +170,8 @@ def consultar_asistencias(fecha_inicio, fecha_fin) -> list[dict]:
             WHERE fecha_hora >= ? AND fecha_hora <= ?
             ORDER BY nombre, fecha_hora
         """, (
-            f"{fecha_inicio.strftime('%Y-%m-%d')} 00:00:00",
-            f"{fecha_fin.strftime('%Y-%m-%d')} 23:59:59",
+            f"{fecha_inicio.strftime('%Y-%m-%d')}T00:00:00",
+            f"{fecha_fin.strftime('%Y-%m-%d')}T23:59:59",
         )).fetchall()
 
     registros = []
@@ -179,8 +197,8 @@ def get_personas(fecha_inicio, fecha_fin) -> list[str]:
             WHERE fecha_hora >= ? AND fecha_hora <= ?
             ORDER BY nombre
         """, (
-            f"{fecha_inicio.strftime('%Y-%m-%d')} 00:00:00",
-            f"{fecha_fin.strftime('%Y-%m-%d')} 23:59:59",
+            f"{fecha_inicio.strftime('%Y-%m-%d')}T00:00:00",
+            f"{fecha_fin.strftime('%Y-%m-%d')}T23:59:59",
         )).fetchall()
     return [row["nombre"] for row in rows]
 
@@ -348,6 +366,171 @@ def delete_horario(id_usuario: str) -> bool:
         )
         deleted = cursor.rowcount > 0
     return deleted
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PERSONAS CON ID (para filtrado)
+# ══════════════════════════════════════════════════════════════════════════
+
+def get_personas_con_id(fecha_inicio, fecha_fin) -> list[dict]:
+    """Devuelve lista de {id_usuario, nombre} únicos en el rango de fechas."""
+    with _conn() as conn:
+        rows = conn.execute("""
+            SELECT id_usuario, nombre
+            FROM asistencias
+            WHERE fecha_hora >= ? AND fecha_hora <= ?
+            GROUP BY nombre
+            ORDER BY nombre
+        """, (
+            f"{fecha_inicio.strftime('%Y-%m-%d')}T00:00:00",
+            f"{fecha_fin.strftime('%Y-%m-%d')}T23:59:59",
+        )).fetchall()
+    return [{"id_usuario": row["id_usuario"], "nombre": row["nombre"]} for row in rows]
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# JUSTIFICACIONES
+# ══════════════════════════════════════════════════════════════════════════
+
+def insertar_justificacion(id_usuario: str, nombre: str, fecha: str,
+                           tipo: str, motivo: str = "", aprobado_por: str = "") -> dict:
+    """
+    Inserta o reemplaza una justificación.
+    fecha debe ser string 'YYYY-MM-DD'.
+    tipo: 'ausencia' | 'tardanza' | 'almuerzo' | 'incompleto'
+    """
+    with _conn() as conn:
+        conn.execute("""
+            INSERT INTO justificaciones
+                (id_usuario, nombre, fecha, tipo, motivo, aprobado_por)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id_usuario, fecha, tipo) DO UPDATE SET
+                nombre       = excluded.nombre,
+                motivo       = excluded.motivo,
+                aprobado_por = excluded.aprobado_por,
+                creado_en    = datetime('now')
+        """, (str(id_usuario), nombre, fecha, tipo, motivo or "", aprobado_por or ""))
+        row = conn.execute("""
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, creado_en
+            FROM justificaciones WHERE id_usuario=? AND fecha=? AND tipo=?
+        """, (str(id_usuario), fecha, tipo)).fetchone()
+    return dict(row) if row else {}
+
+
+def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
+    """Retorna justificaciones en el rango de fechas (o todas si no se especifica rango)."""
+    with _conn() as conn:
+        if fecha_inicio and fecha_fin:
+            rows = conn.execute("""
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, creado_en
+                FROM justificaciones
+                WHERE fecha >= ? AND fecha <= ?
+                ORDER BY fecha, nombre
+            """, (
+                fecha_inicio.strftime('%Y-%m-%d') if hasattr(fecha_inicio, 'strftime') else fecha_inicio,
+                fecha_fin.strftime('%Y-%m-%d')    if hasattr(fecha_fin,    'strftime') else fecha_fin,
+            )).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, creado_en
+                FROM justificaciones ORDER BY fecha DESC, nombre
+            """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_justificaciones_dict(fecha_inicio=None, fecha_fin=None) -> dict:
+    """
+    Retorna justificaciones indexadas por (id_usuario, fecha_iso, tipo).
+    Útil para lookup rápido durante el análisis.
+    """
+    lista = get_justificaciones(fecha_inicio, fecha_fin)
+    return {(j["id_usuario"], j["fecha"], j["tipo"]): j for j in lista}
+
+
+def eliminar_justificacion(id_justificacion: int) -> bool:
+    """Elimina una justificación por su ID. Retorna True si existía."""
+    with _conn() as conn:
+        cursor = conn.execute(
+            "DELETE FROM justificaciones WHERE id = ?", (id_justificacion,)
+        )
+    return cursor.rowcount > 0
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# FERIADOS
+# ══════════════════════════════════════════════════════════════════════════
+
+def insertar_feriado(fecha: str, descripcion: str, tipo: str = "nacional") -> dict:
+    """Inserta o reemplaza un feriado. fecha debe ser 'YYYY-MM-DD'."""
+    with _conn() as conn:
+        conn.execute("""
+            INSERT INTO feriados (fecha, descripcion, tipo)
+            VALUES (?, ?, ?)
+            ON CONFLICT(fecha) DO UPDATE SET
+                descripcion = excluded.descripcion,
+                tipo        = excluded.tipo
+        """, (fecha, descripcion, tipo))
+        row = conn.execute(
+            "SELECT fecha, descripcion, tipo FROM feriados WHERE fecha=?", (fecha,)
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def get_feriados(fecha_inicio=None, fecha_fin=None) -> list[dict]:
+    """Retorna feriados en el rango dado (o todos si no se especifica)."""
+    with _conn() as conn:
+        if fecha_inicio and fecha_fin:
+            fi = fecha_inicio.strftime('%Y-%m-%d') if hasattr(fecha_inicio, 'strftime') else fecha_inicio
+            ff = fecha_fin.strftime('%Y-%m-%d')    if hasattr(fecha_fin,    'strftime') else fecha_fin
+            rows = conn.execute(
+                "SELECT fecha, descripcion, tipo FROM feriados WHERE fecha >= ? AND fecha <= ? ORDER BY fecha",
+                (fi, ff)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT fecha, descripcion, tipo FROM feriados ORDER BY fecha"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_feriados_set(fecha_inicio=None, fecha_fin=None) -> set:
+    """Retorna un set de objetos date para lookup rápido en el análisis."""
+    from datetime import date as _date
+    lista = get_feriados(fecha_inicio, fecha_fin)
+    result = set()
+    for f in lista:
+        try:
+            y, m, d = f["fecha"].split("-")
+            result.add(_date(int(y), int(m), int(d)))
+        except (ValueError, KeyError):
+            pass
+    return result
+
+
+def eliminar_feriado(fecha: str) -> bool:
+    """Elimina un feriado por su fecha. Retorna True si existía."""
+    with _conn() as conn:
+        cursor = conn.execute("DELETE FROM feriados WHERE fecha = ?", (fecha,))
+    return cursor.rowcount > 0
+
+
+def importar_feriados_csv(filepath: str) -> int:
+    """
+    Importa feriados desde un CSV con columnas: fecha, descripcion, tipo.
+    Retorna la cantidad de feriados cargados.
+    """
+    import csv as _csv
+    count = 0
+    with open(filepath, newline="", encoding="utf-8-sig") as f:
+        reader = _csv.DictReader(f)
+        for row in reader:
+            fecha = str(row.get("fecha", "")).strip()
+            desc  = str(row.get("descripcion", "")).strip()
+            tipo  = str(row.get("tipo", "nacional")).strip() or "nacional"
+            if fecha and desc:
+                insertar_feriado(fecha, desc, tipo)
+                count += 1
+    return count
 
 
 def get_estado_horarios() -> dict:

@@ -35,7 +35,7 @@ ZK_UDP      = os.getenv("ZK_UDP", "false").lower() == "true"
 
 SYNC_AUTO          = os.getenv("SYNC_AUTO",          "false").lower() == "true"
 SYNC_HORA_NOCTURNA = os.getenv("SYNC_HORA_NOCTURNA", "00:30")
-SYNC_INTERVALO_MIN = int(os.getenv("SYNC_INTERVALO_MIN", "30"))
+SYNC_INTERVALO_MIN = int(os.getenv("SYNC_INTERVALO_MIN", "480"))
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -73,12 +73,19 @@ def _make_zk() -> "ZK":
 
 
 def _punch_to_tipo(punch) -> str | None:
-    """Convierte att.punch al tipo de marcación. 0=Entrada, 1=Salida."""
-    if punch == 0:
-        return "Entrada"
-    if punch == 1:
-        return "Salida"
-    return None
+    """
+    Convierte att.punch al tipo de marcación según estándar ZK:
+      0 = Check-In        → Entrada
+      1 = Check-Out       → Salida
+      2 = Break-Out       → Salida  (salida de pausa/almuerzo)
+      3 = Break-In        → Entrada (regreso de pausa/almuerzo)
+      4 = Overtime-In     → Entrada (inicio de horas extra)
+      5 = Overtime-Out    → Salida  (fin de horas extra)
+    Cualquier otro valor se descarta (retorna None).
+    """
+    _MAPA = {0: "Entrada", 1: "Salida", 2: "Salida",
+             3: "Entrada", 4: "Entrada", 5: "Salida"}
+    return _MAPA.get(punch)
 
 
 # ══════════════════════════════════════════════════════════════════════════

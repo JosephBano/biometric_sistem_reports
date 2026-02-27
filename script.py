@@ -233,6 +233,8 @@ def deduplicar(registros: list[dict], max_min: int = 10) -> tuple[list[dict], li
 def analizar_dia(
     registros_dia: list[dict],
     horarios: dict,
+    justificaciones: dict = None,
+    feriados: set = None,
 ) -> dict:
     """
     Analiza los registros de UN día y devuelve un dict con:
@@ -244,7 +246,13 @@ def analizar_dia(
 
     Requiere `horarios` (dict con "by_id" y "by_nombre"). Las personas sin
     horario en el documento se omiten del análisis.
+    justificaciones: dict (id_usuario, fecha_iso, tipo) → info.
+    feriados: set de fechas (date) que no generan alertas.
     """
+    if justificaciones is None:
+        justificaciones = {}
+    if feriados is None:
+        feriados = set()
     # Agrupar por persona
     por_persona = defaultdict(list)
     for r in registros_dia:
@@ -266,6 +274,13 @@ def analizar_dia(
         if horario_persona is None:
             continue  # sin horario → omitir del análisis
 
+        # Feriado → omitir del análisis
+        if fecha_dia in feriados:
+            continue
+
+        def _justificado_dia(tipo_obs: str) -> bool:
+            return (id_usuario, fecha_dia.isoformat(), tipo_obs) in justificaciones
+
         info = _get_info_dia(horario_persona, fecha_dia)
         if not info["trabaja"]:
             # Marcaciones en día libre — registrar como incompleto
@@ -283,7 +298,7 @@ def analizar_dia(
 
         # ── Análisis de llegada (primer registro) ──────────────────────
         primera = marcaciones[0]
-        if primera["tipo"] == "Entrada":
+        if primera["tipo"] == "Entrada" and not _justificado_dia("tardanza"):
             hora_llegada = primera["hora"]
 
             # Lógica relativa al horario individual
@@ -305,15 +320,15 @@ def analizar_dia(
                 })
 
         # ── Análisis de almuerzo ───────────────────────────────────────
-        if max_almuerzo_per > 0:
+        if max_almuerzo_per > 0 and not _justificado_dia("almuerzo"):
             for i, m in enumerate(marcaciones):
                 if m["tipo"] == "Salida" and i > 0:
                     for j in range(i + 1, len(marcaciones)):
                         if marcaciones[j]["tipo"] == "Entrada":
                             entrada_alm = marcaciones[j]
-                            duracion = (
+                            duracion = int((
                                 entrada_alm["datetime"] - m["datetime"]
-                            ).total_seconds() / 60
+                            ).total_seconds() / 60)
                             if duracion > max_almuerzo_per:
                                 almuerzo_largo.append({
                                     "nombre":   nombre,
@@ -328,14 +343,15 @@ def analizar_dia(
         # ── Detectar registros incompletos ────────────────────────────
         n = len(marcaciones)
         if n < 2 or n not in (2, 4):
-            incompletos.append({
-                "nombre":    nombre,
-                "registros": n,
-                "detalle":   " / ".join(
-                    f"{m['tipo']} {m['hora'].strftime('%H:%M')}"
-                    for m in marcaciones
-                ),
-            })
+            if not _justificado_dia("incompleto"):
+                incompletos.append({
+                    "nombre":    nombre,
+                    "registros": n,
+                    "detalle":   " / ".join(
+                        f"{m['tipo']} {m['hora'].strftime('%H:%M')}"
+                        for m in marcaciones
+                    ),
+                })
 
     return {
         "tardanza_leve":         sorted(tardanza_leve_lst,   key=lambda x: x["hora"]),
@@ -357,13 +373,29 @@ def analizar_por_persona(
     registros: list[dict],
     config: dict,
     horarios: dict = None,
+    fecha_inicio=None,
+    fecha_fin=None,
+    justificaciones: dict = None,
+    feriados: set = None,
+    mostrar_todos: bool = False,
 ) -> dict:
     """
     Analiza los registros de todas las personas, organizados por persona.
 
     Requiere `horarios` (dict con "by_id" y "by_nombre"). Las personas sin
-    horario en el documento se omiten del resultado.
+    horario se omiten del resultado.
+
+    Parámetros opcionales:
+      fecha_inicio / fecha_fin : detectar ausencias totales en días sin registros.
+      justificaciones          : dict (id_usuario, fecha_iso, tipo) → info.
+      feriados                 : set de objetos date que no generan alertas.
+      mostrar_todos            : si True, incluye días sin novedad en dias_list.
     """
+    if justificaciones is None:
+        justificaciones = {}
+    if feriados is None:
+        feriados = set()
+
     # Agrupar por persona y luego por fecha
     por_persona_fecha = defaultdict(lambda: defaultdict(list))
     for r in registros:
@@ -386,23 +418,49 @@ def analizar_por_persona(
 
         dias_list = []
         resumen = {
-            "total_dias":     0,
-            "tardanza_leve":  0,
+            "total_dias":      0,
+            "tardanza_leve":   0,
             "tardanza_severa": 0,
-            "almuerzo_largo": 0,
-            "incompletos":    0,
+            "almuerzo_largo":  0,
+            "incompletos":     0,
+            "ausencias":       0,
         }
+
+        def _esta_justificado(tipo_obs: str) -> bool:
+            return (
+                (str(id_usuario), fecha.isoformat(), tipo_obs) in justificaciones
+                if id_usuario else False
+            )
 
         for fecha, marcaciones in sorted(por_fecha.items()):
             marcaciones.sort(key=lambda x: x["datetime"])
+
+            # ── Feriado ────────────────────────────────────────────────
+            if fecha in feriados:
+                if mostrar_todos:
+                    dias_list.append({
+                        "fecha": fecha, "llegada": None, "salida": None,
+                        "hora_programada": None, "almuerzo_duracion": None,
+                        "almuerzo_salida": None, "almuerzo_regreso": None,
+                        "almuerzo_exceso": None, "tiempo_dentro": None,
+                        "n_registros": len(marcaciones),
+                        "detalle_registros": "",
+                        "observaciones": ["Feriado"], "estado": "libre",
+                    })
+                continue
 
             dia_info = {
                 "fecha":             fecha,
                 "llegada":           None,
                 "salida":            None,
-                "hora_programada":   None,  # None = sin horario individual
+                "hora_programada":   None,
                 "almuerzo_duracion": None,
+                "almuerzo_salida":   None,
+                "almuerzo_regreso":  None,
                 "almuerzo_exceso":   None,
+                "tiempo_dentro":     None,
+                "n_registros":       len(marcaciones),
+                "detalle_registros": "",
                 "observaciones":     [],
                 "estado":            "ok",
             }
@@ -412,13 +470,12 @@ def analizar_por_persona(
             dia_info["hora_programada"] = info["hora_entrada"]
 
             if not info["trabaja"]:
-                # Persona no trabaja este día según su horario
                 dia_info["estado"] = "libre"
                 dia_info["observaciones"].append("Día libre según horario")
                 if marcaciones[0]["tipo"] == "Entrada":
                     dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
-                dias_list.append(dia_info)   # día libre siempre se incluye
-                continue  # No se analiza tardanza ni almuerzo
+                dias_list.append(dia_info)
+                continue
 
             hora_prog        = info["hora_entrada"]
             max_almuerzo_per = info["almuerzo_min"]
@@ -426,10 +483,16 @@ def analizar_por_persona(
             n = len(marcaciones)
             resumen["total_dias"] += 1
 
+            dia_info["detalle_registros"] = " / ".join(
+                f"{m['tipo']} {m['hora'].strftime('%H:%M')}" for m in marcaciones
+            )
+            dia_info["n_registros"] = n
+
             if n < 2 or n not in (2, 4):
-                dia_info["estado"] = "incompleto"
-                dia_info["observaciones"].append(f"Registros anómalos ({n})")
-                resumen["incompletos"] += 1
+                if not _esta_justificado("incompleto"):
+                    dia_info["estado"] = "incompleto"
+                    dia_info["observaciones"].append(f"Registros anómalos ({n})")
+                    resumen["incompletos"] += 1
 
                 if marcaciones[0]["tipo"] == "Entrada":
                     dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
@@ -443,39 +506,48 @@ def analizar_por_persona(
                 if primera["tipo"] == "Entrada":
                     dia_info["llegada"] = primera["hora"].strftime("%H:%M")
 
+                    # ── Tiempo dentro de la institución ────────────────
+                    if ultima["tipo"] == "Salida":
+                        td_min = int((ultima["datetime"] - primera["datetime"]).total_seconds() / 60)
+                        h_td, m_td = divmod(td_min, 60)
+                        dia_info["tiempo_dentro"] = f"{h_td}h {m_td:02d}m"
+
                     # ── Tardanza relativa al horario individual ────────
-                    h_prog  = datetime.strptime(hora_prog, "%H:%M").time()
-                    retraso = _minutos_diferencia(h_prog, primera["hora"])
-                    if retraso > MARGEN_LEVE_MIN:
-                        dia_info["estado"] = "severa"
-                        dia_info["observaciones"].append(
-                            f"Tardanza severa (+{retraso}m sobre {hora_prog})"
-                        )
-                        resumen["tardanza_severa"] += 1
-                    elif retraso > 0:
-                        if dia_info["estado"] == "ok":
-                            dia_info["estado"] = "leve"
-                        dia_info["observaciones"].append(
-                            f"Tardanza leve (+{retraso}m sobre {hora_prog})"
-                        )
-                        resumen["tardanza_leve"] += 1
+                    if not _esta_justificado("tardanza"):
+                        h_prog_t = datetime.strptime(hora_prog, "%H:%M").time()
+                        retraso  = _minutos_diferencia(h_prog_t, primera["hora"])
+                        if retraso > MARGEN_LEVE_MIN:
+                            dia_info["estado"] = "severa"
+                            dia_info["observaciones"].append(
+                                f"Tardanza severa (+{retraso}m sobre {hora_prog})"
+                            )
+                            resumen["tardanza_severa"] += 1
+                        elif retraso > 0:
+                            if dia_info["estado"] == "ok":
+                                dia_info["estado"] = "leve"
+                            dia_info["observaciones"].append(
+                                f"Tardanza leve (+{retraso}m sobre {hora_prog})"
+                            )
+                            resumen["tardanza_leve"] += 1
 
                 if ultima["tipo"] == "Salida":
                     dia_info["salida"] = ultima["hora"].strftime("%H:%M")
 
                 # ── Análisis de almuerzo ───────────────────────────────
-                if n >= 4 and max_almuerzo_per > 0:
+                if n >= 4 and max_almuerzo_per > 0 and not _esta_justificado("almuerzo"):
                     for i, m in enumerate(marcaciones):
                         if m["tipo"] == "Salida" and i > 0:
                             for j in range(i + 1, len(marcaciones)):
                                 if marcaciones[j]["tipo"] == "Entrada":
                                     entrada_alm = marcaciones[j]
-                                    duracion = (
+                                    duracion = int((
                                         entrada_alm["datetime"] - m["datetime"]
-                                    ).total_seconds() / 60
-                                    dia_info["almuerzo_duracion"] = round(duracion)
+                                    ).total_seconds() / 60)
+                                    dia_info["almuerzo_duracion"] = duracion
+                                    dia_info["almuerzo_salida"]   = m["hora"].strftime("%H:%M")
+                                    dia_info["almuerzo_regreso"]  = entrada_alm["hora"].strftime("%H:%M")
                                     if duracion > max_almuerzo_per:
-                                        exceso = round(duracion - max_almuerzo_per)
+                                        exceso = duracion - max_almuerzo_per
                                         dia_info["almuerzo_exceso"] = exceso
                                         if dia_info["estado"] == "ok":
                                             dia_info["estado"] = "leve"
@@ -486,9 +558,34 @@ def analizar_por_persona(
                                     break
                             break
 
-            # Solo incluir días con observaciones; omitir días perfectos
-            if dia_info["estado"] != "ok" or dia_info["observaciones"]:
+            # Incluir en dias_list si hay novedad, o siempre si mostrar_todos
+            if mostrar_todos or dia_info["estado"] != "ok" or dia_info["observaciones"]:
                 dias_list.append(dia_info)
+
+        # ── Detectar ausencias: días que debían trabajar sin registros ─
+        if fecha_inicio and fecha_fin:
+            from datetime import timedelta as _td
+            d = fecha_inicio
+            while d <= fecha_fin:
+                if d not in por_fecha and d not in feriados:
+                    info = _get_info_dia(horario_persona, d)
+                    if info["trabaja"] and not _esta_justificado("ausencia"):
+                        # fecha variable en closure → usar default arg
+                        resumen["ausencias"] += 1
+                        resumen["total_dias"] += 1
+                        dia_aus = {
+                            "fecha": d, "llegada": None, "salida": None,
+                            "hora_programada": info["hora_entrada"],
+                            "almuerzo_duracion": None,
+                            "almuerzo_salida": None, "almuerzo_regreso": None,
+                            "almuerzo_exceso": None, "tiempo_dentro": None,
+                            "n_registros": 0, "detalle_registros": "",
+                            "observaciones": [f"AUSENTE — sin marcaciones (Prog: {info['hora_entrada']})"],
+                            "estado": "ausente",
+                        }
+                        dias_list.append(dia_aus)
+                d += _td(days=1)
+            dias_list.sort(key=lambda x: x["fecha"])
 
         if resumen["total_dias"] > 0:
             resultado[nombre] = {
@@ -503,7 +600,7 @@ def _minutos_diferencia(hora_limite, hora_real) -> int:
     """Minutos de diferencia entre hora_limite y hora_real."""
     dt_base = datetime.combine(datetime.today().date(), hora_limite)
     dt_real = datetime.combine(datetime.today().date(), hora_real)
-    return round((dt_real - dt_base).total_seconds() / 60)
+    return int((dt_real - dt_base).total_seconds() / 60)
 
 
 # ── Helpers de horarios personalizados ────────────────────────────────────
@@ -550,7 +647,13 @@ def _get_info_dia(horario_persona: dict, fecha) -> dict:
     es_domingo = weekday == 6
 
     if es_domingo:
-        return {"trabaja": False, "hora_entrada": None, "almuerzo_min": 0}
+        columna = "domingo"
+        hora_entrada = horario_persona.get("domingo")
+        return {
+            "trabaja":      hora_entrada is not None,
+            "hora_entrada": hora_entrada,
+            "almuerzo_min": 0,
+        }
 
     columna      = _WEEKDAY_COL.get(weekday, "viernes")
     hora_entrada = horario_persona.get(columna)
@@ -573,8 +676,22 @@ def generar_pdf(
     log_duplicados: list[dict],
     config: dict,
     nombre_archivo_origen: str,
+    filtros: dict = None,
+    sin_horario: list = None,
 ):
     """Genera el PDF completo con todos los días y el log de duplicados."""
+    if filtros is None:
+        filtros = {}
+    if sin_horario is None:
+        sin_horario = []
+
+    _F = {
+        "mostrar_tardanza_leve":   filtros.get("mostrar_tardanza_leve",   True),
+        "mostrar_tardanza_severa": filtros.get("mostrar_tardanza_severa", True),
+        "mostrar_almuerzo":        filtros.get("mostrar_almuerzo",        True),
+        "mostrar_incompletos":     filtros.get("mostrar_incompletos",     True),
+        "mostrar_todos_los_dias":  filtros.get("mostrar_todos_los_dias",  False),
+    }
 
     doc = SimpleDocTemplate(
         ruta_salida,
@@ -597,19 +714,41 @@ def generar_pdf(
     # ── Resumen ejecutivo del mes ──────────────────────────────────────
     story += _resumen_mensual(st, analisis_por_dia, config)
 
-    # ── Página por día (solo días con novedades) ──────────────────────
-    dias_con_nov = [
-        d for d in sorted(analisis_por_dia.keys())
-        if any(analisis_por_dia[d]["resumen"][k] > 0
-               for k in ("tardanza_leve", "tardanza_severa", "almuerzo_largo", "incompletos"))
-    ]
-    if not dias_con_nov:
+    # ── Página por día ────────────────────────────────────────────────
+    _claves_activas = []
+    if _F["mostrar_tardanza_leve"]:   _claves_activas.append("tardanza_leve")
+    if _F["mostrar_tardanza_severa"]: _claves_activas.append("tardanza_severa")
+    if _F["mostrar_almuerzo"]:        _claves_activas.append("almuerzo_largo")
+    if _F["mostrar_incompletos"]:     _claves_activas.append("incompletos")
+
+    if _F["mostrar_todos_los_dias"]:
+        dias_a_mostrar = sorted(analisis_por_dia.keys())
+    else:
+        dias_a_mostrar = [
+            d for d in sorted(analisis_por_dia.keys())
+            if any(analisis_por_dia[d]["resumen"].get(k, 0) > 0 for k in _claves_activas)
+        ]
+
+    if not dias_a_mostrar:
         story.append(Spacer(1, 2*cm))
         story.append(Paragraph("Sin novedades en el período consultado.", st["ok"]))
     else:
-        for dia in dias_con_nov:
+        for dia in dias_a_mostrar:
             story.append(PageBreak())
-            story += _pagina_dia(st, dia, analisis_por_dia[dia], config)
+            story += _pagina_dia(st, dia, analisis_por_dia[dia], config, _F)
+
+    # ── Personas sin horario ──────────────────────────────────────────
+    if sin_horario:
+        story.append(PageBreak())
+        story.append(Paragraph("PERSONAS EN EL BIOMÉTRICO SIN HORARIO ASIGNADO", st["dia_titulo"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
+        story.append(Spacer(1, 0.3*cm))
+        filas_sh = [["#", "Nombre"]]
+        for i, n in enumerate(sin_horario, 1):
+            filas_sh.append([str(i), n])
+        t_sh = Table(filas_sh, colWidths=[1.2*cm, 15.3*cm])
+        t_sh.setStyle(_estilo_tabla_datos(len(filas_sh)))
+        story.append(t_sh)
 
     # ── Log de duplicados ─────────────────────────────────────────────
     if log_duplicados:
@@ -628,7 +767,23 @@ def generar_pdf_persona(
     analisis_persona: dict,
     config: dict,
     nombre_archivo_origen: str,
+    filtros: dict = None,
+    sin_horario: list = None,
 ):
+    if filtros is None:
+        filtros = {}
+    if sin_horario is None:
+        sin_horario = []
+
+    _F = {
+        "mostrar_ausencias":       filtros.get("mostrar_ausencias",       True),
+        "mostrar_tardanza_severa": filtros.get("mostrar_tardanza_severa", True),
+        "mostrar_tardanza_leve":   filtros.get("mostrar_tardanza_leve",   True),
+        "mostrar_almuerzo":        filtros.get("mostrar_almuerzo",        True),
+        "mostrar_incompletos":     filtros.get("mostrar_incompletos",     True),
+        "columna_tiempo_dentro":   filtros.get("columna_tiempo_dentro",   False),
+    }
+
     doc = SimpleDocTemplate(
         ruta_salida,
         pagesize=A4,
@@ -642,33 +797,35 @@ def generar_pdf_persona(
     story   = []
     st = _crear_estilos(styles)
 
+    nombre_sistema     = os.getenv("NOMBRE_SISTEMA",     "Informes Biométricos")
+    nombre_institucion = os.getenv("NOMBRE_INSTITUCION", "ISTPET")
+
     # ── Portada ───────────────────────────────────────────────────────
     story.append(Spacer(1, 3*cm))
-    story.append(Paragraph("REPORTE DE ASISTENCIA (POR PERSONA)", st["titulo"]))
-    story.append(Paragraph("Control Biométrico de Personal", st["subtitulo"]))
+    story.append(Paragraph(f"{nombre_sistema.upper()} (POR PERSONA)", st["titulo"]))
+    story.append(Paragraph(f"Control Biométrico · {nombre_institucion.upper()}", st["subtitulo"]))
     story.append(Spacer(1, 0.5*cm))
     story.append(HRFlowable(width="100%", thickness=2, color=COLOR_HEADER))
     story.append(Spacer(1, 1*cm))
 
     datos_portada = [
-        ["Archivo origen:",   os.path.basename(nombre_archivo_origen)],
-        ["Generado el:",      datetime.now().strftime("%d/%m/%Y %H:%M")],
-        ["Personas total:",   str(len(analisis_persona))],
+        ["Archivo origen:",     os.path.basename(nombre_archivo_origen)],
+        ["Generado el:",        datetime.now().strftime("%d/%m/%Y %H:%M")],
+        ["Personas analizadas:", str(len(analisis_persona))],
         ["Tolerancia entrada:", "5 minutos (fija)"],
-        ["Almuerzo:",          "Según horario individual"],
+        ["Almuerzo:",           "Según horario individual"],
     ]
     t_portada = Table(datos_portada, colWidths=[6*cm, 10*cm])
     t_portada.setStyle(TableStyle([
-        ("FONTNAME",    (0,0), (0,-1), "Helvetica-Bold"),
-        ("FONTNAME",    (1,0), (1,-1), "Helvetica"),
-        ("FONTSIZE",    (0,0), (-1,-1), 10),
-        ("TEXTCOLOR",   (0,0), (0,-1), COLOR_SUBHEADER),
-        ("TEXTCOLOR",   (1,0), (1,-1), COLOR_TEXTO),
-        ("BOTTOMPADDING",(0,0),(-1,-1), 6),
-        ("TOPPADDING",  (0,0),(-1,-1), 6),
-        ("ROWBACKGROUNDS",(0,0),(-1,-1),[colors.white, COLOR_TABLA_ALT]),
-        ("GRID",        (0,0), (-1,-1), 0.5, colors.HexColor("#dee2e6")),
-        ("ROUNDEDCORNERS", [4]),
+        ("FONTNAME",     (0,0), (0,-1), "Helvetica-Bold"),
+        ("FONTNAME",     (1,0), (1,-1), "Helvetica"),
+        ("FONTSIZE",     (0,0), (-1,-1), 10),
+        ("TEXTCOLOR",    (0,0), (0,-1), COLOR_SUBHEADER),
+        ("TEXTCOLOR",    (1,0), (1,-1), COLOR_TEXTO),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 6),
+        ("TOPPADDING",   (0,0), (-1,-1), 6),
+        ("BACKGROUND",   (0,1), (-1,-1), COLOR_TABLA_ALT),
+        ("GRID",         (0,0), (-1,-1), 0.5, colors.HexColor("#dee2e6")),
     ]))
     story.append(t_portada)
     story.append(PageBreak())
@@ -678,115 +835,227 @@ def generar_pdf_persona(
     story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
     story.append(Spacer(1, 0.5*cm))
 
-    encabezado_resumen = ["Persona", "Días", "Tard. Leves", "Tard. Severas", "Exceso Almuerzo", "Incompletos"]
-    filas_resumen = [encabezado_resumen]
-    
+    enc_res = ["Persona", "Días", "Ausencias", "Tard. Severas",
+               "Tard. Leves", "Exc. Almuerzo", "Anómalos"]
+    filas_resumen = [enc_res]
     for nombre in sorted(analisis_persona.keys()):
         r = analisis_persona[nombre]["resumen"]
         filas_resumen.append([
             nombre,
-            str(r["total_dias"]),
-            str(r["tardanza_leve"]),
-            str(r["tardanza_severa"]),
-            str(r["almuerzo_largo"]),
-            str(r["incompletos"]),
+            str(r.get("total_dias", 0)),
+            str(r.get("ausencias", 0)),
+            str(r.get("tardanza_severa", 0)),
+            str(r.get("tardanza_leve",  0)),
+            str(r.get("almuerzo_largo", 0)),
+            str(r.get("incompletos",    0)),
         ])
-    
-    t_resumen = Table(filas_resumen, colWidths=[5*cm, 2*cm, 2.5*cm, 2.8*cm, 3.2*cm, 2.5*cm])
-    t_resumen.setStyle(_estilo_tabla_datos(len(filas_resumen)))
-    story.append(t_resumen)
+    t_res = Table(filas_resumen, colWidths=[5*cm, 1.6*cm, 1.9*cm, 2.5*cm, 2.2*cm, 2.8*cm, 1.8*cm])
+    t_res.setStyle(_estilo_tabla_datos(len(filas_resumen)))
+    story.append(t_res)
 
     # ── Sección por persona ───────────────────────────────────────────
     for nombre in sorted(analisis_persona.keys()):
         story.append(PageBreak())
-        story.append(Paragraph(f"👤 {nombre}", st["dia_titulo"]))
+        story.append(Paragraph(f"  {nombre}", st["dia_titulo"]))
         story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
         story.append(Spacer(1, 0.3*cm))
-        
+
         r = analisis_persona[nombre]["resumen"]
-        story.append(Paragraph(
-            f"<b>{r['total_dias']}</b> días registrados  |  "
-            f"<b>{r['tardanza_leve']}</b> tard. leves  |  "
-            f"<b>{r['tardanza_severa']}</b> tard. severas  |  "
-            f"<b>{r['almuerzo_largo']}</b> exc. almuerzo  |  "
-            f"<b>{r['incompletos']}</b> anómalos",
-            st["pequeño"]
-        ))
+        partes = []
+        if r.get("ausencias",       0): partes.append(f"<b>{r['ausencias']}</b> ausencias")
+        if r.get("tardanza_severa", 0): partes.append(f"<b>{r['tardanza_severa']}</b> tard. severas")
+        if r.get("tardanza_leve",   0): partes.append(f"<b>{r['tardanza_leve']}</b> tard. leves")
+        if r.get("almuerzo_largo",  0): partes.append(f"<b>{r['almuerzo_largo']}</b> exc. almuerzo")
+        if r.get("incompletos",     0): partes.append(f"<b>{r['incompletos']}</b> anómalos")
+        resumen_txt = "  ·  ".join(partes) if partes else "Sin novedades"
+        story.append(Paragraph(resumen_txt, st["pequeño"]))
         story.append(Spacer(1, 0.4*cm))
 
         datos = analisis_persona[nombre]["dias"]
         if analisis_persona[nombre].get("sin_novedades") or not datos:
-            story.append(Paragraph(
-                "Sin novedades registradas en el período consultado.", st["ok"]
-            ))
+            story.append(Paragraph("Sin novedades registradas en el período consultado.", st["ok"]))
             continue
 
-        # Determinar si hay horarios individuales para mostrar columna "Prog."
-        tiene_horario = any(d.get("hora_programada") is not None for d in datos)
+        # ── Ausencias ─────────────────────────────────────────────────
+        if _F["mostrar_ausencias"]:
+            ausentes = [d for d in datos if d.get("estado") == "ausente"]
+            story += _seccion_ausencias_persona(st, ausentes)
 
-        if tiene_horario:
-            encabezado_dias = ["Día", "Prog.", "Llegada", "Salida", "Almuerzo", "Observaciones"]
-        else:
-            encabezado_dias = ["Día", "Llegada", "Salida", "Dur. Almuerzo", "Observaciones"]
+        # ── Tardanzas Severas ──────────────────────────────────────────
+        if _F["mostrar_tardanza_severa"]:
+            severas = [d for d in datos if d.get("estado") == "severa"]
+            story += _seccion_tardanzas_persona(
+                st, "Tardanzas Severas",
+                "Llegadas con más de 5 minutos de retraso",
+                severas, COLOR_ERROR, _F["columna_tiempo_dentro"]
+            )
 
-        filas_dias = [encabezado_dias]
-        row_colors = []
+        # ── Tardanzas Leves ────────────────────────────────────────────
+        if _F["mostrar_tardanza_leve"]:
+            leves = [d for d in datos if d.get("estado") == "leve"
+                     and any("Tardanza leve" in o for o in d.get("observaciones", []))]
+            story += _seccion_tardanzas_persona(
+                st, "Tardanzas Leves",
+                "Llegadas con 1 a 5 minutos de retraso",
+                leves, COLOR_WARN, _F["columna_tiempo_dentro"]
+            )
 
-        for i, d in enumerate(datos, 1):
-            fecha_str    = d["fecha"].strftime("%d/%m/%Y")
-            llegada      = d["llegada"] or "—"
-            salida       = d["salida"]  or "—"
-            dur_almuerzo = f"{d['almuerzo_duracion']} min" if d["almuerzo_duracion"] else "—"
-            obs          = ", ".join(d["observaciones"]) if d["observaciones"] else "✓ Ok"
+        # ── Excesos de Almuerzo ────────────────────────────────────────
+        if _F["mostrar_almuerzo"]:
+            almuerzos = [d for d in datos if d.get("almuerzo_exceso") is not None
+                         and d.get("almuerzo_exceso", 0) > 0]
+            story += _seccion_almuerzo_persona(st, almuerzos)
 
-            if tiene_horario:
-                prog = d.get("hora_programada") or "—"
-                filas_dias.append([fecha_str, prog, llegada, salida, dur_almuerzo, obs])
-            else:
-                filas_dias.append([fecha_str, llegada, salida, dur_almuerzo, obs])
+        # ── Registros Incompletos ──────────────────────────────────────
+        if _F["mostrar_incompletos"]:
+            incompletos = [d for d in datos if d.get("estado") == "incompleto"]
+            story += _seccion_incompletos_persona(st, incompletos)
 
-            estado = d["estado"]
-            if estado == "ok":
-                row_colors.append(COLOR_OK)
-            elif estado == "leve":
-                row_colors.append(COLOR_WARN)
-            elif estado == "severa":
-                row_colors.append(COLOR_ERROR)
-            elif estado in ("incompleto", "libre"):
-                row_colors.append(COLOR_TABLA_ALT)
-            else:
-                row_colors.append(colors.white)
-
-        if tiene_horario:
-            t_dias = Table(filas_dias, colWidths=[2.5*cm, 1.8*cm, 2.0*cm, 2.0*cm, 2.5*cm, 6.6*cm])
-        else:
-            t_dias = Table(filas_dias, colWidths=[2.5*cm, 2.2*cm, 2.2*cm, 3*cm, 7.5*cm])
-        
-        estilos_base = [
-            ("BACKGROUND",    (0,0), (-1,0), COLOR_HEADER),
-            ("TEXTCOLOR",     (0,0), (-1,0), colors.white),
-            ("FONTNAME",      (0,0), (-1,0), "Helvetica-Bold"),
-            ("FONTSIZE",      (0,0), (-1,0), 8.5),
-            ("ALIGN",         (0,0), (-1,0), "CENTER"),
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
-            ("FONTSIZE",      (0,1), (-1,-1), 8.5),
-            ("TEXTCOLOR",     (0,1), (-1,-1), COLOR_TEXTO),
-            ("TOPPADDING",    (0,0), (-1,-1), 5),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
-            ("LEFTPADDING",   (0,0), (-1,-1), 6),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 6),
-            ("GRID",          (0,0), (-1,-1), 0.5, colors.HexColor("#dee2e6")),
-        ]
-        
-        for i, color_ in enumerate(row_colors, 1):
-            estilos_base.append(("BACKGROUND", (0,i), (-1,i), color_))
-            
-        t_dias.setStyle(TableStyle(estilos_base))
-        story.append(t_dias)
+    # ── Personas sin horario ──────────────────────────────────────────
+    if sin_horario:
+        story.append(PageBreak())
+        story.append(Paragraph("PERSONAS EN EL BIOMÉTRICO SIN HORARIO ASIGNADO", st["dia_titulo"]))
+        story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
+        story.append(Spacer(1, 0.3*cm))
+        story.append(Paragraph(
+            "Las siguientes personas tienen registros biométricos pero no están en la lista de horarios.",
+            st["pequeño"]
+        ))
+        story.append(Spacer(1, 0.3*cm))
+        filas_sh = [["#", "Nombre"]]
+        for i, n in enumerate(sin_horario, 1):
+            filas_sh.append([str(i), n])
+        t_sh = Table(filas_sh, colWidths=[1.2*cm, 15.3*cm])
+        t_sh.setStyle(_estilo_tabla_datos(len(filas_sh)))
+        story.append(t_sh)
 
     doc.build(story, onFirstPage=_pie_pagina, onLaterPages=_pie_pagina)
     print(f"\n✅ Reporte por persona generado: {ruta_salida}\n")
+
+
+def _dia_nombre_corto(fecha) -> str:
+    """Retorna el nombre del día en español (3 letras)."""
+    _DIAS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+    return _DIAS[fecha.weekday()]
+
+
+def _seccion_ausencias_persona(st, datos: list) -> list:
+    story = []
+    story.append(Paragraph("  AUSENCIAS", st["seccion"]))
+    story.append(Paragraph("Días en que debía trabajar y no registró ninguna marcación.", st["pequeño"]))
+    story.append(Spacer(1, 0.2*cm))
+    if not datos:
+        story.append(Paragraph("✓ Sin ausencias en el período.", st["ok"]))
+    else:
+        filas = [["Fecha", "Día", "Horario programado"]]
+        for d in datos:
+            filas.append([
+                d["fecha"].strftime("%d/%m/%Y"),
+                _dia_nombre_corto(d["fecha"]),
+                d.get("hora_programada") or "—",
+            ])
+        t = Table(filas, colWidths=[3*cm, 2*cm, 11.5*cm])
+        t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_ERROR))
+        story.append(t)
+    story.append(Spacer(1, 0.5*cm))
+    return story
+
+
+def _seccion_tardanzas_persona(st, titulo: str, desc: str,
+                                datos: list, color_bg, con_tiempo_dentro: bool) -> list:
+    story = []
+    story.append(Paragraph(f"  {titulo.upper()}", st["seccion"]))
+    story.append(Paragraph(desc, st["pequeño"]))
+    story.append(Spacer(1, 0.2*cm))
+    if not datos:
+        story.append(Paragraph("✓ Sin novedades.", st["ok"]))
+    else:
+        enc = ["Fecha", "Día", "Programado", "Llegada", "Retraso"]
+        w   = [3*cm, 2*cm, 2.8*cm, 2.5*cm, 2.5*cm]
+        if con_tiempo_dentro:
+            enc.append("Tiempo dentro")
+            w.append(2.5*cm)
+        enc.append("Observaciones")
+        w.append(16.4*cm - sum(w))
+
+        filas = [enc]
+        for d in datos:
+            obs_txt = " / ".join(o for o in d.get("observaciones", [])
+                                 if "Tardanza" in o) or "—"
+            fila = [
+                d["fecha"].strftime("%d/%m/%Y"),
+                _dia_nombre_corto(d["fecha"]),
+                d.get("hora_programada") or "—",
+                d.get("llegada") or "—",
+                _retraso_de_obs(d.get("observaciones", [])),
+            ]
+            if con_tiempo_dentro:
+                fila.append(d.get("tiempo_dentro") or "—")
+            fila.append(obs_txt)
+            filas.append(fila)
+        t = Table(filas, colWidths=w)
+        t.setStyle(_estilo_tabla_datos(len(filas), color_fila=color_bg))
+        story.append(t)
+    story.append(Spacer(1, 0.5*cm))
+    return story
+
+
+def _seccion_almuerzo_persona(st, datos: list) -> list:
+    story = []
+    story.append(Paragraph("  EXCESOS DE ALMUERZO", st["seccion"]))
+    story.append(Paragraph("Días con tiempo de almuerzo superior al límite establecido.", st["pequeño"]))
+    story.append(Spacer(1, 0.2*cm))
+    if not datos:
+        story.append(Paragraph("✓ Sin excesos de almuerzo.", st["ok"]))
+    else:
+        filas = [["Fecha", "Día", "Salida", "Regreso", "Duración", "Exceso"]]
+        for d in datos:
+            filas.append([
+                d["fecha"].strftime("%d/%m/%Y"),
+                _dia_nombre_corto(d["fecha"]),
+                d.get("almuerzo_salida")  or "—",
+                d.get("almuerzo_regreso") or "—",
+                f"{d['almuerzo_duracion']} min" if d.get("almuerzo_duracion") else "—",
+                f"+{d['almuerzo_exceso']} min"  if d.get("almuerzo_exceso")   else "—",
+            ])
+        t = Table(filas, colWidths=[3*cm, 2*cm, 2.5*cm, 2.5*cm, 2.8*cm, 3.7*cm])
+        t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_WARN))
+        story.append(t)
+    story.append(Spacer(1, 0.5*cm))
+    return story
+
+
+def _seccion_incompletos_persona(st, datos: list) -> list:
+    story = []
+    story.append(Paragraph("  REGISTROS ANÓMALOS / INCOMPLETOS", st["seccion"]))
+    story.append(Paragraph("Días con un número inusual de marcaciones (esperado: 2 o 4).", st["pequeño"]))
+    story.append(Spacer(1, 0.2*cm))
+    if not datos:
+        story.append(Paragraph("✓ Sin registros anómalos.", st["ok"]))
+    else:
+        filas = [["Fecha", "Día", "# Registros", "Detalle"]]
+        for d in datos:
+            filas.append([
+                d["fecha"].strftime("%d/%m/%Y"),
+                _dia_nombre_corto(d["fecha"]),
+                str(d.get("n_registros", "?")),
+                d.get("detalle_registros") or "—",
+            ])
+        t = Table(filas, colWidths=[3*cm, 2*cm, 2.5*cm, 9*cm])
+        t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_TABLA_ALT))
+        story.append(t)
+    story.append(Spacer(1, 0.5*cm))
+    return story
+
+
+def _retraso_de_obs(observaciones: list) -> str:
+    """Extrae el texto de retraso (ej '+3m') de las observaciones."""
+    import re
+    for o in observaciones:
+        m = re.search(r'\+(\d+)m', o)
+        if m:
+            return f"+{m.group(1)} min"
+    return "—"
 
 def _crear_estilos(base):
 
@@ -830,9 +1099,11 @@ def _crear_estilos(base):
 
 def _portada(st, origen, config, analisis):
     story = []
+    nombre_sistema = os.getenv("NOMBRE_SISTEMA", "Informes Biométricos")
+    nombre_institucion = os.getenv("NOMBRE_INSTITUCION", "ISTPET")
     story.append(Spacer(1, 3*cm))
-    story.append(Paragraph("REPORTE DE ASISTENCIA", st["titulo"]))
-    story.append(Paragraph("Control Biométrico de Personal", st["subtitulo"]))
+    story.append(Paragraph(nombre_sistema.upper(), st["titulo"]))
+    story.append(Paragraph(f"Control Biométrico · {nombre_institucion.upper()}", st["subtitulo"]))
     story.append(Spacer(1, 0.5*cm))
     story.append(HRFlowable(width="100%", thickness=2, color=COLOR_HEADER))
     story.append(Spacer(1, 1*cm))
@@ -932,7 +1203,9 @@ def _resumen_mensual(st, analisis, config):
 
 # ── Página de un día ───────────────────────────────────────────────────────
 
-def _pagina_dia(st, dia, datos, config):
+def _pagina_dia(st, dia, datos, config, filtros_activos: dict = None):
+    if filtros_activos is None:
+        filtros_activos = {}
     story = []
 
     # Título del día
@@ -949,7 +1222,7 @@ def _pagina_dia(st, dia, datos, config):
                   .replace("September","Septiembre").replace("October","Octubre")
                   .replace("November","Noviembre").replace("December","Diciembre"))
 
-    story.append(Paragraph(f"📅  {nombre_dia.upper()}", st["dia_titulo"]))
+    story.append(Paragraph(f"  {nombre_dia.upper()}", st["dia_titulo"]))
     story.append(HRFlowable(width="100%", thickness=1, color=COLOR_SUBHEADER))
     story.append(Spacer(1, 0.3*cm))
 
@@ -963,27 +1236,25 @@ def _pagina_dia(st, dia, datos, config):
     ))
     story.append(Spacer(1, 0.4*cm))
 
-    # ── Tardanza severa ────────────────────────────────────────────────
-    story += _seccion_tardanza(
-        st, "Tardanza Severa",
-        "Llegadas con más de 5 minutos de retraso sobre el horario programado",
-        datos["tardanza_severa"],
-        COLOR_ERROR, "🔴"
-    )
+    if filtros_activos.get("mostrar_tardanza_severa", True):
+        story += _seccion_tardanza(
+            st, "Tardanza Severa",
+            "Llegadas con más de 5 minutos de retraso sobre el horario programado",
+            datos["tardanza_severa"], COLOR_ERROR, "🔴"
+        )
 
-    # ── Tardanza leve ──────────────────────────────────────────────────
-    story += _seccion_tardanza(
-        st, "Tardanza Leve",
-        "Llegadas con 1 a 5 minutos de retraso sobre el horario programado",
-        datos["tardanza_leve"],
-        COLOR_WARN, "🟡"
-    )
+    if filtros_activos.get("mostrar_tardanza_leve", True):
+        story += _seccion_tardanza(
+            st, "Tardanza Leve",
+            "Llegadas con 1 a 5 minutos de retraso sobre el horario programado",
+            datos["tardanza_leve"], COLOR_WARN, "🟡"
+        )
 
-    # ── Exceso de almuerzo ─────────────────────────────────────────────
-    story += _seccion_almuerzo(st, datos["almuerzo_largo"])
+    if filtros_activos.get("mostrar_almuerzo", True):
+        story += _seccion_almuerzo(st, datos["almuerzo_largo"])
 
-    # ── Registros incompletos ──────────────────────────────────────────
-    story += _seccion_incompletos(st, datos["registros_incompletos"])
+    if filtros_activos.get("mostrar_incompletos", True):
+        story += _seccion_incompletos(st, datos["registros_incompletos"])
 
     return story
 
@@ -1110,7 +1381,7 @@ def _estilo_tabla_datos(n_filas, color_fila=None):
         ("LEFTPADDING",   (0,0), (-1,-1), 6),
         ("RIGHTPADDING",  (0,0), (-1,-1), 6),
         ("GRID",          (0,0), (-1,-1), 0.5, colors.HexColor("#dee2e6")),
-        ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.white, bg]),
+        ("BACKGROUND",    (0,1), (-1,-1), bg),
     ]
     return TableStyle(estilos)
 

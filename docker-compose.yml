@@ -1,7 +1,7 @@
 services:
-  rrhh-app:
+  biometrico-app:
     build: .
-    container_name: rrhh-biometrico
+    container_name: biometrico-app
     env_file:
       - .env
     volumes:
@@ -14,7 +14,6 @@ services:
     # El contenedor alcanza el dispositivo ZK en la red local a través del NAT de Docker.
     ports:
       - "5000:5000"
-
     # ALTERNATIVA solo para Linux con Docker Engine (no Docker Desktop):
     # network_mode: host da acceso directo a la red del host sin NAT.
     # Útil si el ZK está en una subnet que no es accesible por NAT.

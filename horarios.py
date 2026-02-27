@@ -260,7 +260,7 @@ def parsear_csv(ruta: str) -> list[dict]:
 
     COLUMNAS_REQ = {
         "id_usuario", "nombre",
-        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado",
+        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo",
         "almuerzo_min",
     }
 
@@ -295,7 +295,7 @@ def parsear_csv(ruta: str) -> list[dict]:
                     "jueves":       _normalizar_hora(fila.get("jueves")),
                     "viernes":      _normalizar_hora(fila.get("viernes")),
                     "sabado":       _normalizar_hora(fila.get("sabado")),
-                    "domingo":      None,
+                    "domingo":      _normalizar_hora(fila.get("domingo")),
                     "almuerzo_min": _normalizar_almuerzo(fila.get("almuerzo_min")),
                     "notas":        (fila.get("notas") or "").strip(),
                 }
@@ -337,9 +337,10 @@ def get_info_dia(horario_persona: dict, fecha) -> dict:
     es_domingo = weekday == 6
 
     if es_domingo:
+        hora_entrada = horario_persona.get("domingo")
         return {
-            "trabaja":      False,
-            "hora_entrada": None,
+            "trabaja":      hora_entrada is not None,
+            "hora_entrada": hora_entrada,
             "almuerzo_min": 0,
             "es_domingo":   True,
         }

@@ -30,6 +30,16 @@ app.config['UPLOAD_FOLDER']      = UPLOAD_FOLDER
 app.config['REPORTS_FOLDER']     = REPORTS_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB
 
+app.config['NOMBRE_SISTEMA'] = os.getenv('NOMBRE_SISTEMA', 'Informes Biométricos')
+app.config['NOMBRE_INSTITUCION'] = os.getenv('NOMBRE_INSTITUCION', 'ISTPET')
+
+@app.context_processor
+def inject_system_info():
+    return dict(
+        nombre_sistema=app.config['NOMBRE_SISTEMA'],
+        nombre_institucion=app.config['NOMBRE_INSTITUCION']
+    )
+
 os.makedirs(UPLOAD_FOLDER,  exist_ok=True)
 os.makedirs(REPORTS_FOLDER, exist_ok=True)
 
@@ -100,12 +110,17 @@ def _parse_config(data: dict) -> dict:
 
 
 def _build_pdf(registros: list, config: dict, modo: str, persona: str,
-               pdf_path: str, nombre_origen: str):
+               pdf_path: str, nombre_origen: str,
+               fecha_inicio=None, fecha_fin=None, filtros: dict = None):
     """
     Aplica filtros, deduplicación, análisis y genera el PDF.
     Los horarios son obligatorios; lanza ValueError si no hay ninguno cargado.
     Solo analiza las personas presentes en el archivo de horarios.
+    filtros: dict con opciones de secciones/columnas a incluir en el PDF.
     """
+    if filtros is None:
+        filtros = {}
+
     if config["excluidos"]:
         registros = filtrar_excluidos(registros, config["excluidos"])
 
@@ -120,6 +135,18 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
     # Filtrar al conjunto de personas del archivo de horarios (aplica siempre)
     ids_h = set(horarios["by_id"].keys())
     nom_h = set(horarios["by_nombre"].keys())
+
+    # Personas sin horario (para el reporte especial)
+    sin_horario = []
+    if filtros.get("reporte_sin_horario"):
+        nombres_vistos = set()
+        for r in registros:
+            if r["nombre"] not in nombres_vistos:
+                nombres_vistos.add(r["nombre"])
+                if r.get("id_usuario") not in ids_h and r["nombre"].upper() not in nom_h:
+                    sin_horario.append(r["nombre"])
+        sin_horario.sort()
+
     registros = [
         r for r in registros
         if (r.get("id_usuario") in ids_h)
@@ -136,8 +163,17 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
     if not registros:
         raise ValueError("No quedaron registros después de aplicar los filtros.")
 
+    # Cargar justificaciones y feriados para el período
+    justificaciones = db_module.get_justificaciones_dict(fecha_inicio, fecha_fin)
+    feriados        = db_module.get_feriados_set(fecha_inicio, fecha_fin)
+
     if modo in ("persona", "varias"):
-        analisis = analizar_por_persona(registros, config, horarios=horarios)
+        analisis = analizar_por_persona(
+            registros, config, horarios=horarios,
+            fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
+            justificaciones=justificaciones, feriados=feriados,
+            mostrar_todos=filtros.get("mostrar_todos_los_dias", False),
+        )
 
         if modo == "persona":
             if not persona:
@@ -155,15 +191,19 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                     "Ninguna de las personas seleccionadas tiene registros en el período."
                 )
 
-        generar_pdf_persona(pdf_path, analisis, config, nombre_origen)
+        generar_pdf_persona(pdf_path, analisis, config, nombre_origen,
+                            filtros=filtros, sin_horario=sin_horario)
     else:
         por_fecha = defaultdict(list)
         for r in registros:
             por_fecha[r["fecha"]].append(r)
         analisis = {}
         for fecha, regs in sorted(por_fecha.items()):
-            analisis[fecha] = analizar_dia(regs, horarios)
-        generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen)
+            analisis[fecha] = analizar_dia(regs, horarios,
+                                           justificaciones=justificaciones,
+                                           feriados=feriados)
+        generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen,
+                    filtros=filtros, sin_horario=sin_horario)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -234,7 +274,20 @@ def personas_db():
         ff = datetime.strptime(ff_str, "%Y-%m-%d").date() if ff_str else date.today()
     except ValueError:
         return jsonify({'error': 'Formato de fecha inválido'}), 400
-    return jsonify({'personas': db_module.get_personas(fi, ff)})
+
+    # Solo devolver personas que tienen horario cargado
+    todas_con_id = db_module.get_personas_con_id(fi, ff)
+    horarios = db_module.get_horarios()
+    if horarios["by_id"]:
+        ids_h = set(horarios["by_id"].keys())
+        nom_h = set(horarios["by_nombre"].keys())
+        personas = [
+            p["nombre"] for p in todas_con_id
+            if p["id_usuario"] in ids_h or p["nombre"].upper() in nom_h
+        ]
+    else:
+        personas = [p["nombre"] for p in todas_con_id]
+    return jsonify({'personas': personas})
 
 
 @app.route('/generar-desde-db', methods=['POST'])
@@ -252,6 +305,20 @@ def generar_desde_db():
     if modo == 'varias':
         config['personas'] = data.get('personas', [])
 
+    # Filtros de secciones/columnas (valores por defecto = activados)
+    _DEFAULT_FILTROS = {
+        "mostrar_ausencias":       True,
+        "mostrar_tardanza_severa": True,
+        "mostrar_tardanza_leve":   True,
+        "mostrar_almuerzo":        True,
+        "mostrar_incompletos":     True,
+        "mostrar_todos_los_dias":  False,
+        "columna_tiempo_dentro":   False,
+        "reporte_sin_horario":     False,
+    }
+    filtros_raw = data.get('filtros', {})
+    filtros = {k: filtros_raw.get(k, v) for k, v in _DEFAULT_FILTROS.items()}
+
     registros = db_module.consultar_asistencias(fecha_inicio, fecha_fin)
     if not registros:
         return jsonify({
@@ -267,7 +334,8 @@ def generar_desde_db():
     pdf_path     = os.path.join(app.config['REPORTS_FOLDER'], pdf_filename)
 
     try:
-        _build_pdf(registros, config, modo, persona, pdf_path, nombre_origen)
+        _build_pdf(registros, config, modo, persona, pdf_path, nombre_origen,
+                   fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, filtros=filtros)
         labels = {'general': 'General', 'persona': 'Persona', 'varias': 'Varias_Personas'}
         label  = labels.get(modo, 'Reporte')
         return jsonify({
@@ -288,6 +356,11 @@ def limpiar_dispositivo():
         return jsonify({
             'error': 'Se requiere { "confirmar": true } en el cuerpo de la solicitud.'
         }), 400
+    # Verificar contraseña si la autenticación está habilitada
+    if APP_PASSWORD_HASH:
+        password = data.get('password', '')
+        if not password or not check_password_hash(APP_PASSWORD_HASH, password):
+            return jsonify({'error': 'Contraseña incorrecta. Esta acción requiere autenticación.'}), 403
     try:
         total_borrado = sync_module.limpiar_log_dispositivo()
         return jsonify({'success': True, 'registros_borrados': total_borrado})
@@ -380,7 +453,7 @@ def ver_horarios():
 # ══════════════════════════════════════════════════════════════════════════
 
 _HORA_RE = re.compile(r"^\d{2}:\d{2}$")
-_DIAS    = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado"]
+_DIAS    = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 
 
 def _validar_horario_body(data: dict):
@@ -436,7 +509,7 @@ def exportar_horarios_csv():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["id_usuario", "nombre", "lunes", "martes", "miercoles",
-                     "jueves", "viernes", "sabado", "almuerzo_min", "notas"])
+                     "jueves", "viernes", "sabado", "domingo", "almuerzo_min", "notas"])
     for h in lista:
         writer.writerow([
             h["id_usuario"],
@@ -447,6 +520,7 @@ def exportar_horarios_csv():
             h.get("jueves")  or "",
             h.get("viernes") or "",
             h.get("sabado")  or "",
+            h.get("domingo") or "",
             h.get("almuerzo_min", 0),
             h.get("notas")   or "",
         ])
@@ -499,6 +573,129 @@ def api_horarios_eliminar(id_usuario):
     if not db_module.delete_horario(id_usuario):
         return jsonify({'error': f"No existe horario con ID {id_usuario}."}), 404
     return jsonify({'success': True})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# JUSTIFICACIONES
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/justificaciones', methods=['GET'])
+def get_justificaciones():
+    fi_str = request.args.get('fecha_inicio')
+    ff_str = request.args.get('fecha_fin')
+    try:
+        fi = datetime.strptime(fi_str, "%Y-%m-%d").date() if fi_str else None
+        ff = datetime.strptime(ff_str, "%Y-%m-%d").date() if ff_str else None
+    except ValueError:
+        return jsonify({'error': 'Formato de fecha inválido'}), 400
+    lista = db_module.get_justificaciones(fi, ff)
+    return jsonify({'justificaciones': lista})
+
+
+@app.route('/justificaciones', methods=['POST'])
+def crear_justificacion():
+    data = request.json or {}
+    id_usuario = str(data.get('id_usuario', '')).strip()
+    nombre     = str(data.get('nombre', '')).strip()
+    fecha      = str(data.get('fecha', '')).strip()
+    tipo       = str(data.get('tipo', '')).strip()
+    motivo     = str(data.get('motivo', '')).strip()
+    aprobado   = str(data.get('aprobado_por', '')).strip()
+
+    if not id_usuario or not nombre or not fecha or not tipo:
+        return jsonify({'error': 'Campos requeridos: id_usuario, nombre, fecha, tipo'}), 400
+    if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto'):
+        return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto"}), 400
+    try:
+        result = db_module.insertar_justificacion(id_usuario, nombre, fecha, tipo, motivo, aprobado)
+        return jsonify({'success': True, 'justificacion': result}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/justificaciones/<int:jid>', methods=['DELETE'])
+def eliminar_justificacion(jid):
+    if not db_module.eliminar_justificacion(jid):
+        return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
+    return jsonify({'success': True})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# FERIADOS
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/feriados', methods=['GET'])
+def get_feriados():
+    anio_str = request.args.get('anio')
+    if anio_str:
+        try:
+            anio = int(anio_str)
+            fi = date(anio, 1, 1)
+            ff = date(anio, 12, 31)
+        except ValueError:
+            return jsonify({'error': 'anio inválido'}), 400
+        lista = db_module.get_feriados(fi, ff)
+    else:
+        lista = db_module.get_feriados()
+    return jsonify({'feriados': lista})
+
+
+@app.route('/feriados', methods=['POST'])
+def crear_feriado():
+    data = request.json or {}
+    fecha       = str(data.get('fecha', '')).strip()
+    descripcion = str(data.get('descripcion', '')).strip()
+    tipo        = str(data.get('tipo', 'nacional')).strip() or 'nacional'
+    if not fecha or not descripcion:
+        return jsonify({'error': 'Campos requeridos: fecha, descripcion'}), 400
+    try:
+        result = db_module.insertar_feriado(fecha, descripcion, tipo)
+        return jsonify({'success': True, 'feriado': result}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/feriados/<fecha>', methods=['DELETE'])
+def eliminar_feriado(fecha):
+    if not db_module.eliminar_feriado(fecha):
+        return jsonify({'error': f'No existe feriado para la fecha {fecha}'}), 404
+    return jsonify({'success': True})
+
+
+@app.route('/feriados/importar', methods=['POST'])
+def importar_feriados():
+    if 'archivo' not in request.files:
+        return jsonify({'error': 'No se envió ningún archivo'}), 400
+    file = request.files['archivo']
+    if not file.filename.endswith('.csv'):
+        return jsonify({'error': 'Solo se aceptan archivos .csv'}), 400
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"{uuid.uuid4().hex}_{filename}")
+    file.save(filepath)
+    try:
+        count = db_module.importar_feriados_csv(filepath)
+        return jsonify({'success': True, 'total_importados': count})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        if os.path.exists(filepath):
+            os.remove(filepath)
+
+
+@app.route('/feriados/exportar', methods=['GET'])
+def exportar_feriados():
+    lista = db_module.get_feriados()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["fecha", "descripcion", "tipo"])
+    for f in lista:
+        writer.writerow([f["fecha"], f["descripcion"], f["tipo"]])
+    content = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content,
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=feriados.csv"},
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════
