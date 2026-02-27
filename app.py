@@ -141,7 +141,7 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
 
     # Personas sin horario (para el reporte especial)
     sin_horario = []
-    if filtros.get("reporte_sin_horario"):
+    if filtros.get("reporte_sin_horario") or filtros.get("reporte_todos_usuarios"):
         nombres_vistos = set()
         for r in registros:
             if r["nombre"] not in nombres_vistos:
@@ -150,15 +150,24 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                     sin_horario.append(r["nombre"])
         sin_horario.sort()
 
-    registros = [
-        r for r in registros
-        if (r.get("id_usuario") in ids_h)
-           or (r["nombre"].upper() in nom_h)
-    ]
+    # Si se pide el reporte de "solo sin horario", filtramos para EXCLUIR a los que sí tienen
+    if filtros.get("reporte_sin_horario"):
+        registros = [
+            r for r in registros
+            if (r.get("id_usuario") not in ids_h)
+               and (r["nombre"].upper() not in nom_h)
+        ]
+    # Si NO se pide "todos los usuarios" ni "solo sin horario", filtramos para mostrar SOLO los que tienen horario
+    elif not filtros.get("reporte_todos_usuarios"):
+        registros = [
+            r for r in registros
+            if (r.get("id_usuario") in ids_h)
+               or (r["nombre"].upper() in nom_h)
+        ]
+
     if not registros:
         raise ValueError(
-            "Ningún registro del período corresponde a personas "
-            "del archivo de horarios cargado."
+            "No hay registros que coincidan con los filtros aplicados."
         )
 
     registros, log_dup = deduplicar(registros, config["duplicado_min"])
@@ -170,12 +179,15 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
     justificaciones = db_module.get_justificaciones_dict(fecha_inicio, fecha_fin)
     feriados        = db_module.get_feriados_set(fecha_inicio, fecha_fin)
 
+    permitir_sin_horario = filtros.get("reporte_sin_horario", False) or filtros.get("reporte_todos_usuarios", False)
+
     if modo in ("persona", "varias"):
         analisis = analizar_por_persona(
             registros, config, horarios=horarios,
             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
             justificaciones=justificaciones, feriados=feriados,
             mostrar_todos=filtros.get("mostrar_todos_los_dias", False),
+            permitir_sin_horario=permitir_sin_horario,
         )
 
         if modo == "persona":
@@ -204,7 +216,8 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
         for fecha, regs in sorted(por_fecha.items()):
             analisis[fecha] = analizar_dia(regs, horarios,
                                            justificaciones=justificaciones,
-                                           feriados=feriados)
+                                           feriados=feriados,
+                                           permitir_sin_horario=permitir_sin_horario)
         generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen,
                     filtros=filtros, sin_horario=sin_horario)
 
@@ -318,6 +331,7 @@ def generar_desde_db():
         "mostrar_todos_los_dias":  False,
         "columna_tiempo_dentro":   False,
         "reporte_sin_horario":     False,
+        "reporte_todos_usuarios":  False,
     }
     filtros_raw = data.get('filtros', {})
     filtros = {k: filtros_raw.get(k, v) for k, v in _DEFAULT_FILTROS.items()}

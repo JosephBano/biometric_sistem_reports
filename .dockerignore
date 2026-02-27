@@ -1,0 +1,32 @@
+# Credenciales — NUNCA dentro de la imagen
+.env
+*.env
+
+# Entornos virtuales
+.venv/
+venv/
+
+# Caché Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Datos en runtime (se montan como volúmenes)
+data/
+uploads/
+reports/
+
+# Base de datos local de desarrollo
+*.db
+
+# Git
+.git/
+.gitignore
+
+# Documentación interna
+*.md
+
+# Archivos temporales
+*.tar
+*.zip
+rrhh-biometrico.tar

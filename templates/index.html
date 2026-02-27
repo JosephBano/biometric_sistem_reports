@@ -380,14 +380,24 @@
                                     </div>
                                 </div>
                             </div>
-                            <p class="small fw-semibold mb-2">Reportes especiales:</p>
-                            <div class="row g-2">
-                                <div class="col-auto">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="f-sin-horario">
-                                        <label class="form-check-label small" for="f-sin-horario">
-                                            Listar personas en biométrico sin horario asignado
-                                        </label>
+                            <div id="especiales-group" class="mt-3" style="display:none">
+                                <p class="small fw-semibold mb-2">Reportes especiales (solo para General):</p>
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="f-sin-horario">
+                                            <label class="form-check-label small" for="f-sin-horario">
+                                                Listar solo personas en biométrico SIN horario asignado
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="f-todos-usuarios">
+                                            <label class="form-check-label small" for="f-todos-usuarios">
+                                                Listar ABSOLUTAMENTE TODOS los usuarios del biométrico
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -588,15 +598,29 @@
             fetchEstadoHorarios();
             cargarJustificaciones();
             cargarFeriados();
+            actualizarVisibilidadModo();
         });
 
         // Cambio de modo
-        document.getElementById('modo').addEventListener('change', function () {
-            const v = this.value;
+        function actualizarVisibilidadModo() {
+            const v = document.getElementById('modo').value;
             document.getElementById('persona-group').style.display = v === 'persona' ? 'block' : 'none';
             document.getElementById('varias-group').style.display = v === 'varias' ? 'block' : 'none';
+            // Mostrar especiales solo en modo general
+            document.getElementById('especiales-group').style.display = v === 'general' ? 'block' : 'none';
+
             if (v === 'persona') loadPersonas();
             if (v === 'varias') loadPersonasVarias();
+        }
+
+        document.getElementById('modo').addEventListener('change', actualizarVisibilidadModo);
+
+        // Mutuamente excluyentes los reportes especiales
+        document.getElementById('f-sin-horario').addEventListener('change', function () {
+            if (this.checked) document.getElementById('f-todos-usuarios').checked = false;
+        });
+        document.getElementById('f-todos-usuarios').addEventListener('change', function () {
+            if (this.checked) document.getElementById('f-sin-horario').checked = false;
         });
 
         // Recargar personas al cambiar fechas
@@ -764,6 +788,7 @@
                 mostrar_todos_los_dias: document.getElementById('f-todos-dias').checked,
                 columna_tiempo_dentro: document.getElementById('f-tiempo-dentro').checked,
                 reporte_sin_horario: document.getElementById('f-sin-horario').checked,
+                reporte_todos_usuarios: document.getElementById('f-todos-usuarios').checked,
             };
         }
 
