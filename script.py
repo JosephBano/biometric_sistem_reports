@@ -1065,12 +1065,13 @@ def _seccion_cronologico_persona(st, datos: list, con_tiempo_dentro: bool) -> li
     else:
         # Definir encabezados y anchos
         enc = ["Fecha", "Ingreso", "Salida"]
-        w   = [3.0*cm, 2.5*cm, 2.5*cm]
+        w   = [4.0*cm, 4.0*cm, 4.0*cm]
         if con_tiempo_dentro:
             enc.append("T. Dentro")
-            w.append(2.5*cm)
-        enc.append("Observaciones")
-        w.append(17.4*cm - sum(w))
+            w.append(4.0*cm)
+        
+        # Ajustar el último ancho para completar el ancho de página (aprox 17.4cm)
+        w[-1] += (17.4*cm - sum(w))
 
         filas = [enc]
         for d in datos:
@@ -1084,7 +1085,6 @@ def _seccion_cronologico_persona(st, datos: list, con_tiempo_dentro: bool) -> li
             if con_tiempo_dentro:
                 fila.append(d.get("tiempo_dentro") or "—")
             
-            fila.append(Paragraph(obs_txt, st["pequeño"]))
             filas.append(fila)
 
         t = Table(filas, colWidths=w, repeatRows=1)
@@ -1116,14 +1116,13 @@ def _seccion_ausencias_persona(st, datos: list) -> list:
     if not datos:
         story.append(Paragraph("✓ Sin ausencias en el período.", st["ok"]))
     else:
-        filas = [["Fecha", "Horario programado", "Observaciones"]]
+        filas = [["Fecha", "Horario programado"]]
         for d in datos:
             filas.append([
                 d["fecha"].strftime("%d/%m/%Y"),
                 d.get("hora_programada") or "—",
-                Paragraph(" / ".join(d.get("observaciones",[])), st["pequeño"]),
             ])
-        t = Table(filas, colWidths=[4*cm, 5*cm, 8.4*cm])
+        t = Table(filas, colWidths=[8.7*cm, 8.7*cm])
         t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_ERROR))
         # Resaltar justificadas en amarillo
         for i, d in enumerate(datos):
@@ -1144,12 +1143,11 @@ def _seccion_tardanzas_persona(st, titulo: str, desc: str,
         story.append(Paragraph("✓ Sin novedades.", st["ok"]))
     else:
         enc = ["Fecha", "Programado", "Llegada", "Retraso"]
-        w   = [3*cm, 3*cm, 2.5*cm, 2.5*cm]
+        w   = [4.5*cm, 4.5*cm, 4*cm, 4.4*cm]
         if con_tiempo_dentro:
             enc.append("Tiempo dentro")
-            w.append(2.5*cm)
-        enc.append("Observaciones")
-        w.append(17.4*cm - sum(w))
+            # Ajustar anchos para que quepan 5 columnas
+            w = [3.5*cm, 3.5*cm, 3.5*cm, 3.4*cm, 3.5*cm]
 
         filas = [enc]
         for d in datos:
@@ -1163,7 +1161,6 @@ def _seccion_tardanzas_persona(st, titulo: str, desc: str,
             ]
             if con_tiempo_dentro:
                 fila.append(d.get("tiempo_dentro") or "—")
-            fila.append(Paragraph(obs_txt, st["pequeño"]))
             filas.append(fila)
         t = Table(filas, colWidths=w)
         t.setStyle(_estilo_tabla_datos(len(filas), color_fila=color_bg))
@@ -1184,18 +1181,16 @@ def _seccion_almuerzo_persona(st, datos: list) -> list:
     if not datos:
         story.append(Paragraph("✓ Sin excesos de almuerzo.", st["ok"]))
     else:
-        filas = [["Fecha", "Salida", "Regreso", "Duración", "Exceso", "Observaciones"]]
+        filas = [["Fecha", "Salida", "Regreso", "Duración", "Exceso"]]
         for d in datos:
-            obs_txt = " / ".join(d.get("observations", d.get("observaciones",[]))) or "—"
             filas.append([
                 d["fecha"].strftime("%d/%m/%Y"),
                 d.get("almuerzo_salida")  or "—",
                 d.get("almuerzo_regreso") or "—",
                 f"{d['almuerzo_duracion']} min" if d.get("almuerzo_duracion") else "—",
                 f"+{d['almuerzo_exceso']} min"  if d.get("almuerzo_exceso")   else "—",
-                Paragraph(obs_txt, st["pequeño"]),
             ])
-        t = Table(filas, colWidths=[3.0*cm, 2.0*cm, 2.0*cm, 2.0*cm, 2.0*cm, 6.4*cm])
+        t = Table(filas, colWidths=[4*cm, 3*cm, 3.4*cm, 3.5*cm, 3.5*cm])
         t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_WARN))
         for i, d in enumerate(datos):
             if d.get("justificado"):
@@ -1213,21 +1208,18 @@ def _seccion_incompletos_persona(st, datos: list) -> list:
     if not datos:
         story.append(Paragraph("✓ Sin registros anómalos.", st["ok"]))
     else:
-        filas = [["Fecha", "# Reg.", "Detalle de marcaciones", "Observaciones"]]
+        filas = [["Fecha", "# Reg.", "Detalle de marcaciones"]]
         for d in datos:
             det_val = d.get("detalle_registros") or "—"
             if det_val != "—":
                 det_val = Paragraph(det_val, st["pequeño"])
             
-            obs_txt = " / ".join(d.get("observaciones",[])) or "—"
-            
             filas.append([
                 d["fecha"].strftime("%d/%m/%Y"),
                 str(d.get("n_registros", "?")),
                 det_val,
-                Paragraph(obs_txt, st["pequeño"]),
             ])
-        t = Table(filas, colWidths=[3.0*cm, 1.5*cm, 6.5*cm, 6.4*cm])
+        t = Table(filas, colWidths=[4*cm, 2.5*cm, 10.9*cm])
         t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_TABLA_ALT))
         for i, d in enumerate(datos):
             if d.get("justificado"):
@@ -1364,17 +1356,15 @@ def _resumen_mensual(st, analisis, config):
     story.append(t)
     story.append(Spacer(1, 1*cm))
 
-    # Tabla resumen por día
-    story.append(Paragraph("Detalle por día", st["seccion"]))
-    encabezado = ["Día", "Personas", "Tard. Leve", "Tard. Severa",
+    # Tabla resumen por fecha
+    story.append(Paragraph("Detalle por fecha", st["seccion"]))
+    encabezado = ["Fecha", "Personas", "Tard. Leve", "Tard. Severa",
                   "Exceso Almuerzo", "Reg. Anómalos"]
     filas = [encabezado]
     for dia in sorted(analisis.keys()):
         r = analisis[dia]["resumen"]
         filas.append([
-            dia.strftime("%d/%m/%Y (%a)").replace("Mon","Lun").replace("Tue","Mar")
-              .replace("Wed","Mié").replace("Thu","Jue").replace("Fri","Vie")
-              .replace("Sat","Sáb").replace("Sun","Dom"),
+            dia.strftime("%d/%m/%Y"),
             str(r["total_personas"]),
             str(r["tardanza_leve"])   or "—",
             str(r["tardanza_severa"]) or "—",
