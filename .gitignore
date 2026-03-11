@@ -1,25 +1,64 @@
-venv/
-.venv/
+# --- Python ---
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-*.log
-.env
-.pytest_cache/
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
 htmlcov/
 
-# Excel and PDFs
-*.xlsx
-*.pdf
-
-# Variables de entorno (credenciales)
+# --- Environment Variables ---
 .env
+.env.*
+!.env.example
 
-# Base de datos y datos en runtime
+# --- Databases ---
 *.db
-data/
+*.sqlite3
+instance/
+
+# --- IDEs / Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+
+# --- Application Specific ---
 uploads/
 reports/
+data/
+static/uploads/
+temp/
+*.xlsx
+*.pdf
+!plantilla*.xlsx
+
+# --- Agent & Skills (Specific Request) ---
+.agent/
+.agents/
+.claude/
+skills-lock.json
+**/SKILL.md
+**/skills.sh
+**/skills.md
