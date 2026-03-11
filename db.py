@@ -100,6 +100,8 @@ def init_db():
                 domingo_almuerzo_min  INTEGER,
                 notas          TEXT,
                 fuente         TEXT,
+                horas_semana   REAL,   -- Horas contrato por semana (ej: 40). NULL si usa horas_mes.
+                horas_mes      REAL,   -- Horas contrato por mes (ej: 160). NULL si usa horas_semana.
                 actualizado_en TEXT    DEFAULT (datetime('now'))
             );
 
@@ -129,6 +131,8 @@ def init_db():
         _migrar_columna(conn, "justificaciones", "hora_permitida", "TEXT")
         _migrar_columna(conn, "justificaciones", "estado",         "TEXT DEFAULT 'aprobada'")
         _migrar_columna(conn, "justificaciones", "duracion_permitida_min", "INTEGER")
+        _migrar_columna(conn, "horarios_personal", "horas_semana", "REAL")
+        _migrar_columna(conn, "horarios_personal", "horas_mes",    "REAL")
 
 
 def _migrar_columna(conn, tabla, columna, tipo):
@@ -307,8 +311,8 @@ def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
                      lunes_salida, martes_salida, miercoles_salida, jueves_salida, viernes_salida, sabado_salida, domingo_salida,
                      almuerzo_min, 
                      lunes_almuerzo_min, martes_almuerzo_min, miercoles_almuerzo_min, jueves_almuerzo_min, viernes_almuerzo_min, sabado_almuerzo_min, domingo_almuerzo_min,
-                     notas, fuente, actualizado_en)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                     notas, fuente, horas_semana, horas_mes, actualizado_en)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(id_usuario) DO UPDATE SET
                     nombre        = excluded.nombre,
                     lunes         = excluded.lunes,
@@ -335,6 +339,8 @@ def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
                     domingo_almuerzo_min = excluded.domingo_almuerzo_min,
                     notas         = excluded.notas,
                     fuente        = excluded.fuente,
+                    horas_semana  = excluded.horas_semana,
+                    horas_mes     = excluded.horas_mes,
                     actualizado_en = datetime('now')
             """, (
                 str(h["id_usuario"]),
@@ -363,6 +369,8 @@ def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
                 int(h["domingo_almuerzo_min"]) if h.get("domingo_almuerzo_min") is not None else None,
                 h.get("notas", ""),
                 fuente,
+                h.get("horas_semana"),
+                h.get("horas_mes"),
             ))
     return len(horarios)
 
@@ -383,7 +391,7 @@ def get_horarios() -> dict:
                    lunes_salida, martes_salida, miercoles_salida, jueves_salida, viernes_salida, sabado_salida, domingo_salida,
                    almuerzo_min, 
                    lunes_almuerzo_min, martes_almuerzo_min, miercoles_almuerzo_min, jueves_almuerzo_min, viernes_almuerzo_min, sabado_almuerzo_min, domingo_almuerzo_min,
-                   notas
+                   notas, horas_semana, horas_mes
             FROM horarios_personal
         """).fetchall()
 
@@ -414,7 +422,7 @@ def get_horario(id_usuario: str) -> dict | None:
                    lunes_salida, martes_salida, miercoles_salida, jueves_salida, viernes_salida, sabado_salida, domingo_salida,
                    almuerzo_min, 
                    lunes_almuerzo_min, martes_almuerzo_min, miercoles_almuerzo_min, jueves_almuerzo_min, viernes_almuerzo_min, sabado_almuerzo_min, domingo_almuerzo_min,
-                   notas
+                   notas, horas_semana, horas_mes
             FROM horarios_personal
             WHERE id_usuario = ?
         """, (str(id_usuario),)).fetchone()
