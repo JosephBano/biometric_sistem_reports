@@ -1,8 +1,24 @@
 import os
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    if os.path.exists('.env'):
+        with open('.env', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    k, v = line.split('=', 1)
+                    k = k.strip()
+                    v = v.strip()
+                    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                        v = v[1:-1]
+                    os.environ.setdefault(k, v)
 import uuid
 import re
 import csv
 import io
+import sys
 import threading
 import time
 from datetime import datetime, date
@@ -38,11 +54,20 @@ app.config['NOMBRE_INSTITUCION'] = os.getenv('NOMBRE_INSTITUCION', 'ISTPET')
 def inject_system_info():
     return dict(
         nombre_sistema=app.config['NOMBRE_SISTEMA'],
-        nombre_institucion=app.config['NOMBRE_INSTITUCION']
+        nombre_institucion=app.config['NOMBRE_INSTITUCION'],
+        auth_enabled=bool(APP_PASSWORD_HASH)
     )
 
-os.makedirs(UPLOAD_FOLDER,  exist_ok=True)
-os.makedirs(REPORTS_FOLDER, exist_ok=True)
+try:
+    os.makedirs(UPLOAD_FOLDER,  exist_ok=True)
+    os.makedirs(REPORTS_FOLDER, exist_ok=True)
+except PermissionError:
+    UPLOAD_FOLDER = "data/uploads"
+    REPORTS_FOLDER = "data/reports"
+    os.makedirs(UPLOAD_FOLDER,  exist_ok=True)
+    os.makedirs(REPORTS_FOLDER, exist_ok=True)
+    app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+    app.config['REPORTS_FOLDER'] = REPORTS_FOLDER
 
 # ── Inicializar DB y scheduler ────────────────────────────────────────────
 db_module.init_db()
@@ -76,6 +101,10 @@ def _require_auth():
     if request.endpoint in ("login", "logout", "static"):
         return None
     if not session.get("autenticado"):
+        # If it's an AJAX/fetch request (like API routes) return 401
+        # otherwise redirect to login page
+        if request.headers.get("Accept") and "application/json" in request.headers.get("Accept") or request.path.startswith("/api/") or request.endpoint not in ["index", "configuracion", "justificaciones", "reportes"]:
+            return jsonify({"error": "No autenticado"}), 401
         return redirect(url_for("login"))
 
 
@@ -228,7 +257,19 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('dashboard.html')
+
+@app.route('/configuracion')
+def configuracion():
+    return render_template('configuracion.html')
+
+@app.route('/justificaciones')
+def justificaciones():
+    return render_template('justificaciones.html')
+
+@app.route('/reportes')
+def reportes():
+    return render_template('reportes.html')
 
 
 @app.route('/descargar/<filename>')

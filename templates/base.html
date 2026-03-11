@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ nombre_sistema }} · {{ nombre_institucion }}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar border-end">
+            <div class="sidebar-header p-3 border-bottom">
+                <h5 class="mb-0 fw-bold">{{ nombre_institucion }}</h5>
+                <small class="text-muted">Biométrico</small>
+            </div>
+            
+            <ul class="nav flex-column py-2 sidebar-nav">
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'index' %}active{% endif %}" href="{{ url_for('index') }}">
+                        <span class="material-symbols-outlined nav-icon">dashboard</span> Panel
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'configuracion' %}active{% endif %}" href="{{ url_for('configuracion') }}">
+                        <span class="material-symbols-outlined nav-icon">settings</span> Configuración
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'justificaciones' %}active{% endif %}" href="{{ url_for('justificaciones') }}">
+                        <span class="material-symbols-outlined nav-icon">fact_check</span> Justificaciones
+                        <span class="badge bg-warning text-dark float-end ms-2" id="badge-justificaciones" style="display:none">0</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if request.endpoint == 'reportes' %}active{% endif %}" href="{{ url_for('reportes') }}">
+                        <span class="material-symbols-outlined nav-icon">description</span> Reportes
+                    </a>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer p-3 border-top mt-auto">
+                <div class="d-flex align-items-center mb-2">
+                    <span class="material-symbols-outlined nav-icon">person</span> 
+                    <small class="text-truncate">Admin</small>
+                </div>
+                {% if auth_enabled %}
+                <!-- Since logout uses standard form submit -->
+                <form method="POST" action="{{ url_for('logout') }}" class="m-0">
+                    <button type="submit" class="btn btn-sm btn-outline-danger w-100">Cerrar sesión</button>
+                </form>
+                {% else %}
+                <small class="text-muted d-block text-center mt-2" style="font-size: 0.75rem;">Sin autenticación</small>
+                {% endif %}
+            </div>
+        </nav>
+
+        <!-- Main Content Layout -->
+        <main class="main-content">
+            <!-- Topbar for mobile -->
+            <header class="topbar d-flex justify-content-between align-items-center p-3 border-bottom bg-white d-md-none">
+                <h5 class="mb-0 fw-bold">{{ nombre_sistema }}</h5>
+                <button class="btn btn-sm btn-outline-secondary" id="btn-toggle-sidebar">☰</button>
+            </header>
+
+            <div class="content-wrapper p-4">
+                <!-- Zona de alertas globales (siempre útiles) -->
+                <div class="alert alert-danger alert-dismissible fade show" role="alert" id="global-error-alert" style="display:none;">
+                    <span id="global-error-msg"></span>
+                    <button type="button" class="btn-close" onclick="document.getElementById('global-error-alert').style.display='none'"></button>
+                </div>
+                <div class="alert alert-success alert-dismissible fade show" role="alert" id="global-success-alert" style="display:none;">
+                    <span id="global-success-msg"></span>
+                    <button type="button" class="btn-close" onclick="document.getElementById('global-success-alert').style.display='none'"></button>
+                </div>
+
+                <!-- Definido por la vista hija -->
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals area -->
+    {% block modals %}{% endblock %}
+
+    <!-- Global Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/api.js') }}?v=2"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const btnToggle = document.getElementById('btn-toggle-sidebar');
+            if(btnToggle) {
+                btnToggle.addEventListener('click', () => {
+                    document.querySelector('.sidebar').classList.toggle('show');
+                });
+            }
+            
+            if(typeof checkPendingJustifications === 'function') {
+                checkPendingJustifications();
+            }
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

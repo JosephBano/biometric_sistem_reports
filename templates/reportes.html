@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="h4 mb-0 fw-bold">Generación de Reportes</h2>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 12px; max-width: 900px; margin: 0 auto;">
+    <div class="card-body p-4 p-md-5">
+        
+        <div class="row g-4 mb-4">
+            <!-- Periodo -->
+            <div class="col-md-6 border-end-md">
+                <h6 class="fw-bold mb-3 text-secondary">1. Período del Informe</h6>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <label class="form-label small mb-1">Desde</label>
+                        <input type="date" class="form-control form-control-sm" id="fecha-inicio">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label small mb-1">Hasta</label>
+                        <input type="date" class="form-control form-control-sm" id="fecha-fin">
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-3 flex-wrap">
+                    <button class="btn btn-sm btn-light border" onclick="setMesActual()">Mes actual</button>
+                    <button class="btn btn-sm btn-light border" onclick="setSemanaActual()">Semana actual</button>
+                    <button class="btn btn-sm btn-light border" onclick="setMesAnterior()">Mes anterior</button>
+                </div>
+            </div>
+
+            <!-- Tipo de Reporte -->
+            <div class="col-md-6">
+                <h6 class="fw-bold mb-3 text-secondary">2. Tipo de Reporte</h6>
+                <div class="mb-3">
+                    <select class="form-select form-select-sm" id="modo" onchange="actualizarVisibilidadModo()">
+                        <option value="general">General (todos los días)</option>
+                        <option value="persona">Por persona (una sola)</option>
+                        <option value="varias">Múltiples personas</option>
+                    </select>
+                </div>
+
+                <div id="persona-group" style="display:none;">
+                    <label class="form-label small mb-1">Seleccionar Persona</label>
+                    <select id="persona" placeholder="Buscar persona..."></select>
+                </div>
+
+                <div id="varias-group" style="display:none;">
+                    <label class="form-label small mb-1">Seleccionar Personas</label>
+                    <select class="form-select" id="personas-varias" multiple size="4"></select>
+                    <div class="mt-2 text-end">
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none py-0" onclick="seleccionarTodasPersonas()">Todas</button>
+                        <button type="button" class="btn btn-sm btn-link text-decoration-none py-0 text-muted" onclick="deseleccionarTodasPersonas()">Ninguna</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="mb-4">
+
+        <!-- Opciones -->
+        <h6 class="fw-bold mb-3 text-secondary">3. Opciones de Análisis</h6>
+        
+        <div class="row g-3 mb-4 p-3 bg-light rounded">
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-ausencias" checked>
+                    <label class="form-check-label small user-select-none" for="f-ausencias">Ausencias</label>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-tardanza-severa" checked>
+                    <label class="form-check-label small user-select-none" for="f-tardanza-severa">Tardanza severa</label>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-tardanza-leve" checked>
+                    <label class="form-check-label small user-select-none" for="f-tardanza-leve">Tardanza leve</label>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-almuerzo" checked>
+                    <label class="form-check-label small user-select-none" for="f-almuerzo">Exceso almuerzo</label>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-incompletos" checked>
+                    <label class="form-check-label small user-select-none" for="f-incompletos">Anomalías / Incompletos</label>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-todos-dias">
+                    <label class="form-check-label small user-select-none" for="f-todos-dias">Mostrar días sin novedades</label>
+                </div>
+            </div>
+            <div class="col-6 col-md-4">
+                <div class="form-check form-switch cursor-pointer">
+                    <input class="form-check-input" type="checkbox" id="f-tiempo-dentro">
+                    <label class="form-check-label small user-select-none" for="f-tiempo-dentro">Inc. tiempo dentro inst.</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Opciones Rápidas Colapsables -->
+        <details class="mb-4">
+            <summary class="small text-primary fw-semibold cursor-pointer mb-2 user-select-none">Opciones avanzadas y Filtros Especiales</summary>
+            <div class="p-3 border rounded mt-2">
+                <div id="especiales-group">
+                    <p class="small fw-bold text-muted mb-2">Reportes especiales (Solo General)</p>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="f-sin-horario">
+                        <label class="form-check-label small" for="f-sin-horario">
+                            Listar solo personas en biométrico SIN horario asignado
+                        </label>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="f-todos-usuarios">
+                        <label class="form-check-label small" for="f-todos-usuarios">
+                            Listar ABSOLUTAMENTE TODOS los usuarios del biométrico
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mb-2 mt-3">
+                    <label class="form-label small fw-bold text-muted mb-1">Personas a excluir (nombres, separados por coma)</label>
+                    <input type="text" class="form-control form-control-sm" id="excluidos" placeholder="Ej: Juan Perez, Maria Lopez">
+                </div>
+            </div>
+        </details>
+
+        <div class="d-grid gap-2 mt-5">
+            <button type="button" class="btn btn-primary btn-lg fw-bold shadow-sm" id="btn-submit" onclick="generarReporte()">
+                Generar Reporte PDF
+            </button>
+        </div>
+
+        <div class="text-center mt-3" id="loading-spinner" style="display:none;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted fw-bold small">Procesando y generando reporte...</p>
+        </div>
+        
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .border-end-md { border-right: none; }
+    @media (min-width: 768px) {
+        .border-end-md { border-right: 1px solid #dee2e6; }
+    }
+    .cursor-pointer { cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/reportes.js') }}"></script>
+{% endblock %}

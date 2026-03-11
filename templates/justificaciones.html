@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="h4 mb-0 fw-bold">Gestión de Justificaciones</h2>
+    <button class="btn btn-primary" onclick="abrirOffcanvasJustificacion()">+ Nueva Justificación</button>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 12px;">
+    <div class="card-body p-4">
+        
+        <div class="row g-3 mb-4 align-items-end p-3 bg-light rounded border">
+            <div class="col-md-4">
+                <label class="form-label small text-muted fw-bold">Filtro Rango Fechas</label>
+                <div class="input-group input-group-sm">
+                    <input type="date" class="form-control" id="filtro-fecha-inicio">
+                    <span class="input-group-text bg-white border-0 text-muted">A</span>
+                    <input type="date" class="form-control" id="filtro-fecha-fin">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-sm btn-outline-secondary w-100 h-100" onclick="cargarJustificaciones()">Filtrar</button>
+            </div>
+        </div>
+
+        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+            <table class="table table-hover align-middle mb-0" id="tabla-justificaciones">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Persona</th>
+                        <th>Tipo</th>
+                        <th>Motivo</th>
+                        <th>Resp. Autorización</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="just-lista">
+                    <tr><td colspan="6" class="text-center text-muted py-4">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Offcanvas Nueva Justificación -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvas-justificacion" aria-labelledby="offcanvasJustificacionLabel" style="width: 450px;">
+  <div class="offcanvas-header border-bottom">
+    <h5 class="offcanvas-title fw-bold" id="offcanvasJustificacionLabel">Nueva Justificación</h5>
+    <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="alert alert-info py-2 small mb-4">
+        Las justificaciones permiten suprimir o mitigar las alertas (ausencias, tardanzas, etc.) generadas por el sistema.
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label small fw-semibold text-muted">Persona (ID — Nombre)</label>
+        <select id="just-persona-id" placeholder="Buscar persona..."></select>
+    </div>
+    
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <label class="form-label small fw-semibold text-muted">Fecha del Evento</label>
+            <input type="date" class="form-control form-control-sm" id="just-fecha">
+        </div>
+        <div class="col-md-6">
+            <label class="form-label small fw-semibold text-muted">Tipo de Justificación</label>
+            <select class="form-select form-select-sm" id="just-tipo" onchange="cambioTipoJustificacion()">
+                <option value="ausencia">Ausencia completa</option>
+                <option value="tardanza">Tardanza</option>
+                <option value="almuerzo">Exceso almuerzo</option>
+                <option value="incompleto">Reg. incompleto</option>
+                <option value="salida_anticipada">Salida anticipada</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Campos Dinámicos (Fase C) -->
+    <div id="dynamic-fields-container" class="p-3 bg-light rounded mb-3 border border-secondary border-opacity-25" style="display:none;">
+        <div id="df-hora_permitida" style="display:none;">
+            <label class="form-label small text-primary fw-bold">Hora autorizada (HH:MM)</label>
+            <input type="time" class="form-control form-control-sm" id="just-hora_permitida">
+            <small class="text-muted" style="font-size: 0.70rem;">(Opcional para tardanza, requerido para salida)</small>
+        </div>
+        <div id="df-duracion_permitida" style="display:none;">
+            <label class="form-label small text-primary fw-bold">Duración autorizada (Minutos)</label>
+            <input type="number" class="form-control form-control-sm" id="just-duracion_permitida" min="1">
+        </div>
+        <div id="df-media_jornada" class="form-check mt-2" style="display:none;">
+            <input class="form-check-input" type="checkbox" id="just-media_jornada">
+            <label class="form-check-label small text-primary fw-bold">Aplica solo media jornada</label>
+        </div>
+    </div>
+    
+    <div class="mb-3">
+        <label class="form-label small fw-semibold text-muted">Motivo</label>
+        <textarea class="form-control form-control-sm" id="just-motivo" rows="3" placeholder="Ej: Cita médica, calamidad doméstica..."></textarea>
+    </div>
+    
+    <div class="mb-4">
+        <label class="form-label small fw-semibold text-muted">Aprobado por</label>
+        <input type="text" class="form-control form-control-sm" id="just-aprobado_por" placeholder="Nombre de quien autoriza">
+    </div>
+
+  </div>
+  <div class="offcanvas-footer p-3 border-top d-flex justify-content-end gap-2">
+    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="offcanvas">Cancelar</button>
+    <button type="button" class="btn btn-primary btn-sm px-4" onclick="agregarJustificacion()">Crear y Aprobar</button>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/justificaciones.js') }}"></script>
+{% endblock %}
