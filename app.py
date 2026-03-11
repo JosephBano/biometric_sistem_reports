@@ -103,7 +103,7 @@ def _require_auth():
     if not session.get("autenticado"):
         # If it's an AJAX/fetch request (like API routes) return 401
         # otherwise redirect to login page
-        if request.headers.get("Accept") and "application/json" in request.headers.get("Accept") or request.path.startswith("/api/") or request.endpoint not in ["index", "configuracion", "justificaciones", "reportes"]:
+        if (request.headers.get("Accept") and "application/json" in request.headers.get("Accept")) or request.path.startswith("/api/") or request.endpoint not in ["dashboard", "configuracion_vista", "justificaciones_vista", "reportes_vista", "descargar"]:
             return jsonify({"error": "No autenticado"}), 401
         return redirect(url_for("login"))
 
@@ -111,15 +111,15 @@ def _require_auth():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if not APP_PASSWORD_HASH:
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     if APP_PASSWORD_HASH and session.get("autenticado"):
-        return redirect(url_for("index"))
+        return redirect(url_for("dashboard"))
     error = None
     if request.method == 'POST':
         password = request.form.get("password", "")
         if check_password_hash(APP_PASSWORD_HASH, password):
             session["autenticado"] = True
-            return redirect(url_for("index"))
+            return redirect(url_for("dashboard"))
         error = "Contraseña incorrecta. Intente nuevamente."
     return render_template("login.html", error=error)
 
@@ -128,6 +128,13 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.context_processor
+def utility_processor():
+    def get_pending_count():
+        return len(db_module.get_justificaciones_pendientes())
+    return dict(justificaciones_pendientes_count=get_pending_count())
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -256,20 +263,20 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.route('/')
-def index():
-    return render_template('dashboard.html')
+def dashboard():
+    return render_template('dashboard.html', active_page='dashboard')
 
 @app.route('/configuracion')
-def configuracion():
-    return render_template('configuracion.html')
+def configuracion_vista():
+    return render_template('configuracion.html', active_page='configuracion')
 
-@app.route('/justificaciones')
-def justificaciones():
-    return render_template('justificaciones.html')
+@app.route('/justificaciones-vista')
+def justificaciones_vista():
+    return render_template('justificaciones.html', active_page='justificaciones')
 
 @app.route('/reportes')
-def reportes():
-    return render_template('reportes.html')
+def reportes_vista():
+    return render_template('reportes.html', active_page='reportes')
 
 
 @app.route('/descargar/<filename>')
@@ -284,14 +291,15 @@ def descargar(filename):
 # RUTAS DEL DISPOSITIVO ZK
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.route('/estado-sync')
+@app.route('/api/estado-sync')
 def estado_sync():
     estado = db_module.get_estado()
     estado['dispositivo_accesible'] = sync_module.ping_dispositivo()
+    estado['justificaciones_pendientes'] = len(db_module.get_justificaciones_pendientes())
     return jsonify(estado)
 
 
-@app.route('/sincronizar', methods=['POST'])
+@app.route('/api/sincronizar', methods=['POST'])
 def sincronizar():
     data             = request.json or {}
     fecha_inicio_str = data.get('fecha_inicio')
@@ -317,12 +325,12 @@ def sincronizar():
     return jsonify({'job_id': job_id, 'estado': 'en_progreso'})
 
 
-@app.route('/sync-status/<job_id>')
+@app.route('/api/sync-status/<job_id>')
 def sync_status(job_id):
     return jsonify(sync_module.get_job_status(job_id))
 
 
-@app.route('/personas-db')
+@app.route('/api/personas-db')
 def personas_db():
     fi_str = request.args.get('fecha_inicio')
     ff_str = request.args.get('fecha_fin')
@@ -347,7 +355,7 @@ def personas_db():
     return jsonify({'personas': personas})
 
 
-@app.route('/generar-desde-db', methods=['POST'])
+@app.route('/api/generar-desde-db', methods=['POST'])
 def generar_desde_db():
     data = request.json
     try:
@@ -364,15 +372,16 @@ def generar_desde_db():
 
     # Filtros de secciones/columnas (valores por defecto = activados)
     _DEFAULT_FILTROS = {
-        "mostrar_ausencias":       True,
-        "mostrar_tardanza_severa": True,
-        "mostrar_tardanza_leve":   True,
-        "mostrar_almuerzo":        True,
-        "mostrar_incompletos":     True,
-        "mostrar_todos_los_dias":  False,
-        "columna_tiempo_dentro":   False,
-        "reporte_sin_horario":     False,
-        "reporte_todos_usuarios":  False,
+        "mostrar_ausencias":          True,
+        "mostrar_tardanza_severa":    True,
+        "mostrar_tardanza_leve":      True,
+        "mostrar_almuerzo":           True,
+        "mostrar_incompletos":        True,
+        "mostrar_salida_anticipada":  True,
+        "mostrar_todos_los_dias":     False,
+        "columna_tiempo_dentro":      False,
+        "reporte_sin_horario":        False,
+        "reporte_todos_usuarios":     False,
     }
     filtros_raw = data.get('filtros', {})
     filtros = {k: filtros_raw.get(k, v) for k, v in _DEFAULT_FILTROS.items()}
@@ -407,7 +416,7 @@ def generar_desde_db():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/limpiar-dispositivo', methods=['POST'])
+@app.route('/api/limpiar-dispositivo', methods=['POST'])
 def limpiar_dispositivo():
     data = request.json or {}
     if not data.get('confirmar'):
@@ -434,7 +443,7 @@ def limpiar_dispositivo():
 ALLOWED_HORARIOS_EXT = {".obd", ".ods", ".csv"}
 
 
-@app.route('/cargar-horarios', methods=['POST'])
+@app.route('/api/horarios/importar', methods=['POST'])
 def cargar_horarios():
     """
     Recibe un archivo .obd/.ods, lo parsea e inserta los horarios en la DB.
@@ -492,13 +501,13 @@ def cargar_horarios():
             os.remove(filepath)
 
 
-@app.route('/estado-horarios')
+@app.route('/api/horarios/estado')
 def estado_horarios():
     """Retorna el estado actual de los horarios cargados."""
     return jsonify(db_module.get_estado_horarios())
 
 
-@app.route('/horarios')
+@app.route('/api/horarios')
 def ver_horarios():
     """Retorna todos los horarios cargados (por persona)."""
     horarios = db_module.get_horarios()
@@ -547,6 +556,28 @@ def _validar_horario_body(data: dict):
             if not _HORA_RE.match(val_s):
                 return None, f"El campo '{dia}' debe tener formato HH:MM o estar vacío."
             horario[dia] = val_s
+            
+        col_salida = f"{dia}_salida"
+        val_salida = data.get(col_salida)
+        if val_salida is None or str(val_salida).strip() == "":
+            horario[col_salida] = None
+        else:
+            val_salida_s = str(val_salida).strip()
+            if not _HORA_RE.match(val_salida_s):
+                return None, f"El campo '{col_salida}' debe tener formato HH:MM o estar vacío."
+            if horario[dia] and val_salida_s <= horario[dia]:
+                return None, f"El campo '{col_salida}' debe ser posterior a '{dia}'."
+            horario[col_salida] = val_salida_s
+            
+        col_alm = f"{dia}_almuerzo_min"
+        val_alm = data.get(col_alm)
+        if val_alm is not None and str(val_alm).strip() != "":
+            try:
+                horario[col_alm] = int(val_alm)
+            except ValueError:
+                return None, f"El campo '{col_alm}' debe ser un entero."
+        else:
+            horario[col_alm] = None
 
     try:
         almuerzo_min = int(data.get("almuerzo_min", 0))
@@ -559,7 +590,7 @@ def _validar_horario_body(data: dict):
     return horario, None
 
 
-@app.route('/exportar-horarios-csv')
+@app.route('/api/horarios/exportar')
 def exportar_horarios_csv():
     """Genera y descarga los horarios actuales como archivo CSV."""
     horarios = db_module.get_horarios()
@@ -568,7 +599,11 @@ def exportar_horarios_csv():
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["id_usuario", "nombre", "lunes", "martes", "miercoles",
-                     "jueves", "viernes", "sabado", "domingo", "almuerzo_min", "notas"])
+                     "jueves", "viernes", "sabado", "domingo", 
+                     "lunes_salida", "martes_salida", "miercoles_salida", "jueves_salida", "viernes_salida", "sabado_salida", "domingo_salida",
+                     "almuerzo_min",
+                     "lunes_almuerzo_min", "martes_almuerzo_min", "miercoles_almuerzo_min", "jueves_almuerzo_min", "viernes_almuerzo_min", "sabado_almuerzo_min", "domingo_almuerzo_min",
+                     "notas"])
     for h in lista:
         writer.writerow([
             h["id_usuario"],
@@ -580,7 +615,21 @@ def exportar_horarios_csv():
             h.get("viernes") or "",
             h.get("sabado")  or "",
             h.get("domingo") or "",
+            h.get("lunes_salida")   or "",
+            h.get("martes_salida")  or "",
+            h.get("miercoles_salida") or "",
+            h.get("jueves_salida")  or "",
+            h.get("viernes_salida") or "",
+            h.get("sabado_salida")  or "",
+            h.get("domingo_salida") or "",
             h.get("almuerzo_min", 0),
+            h.get("lunes_almuerzo_min", ""),
+            h.get("martes_almuerzo_min", ""),
+            h.get("miercoles_almuerzo_min", ""),
+            h.get("jueves_almuerzo_min", ""),
+            h.get("viernes_almuerzo_min", ""),
+            h.get("sabado_almuerzo_min", ""),
+            h.get("domingo_almuerzo_min", ""),
             h.get("notas")   or "",
         ])
 
@@ -638,7 +687,7 @@ def api_horarios_eliminar(id_usuario):
 # JUSTIFICACIONES
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.route('/justificaciones', methods=['GET'])
+@app.route('/api/justificaciones', methods=['GET'])
 def get_justificaciones():
     fi_str = request.args.get('fecha_inicio')
     ff_str = request.args.get('fecha_fin')
@@ -651,7 +700,7 @@ def get_justificaciones():
     return jsonify({'justificaciones': lista})
 
 
-@app.route('/justificaciones', methods=['POST'])
+@app.route('/api/justificaciones', methods=['POST'])
 def crear_justificacion():
     data = request.json or {}
     id_usuario = str(data.get('id_usuario', '')).strip()
@@ -660,19 +709,46 @@ def crear_justificacion():
     tipo       = str(data.get('tipo', '')).strip()
     motivo     = str(data.get('motivo', '')).strip()
     aprobado   = str(data.get('aprobado_por', '')).strip()
+    hora_permitida = str(data.get('hora_permitida', '')).strip() or None
+    estado     = str(data.get('estado', 'aprobada')).strip()
+    
+    duracion_permitida_min = data.get('duracion_permitida_min')
+    if duracion_permitida_min is not None and str(duracion_permitida_min).strip() != "":
+        try:
+            duracion_permitida_min = int(duracion_permitida_min)
+        except ValueError:
+            return jsonify({'error': 'duracion_permitida_min debe ser un número entero'}), 400
+    else:
+        duracion_permitida_min = None
 
     if not id_usuario or not nombre or not fecha or not tipo:
         return jsonify({'error': 'Campos requeridos: id_usuario, nombre, fecha, tipo'}), 400
-    if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto'):
-        return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto"}), 400
+    if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto', 'salida_anticipada'):
+        return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto | salida_anticipada"}), 400
     try:
-        result = db_module.insertar_justificacion(id_usuario, nombre, fecha, tipo, motivo, aprobado)
+        result = db_module.insertar_justificacion(id_usuario, nombre, fecha, tipo, motivo, aprobado, hora_permitida, estado, duracion_permitida_min)
         return jsonify({'success': True, 'justificacion': result}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/justificaciones/<int:jid>', methods=['DELETE'])
+@app.route('/api/justificaciones/<int:jid>', methods=['PATCH'])
+def actualizar_justificacion_estado(jid):
+    """
+    Cambia estado de una justificación.
+    Body: { "estado": "aprobada" | "rechazada" }
+    """
+    data = request.json or {}
+    estado = data.get('estado')
+    if estado not in ('aprobada', 'rechazada', 'pendiente'):
+        return jsonify({'error': 'Estado inválido'}), 400
+    
+    if db_module.actualizar_estado_justificacion(jid, estado):
+        return jsonify({'success': True})
+    return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
+
+
+@app.route('/api/justificaciones/<int:jid>', methods=['DELETE'])
 def eliminar_justificacion(jid):
     if not db_module.eliminar_justificacion(jid):
         return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
@@ -683,7 +759,7 @@ def eliminar_justificacion(jid):
 # FERIADOS
 # ══════════════════════════════════════════════════════════════════════════
 
-@app.route('/feriados', methods=['GET'])
+@app.route('/api/feriados', methods=['GET'])
 def get_feriados():
     anio_str = request.args.get('anio')
     if anio_str:
@@ -699,7 +775,7 @@ def get_feriados():
     return jsonify({'feriados': lista})
 
 
-@app.route('/feriados', methods=['POST'])
+@app.route('/api/feriados', methods=['POST'])
 def crear_feriado():
     data = request.json or {}
     fecha       = str(data.get('fecha', '')).strip()
@@ -714,14 +790,14 @@ def crear_feriado():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/feriados/<fecha>', methods=['DELETE'])
+@app.route('/api/feriados/<fecha>', methods=['DELETE'])
 def eliminar_feriado(fecha):
     if not db_module.eliminar_feriado(fecha):
         return jsonify({'error': f'No existe feriado para la fecha {fecha}'}), 404
     return jsonify({'success': True})
 
 
-@app.route('/feriados/importar', methods=['POST'])
+@app.route('/api/feriados/importar', methods=['POST'])
 def importar_feriados():
     if 'archivo' not in request.files:
         return jsonify({'error': 'No se envió ningún archivo'}), 400
@@ -741,7 +817,7 @@ def importar_feriados():
             os.remove(filepath)
 
 
-@app.route('/feriados/exportar', methods=['GET'])
+@app.route('/api/feriados/exportar', methods=['GET'])
 def exportar_feriados():
     lista = db_module.get_feriados()
     output = io.StringIO()

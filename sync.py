@@ -30,7 +30,7 @@ except ImportError:
 ZK_IP       = os.getenv("ZK_IP",       "192.168.7.129")
 ZK_PORT     = int(os.getenv("ZK_PORT",     "4370"))
 ZK_PASSWORD = int(os.getenv("ZK_PASSWORD", "0"))
-ZK_TIMEOUT  = int(os.getenv("ZK_TIMEOUT",  "5"))
+ZK_TIMEOUT  = int(os.getenv("ZK_TIMEOUT",  "120"))
 ZK_UDP      = os.getenv("ZK_UDP", "false").lower() == "true"
 
 SYNC_AUTO          = os.getenv("SYNC_AUTO",          "false").lower() == "true"
@@ -62,12 +62,16 @@ def get_job_status(job_id: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════════
 
 def _make_zk() -> "ZK":
+    # Leer siempre desde env para que cambios en .env surtan efecto sin reiniciar
+    timeout  = int(os.getenv("ZK_TIMEOUT",  "120"))
+    password = int(os.getenv("ZK_PASSWORD", "0"))
+    udp      = os.getenv("ZK_UDP", "false").lower() == "true"
     return ZK(
         ZK_IP,
         port=ZK_PORT,
-        timeout=ZK_TIMEOUT,
-        password=ZK_PASSWORD,
-        force_udp=ZK_UDP,
+        timeout=timeout,
+        password=password,
+        force_udp=udp,
         ommit_ping=True,
     )
 
@@ -100,9 +104,11 @@ def ping_dispositivo() -> bool:
     if not ZK_DISPONIBLE:
         return False
     try:
+        password = int(os.getenv("ZK_PASSWORD", "0"))
+        udp      = os.getenv("ZK_UDP", "false").lower() == "true"
         zk = ZK(
-            ZK_IP, port=ZK_PORT, timeout=2,
-            password=ZK_PASSWORD, force_udp=ZK_UDP, ommit_ping=True,
+            ZK_IP, port=ZK_PORT, timeout=10,
+            password=password, force_udp=udp, ommit_ping=True,
         )
         conn = zk.connect()
         conn.disconnect()
@@ -244,12 +250,28 @@ def sincronizar(
         return len(registros), nuevos
 
     except Exception as e:
-        _set_job(job_id, {"estado": "error", "detalle": str(e)})
+        tipo_error = type(e).__name__
+        msg = str(e).strip() or "Error desconocido"
+        # Mensajes más legibles para errores comunes de red/ZK
+        if "timed out" in msg.lower() or "timeout" in msg.lower():
+            detalle = (
+                f"Tiempo de espera agotado al comunicar con el dispositivo ({ZK_IP}:{ZK_PORT}). "
+                f"El dispositivo tardó más de {ZK_TIMEOUT}s en responder. "
+                "Verifica que el dispositivo esté encendido y en red, o aumenta ZK_TIMEOUT en .env."
+            )
+        elif "connection refused" in msg.lower():
+            detalle = f"Conexión rechazada por {ZK_IP}:{ZK_PORT}. Verifica IP y puerto en .env."
+        elif "network" in msg.lower() or "unreachable" in msg.lower():
+            detalle = f"Error de red al conectar con {ZK_IP}:{ZK_PORT}: {msg}"
+        else:
+            detalle = f"[{tipo_error}] {msg}"
+
+        _set_job(job_id, {"estado": "error", "detalle": detalle})
         try:
             db_module.registrar_sync(
                 datetime.combine(fecha_inicio, dt_time.min),
                 datetime.combine(fecha_fin,    dt_time(23, 59, 59)),
-                0, 0, False, str(e),
+                0, 0, False, detalle,
             )
         except Exception:
             pass

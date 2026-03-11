@@ -99,19 +99,50 @@ def parsear_obd(ruta: str) -> list[dict]:
         except (ValueError, TypeError):
             continue  # Fila sin ID numérico válido
 
-        horario = {
-            "id_usuario":   id_usuario,
-            "nombre":       nombre,
-            "lunes":        _normalizar_hora(valores[2]),
-            "martes":       _normalizar_hora(valores[3]),
-            "miercoles":    _normalizar_hora(valores[4]),
-            "jueves":       _normalizar_hora(valores[5]),
-            "viernes":      _normalizar_hora(valores[6]),
-            "sabado":       _normalizar_hora(valores[7]),
-            "domingo":      None,  # No aplica; domingo no genera alertas
-            "almuerzo_min": _normalizar_almuerzo(valores[8]),
-            "notas":        str(valores[9]).strip() if len(valores) > 9 and valores[9] else "",
-        }
+        if len(valores) >= 16:
+            # Formato nuevo: L-ENT | L-SAL | M-ENT | M-SAL...
+            horario = {
+                "id_usuario":   id_usuario,
+                "nombre":       nombre,
+                "lunes":        _normalizar_hora(valores[2]),
+                "lunes_salida": _normalizar_hora(valores[3]),
+                "martes":       _normalizar_hora(valores[4]),
+                "martes_salida":_normalizar_hora(valores[5]),
+                "miercoles":    _normalizar_hora(valores[6]),
+                "miercoles_salida":_normalizar_hora(valores[7]),
+                "jueves":       _normalizar_hora(valores[8]),
+                "jueves_salida":_normalizar_hora(valores[9]),
+                "viernes":      _normalizar_hora(valores[10]),
+                "viernes_salida":_normalizar_hora(valores[11]),
+                "sabado":       _normalizar_hora(valores[12]),
+                "sabado_salida":_normalizar_hora(valores[13]),
+                "domingo":      None,
+                "domingo_salida": None,
+                "almuerzo_min": _normalizar_almuerzo(valores[14]),
+                "notas":        str(valores[15]).strip() if len(valores) > 15 and valores[15] else "",
+            }
+        else:
+            # Formato antiguo
+            horario = {
+                "id_usuario":   id_usuario,
+                "nombre":       nombre,
+                "lunes":        _normalizar_hora(valores[2]),
+                "lunes_salida": None,
+                "martes":       _normalizar_hora(valores[3]),
+                "martes_salida":None,
+                "miercoles":    _normalizar_hora(valores[4]),
+                "miercoles_salida":None,
+                "jueves":       _normalizar_hora(valores[5]),
+                "jueves_salida":None,
+                "viernes":      _normalizar_hora(valores[6]),
+                "viernes_salida":None,
+                "sabado":       _normalizar_hora(valores[7]),
+                "sabado_salida":None,
+                "domingo":      None,  # No aplica; domingo no genera alertas
+                "domingo_salida":None,
+                "almuerzo_min": _normalizar_almuerzo(valores[8]),
+                "notas":        str(valores[9]).strip() if len(valores) > 9 and valores[9] else "",
+            }
         horarios.append(horario)
 
     return horarios
@@ -296,7 +327,21 @@ def parsear_csv(ruta: str) -> list[dict]:
                     "viernes":      _normalizar_hora(fila.get("viernes")),
                     "sabado":       _normalizar_hora(fila.get("sabado")),
                     "domingo":      _normalizar_hora(fila.get("domingo")),
+                    "lunes_salida": _normalizar_hora(fila.get("lunes_salida")),
+                    "martes_salida": _normalizar_hora(fila.get("martes_salida")),
+                    "miercoles_salida": _normalizar_hora(fila.get("miercoles_salida")),
+                    "jueves_salida": _normalizar_hora(fila.get("jueves_salida")),
+                    "viernes_salida": _normalizar_hora(fila.get("viernes_salida")),
+                    "sabado_salida": _normalizar_hora(fila.get("sabado_salida")),
+                    "domingo_salida": _normalizar_hora(fila.get("domingo_salida")),
                     "almuerzo_min": _normalizar_almuerzo(fila.get("almuerzo_min")),
+                    "lunes_almuerzo_min": _normalizar_almuerzo(fila.get("lunes_almuerzo_min")) if fila.get("lunes_almuerzo_min") else None,
+                    "martes_almuerzo_min": _normalizar_almuerzo(fila.get("martes_almuerzo_min")) if fila.get("martes_almuerzo_min") else None,
+                    "miercoles_almuerzo_min": _normalizar_almuerzo(fila.get("miercoles_almuerzo_min")) if fila.get("miercoles_almuerzo_min") else None,
+                    "jueves_almuerzo_min": _normalizar_almuerzo(fila.get("jueves_almuerzo_min")) if fila.get("jueves_almuerzo_min") else None,
+                    "viernes_almuerzo_min": _normalizar_almuerzo(fila.get("viernes_almuerzo_min")) if fila.get("viernes_almuerzo_min") else None,
+                    "sabado_almuerzo_min": _normalizar_almuerzo(fila.get("sabado_almuerzo_min")) if fila.get("sabado_almuerzo_min") else None,
+                    "domingo_almuerzo_min": _normalizar_almuerzo(fila.get("domingo_almuerzo_min")) if fila.get("domingo_almuerzo_min") else None,
                     "notas":        (fila.get("notas") or "").strip(),
                 }
                 horarios.append(horario)
@@ -338,21 +383,31 @@ def get_info_dia(horario_persona: dict, fecha) -> dict:
 
     if es_domingo:
         hora_entrada = horario_persona.get("domingo")
+        hora_salida = horario_persona.get("domingo_salida")
         return {
             "trabaja":      hora_entrada is not None,
             "hora_entrada": hora_entrada,
+            "hora_salida":  hora_salida,
             "almuerzo_min": 0,
             "es_domingo":   True,
         }
 
     columna      = WEEKDAY_COLUMNA.get(weekday, "viernes")
     hora_entrada = horario_persona.get(columna)
+    hora_salida  = horario_persona.get(f"{columna}_salida")
+    
+    col_almuerzo = f"{columna}_almuerzo_min"
+    almuerzo_dia = horario_persona.get(col_almuerzo)
+    if almuerzo_dia is None:
+        almuerzo_dia = horario_persona.get("almuerzo_min", 0)
+        
     # Sábado: nunca analizar almuerzo aunque ALMUERZO sea TRUE
-    almuerzo_min = 0 if es_sabado else horario_persona.get("almuerzo_min", 0)
+    almuerzo_min = 0 if es_sabado else almuerzo_dia
 
     return {
         "trabaja":      hora_entrada is not None,
         "hora_entrada": hora_entrada,
+        "hora_salida":  hora_salida,
         "almuerzo_min": almuerzo_min,
         "es_domingo":   False,
     }

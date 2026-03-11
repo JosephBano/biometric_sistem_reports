@@ -261,6 +261,8 @@ def analizar_dia(
 
     tardanza_leve_lst   = []
     tardanza_severa_lst = []
+    salida_anticipada_leve_lst = []
+    salida_anticipada_severa_lst = []
     almuerzo_largo      = []
     incompletos         = []
 
@@ -369,15 +371,45 @@ def analizar_dia(
                     ),
                 })
 
+        # ── Análisis de salida anticipada ───────────
+        hora_salida_prog = info.get("hora_salida")
+        if hora_salida_prog and len(marcaciones) >= 2 and not _justificado_dia("salida_anticipada"):
+            ultima_salida = None
+            for m in reversed(marcaciones):
+                if m["tipo"] == "Salida":
+                    ultima_salida = m["hora"]
+                    break
+            if ultima_salida:
+                h_salida_t = datetime.strptime(hora_salida_prog, "%H:%M").time()
+                salida_diff = -_minutos_diferencia(h_salida_t, ultima_salida)
+                if salida_diff > MARGEN_LEVE_MIN:
+                    salida_anticipada_severa_lst.append({
+                        "nombre": nombre,
+                        "hora":   ultima_salida.strftime("%H:%M"),
+                        "retraso": salida_diff,
+                        "programado": hora_salida_prog,
+                    })
+                elif salida_diff > 0:
+                    salida_anticipada_leve_lst.append({
+                        "nombre": nombre,
+                        "hora":   ultima_salida.strftime("%H:%M"),
+                        "retraso": salida_diff,
+                        "programado": hora_salida_prog,
+                    })
+
     return {
         "tardanza_leve":         sorted(tardanza_leve_lst,   key=lambda x: x["hora"]),
         "tardanza_severa":       sorted(tardanza_severa_lst, key=lambda x: x["hora"]),
+        "salida_anticipada_leve":sorted(salida_anticipada_leve_lst, key=lambda x: x["hora"]),
+        "salida_anticipada_severa": sorted(salida_anticipada_severa_lst, key=lambda x: x["hora"]),
         "almuerzo_largo":        sorted(almuerzo_largo,      key=lambda x: -x["duracion"]),
         "registros_incompletos": sorted(incompletos,         key=lambda x: x["nombre"]),
         "resumen": {
             "total_personas":  len(por_persona),
             "tardanza_leve":   len(tardanza_leve_lst),
             "tardanza_severa": len(tardanza_severa_lst),
+            "salida_anticipada_leve": len(salida_anticipada_leve_lst),
+            "salida_anticipada_severa": len(salida_anticipada_severa_lst),
             "almuerzo_largo":  len(almuerzo_largo),
             "incompletos":     len(incompletos),
         },
@@ -463,6 +495,8 @@ def analizar_por_persona(
             "incompletos":     0,
             "ausencias":       0,
             "justificadas":    0,
+            "salida_anticipada_leve": 0,
+            "salida_anticipada_severa": 0,
         }
 
         def _get_justificado(fecha_eval: date, tipo_obs: str) -> dict:
@@ -578,20 +612,46 @@ def analizar_por_persona(
                             )
                             resumen["tardanza_leve"] += 1
                     else:
-                        dia_info["justificado"] = True
-                        resumen["justificadas"] += 1
-                        # No cambiamos el estado base si ya tenía otro
-                        if dia_info["estado"] == "ok":
-                           # Como es tardanza, el estado debería ser leve o severa pero lo marcamos como leve justificada
-                           dia_info["estado"] = "leve"
-                        dia_info["observaciones"].append(f"Tardanza JUSTIFICADA: {just_tar.get('motivo','(Sin motivo)')}")
+                        hora_permitida = just_tar.get("hora_permitida")
+                        if hora_permitida:
+                            h_permitida_t = datetime.strptime(hora_permitida, "%H:%M").time()
+                            retraso = _minutos_diferencia(h_permitida_t, primera["hora"])
+                            if retraso > MARGEN_LEVE_MIN:
+                                dia_info["estado"] = "severa"
+                                dia_info["observaciones"].append(
+                                    f"Tardanza NO JUSTIF. (+{retraso}m, auth. hasta {hora_permitida})"
+                                )
+                                resumen["tardanza_severa"] += 1
+                            elif retraso > 0:
+                                if dia_info["estado"] == "ok":
+                                    dia_info["estado"] = "leve"
+                                dia_info["observaciones"].append(
+                                    f"Tardanza leve NO JUSTIF. (+{retraso}m, auth. hasta {hora_permitida})"
+                                )
+                                resumen["tardanza_leve"] += 1
+                            else:
+                                dia_info["justificado"] = True
+                                resumen["justificadas"] += 1
+                                if dia_info["estado"] == "ok":
+                                    dia_info["estado"] = "leve"  # marcamos leve justificada
+                                dia_info["observaciones"].append(f"Llegada autorizada hasta {hora_permitida}")
+                        else:
+                            dia_info["justificado"] = True
+                            resumen["justificadas"] += 1
+                            if dia_info["estado"] == "ok":
+                               dia_info["estado"] = "leve"
+                            dia_info["observaciones"].append(f"Tardanza JUSTIFICADA: {just_tar.get('motivo','(Sin motivo)')}")
 
                 if ultima["tipo"] == "Salida":
                     dia_info["salida"] = ultima["hora"].strftime("%H:%M")
 
                 # ── Análisis de almuerzo ───────────────────────────────
                 just_alm = _get_justificado(fecha, "almuerzo")
-                if n >= 4 and max_almuerzo_per > 0 and not just_alm:
+                if n >= 4 and max_almuerzo_per > 0:
+                    limite_alm = max_almuerzo_per
+                    if just_alm and just_alm.get("duracion_permitida_min"):
+                        limite_alm = just_alm["duracion_permitida_min"]
+                        
                     for i, m in enumerate(marcaciones):
                         if m["tipo"] == "Salida" and i > 0:
                             for j in range(i + 1, len(marcaciones)):
@@ -603,34 +663,90 @@ def analizar_por_persona(
                                     dia_info["almuerzo_duracion"] = duracion
                                     dia_info["almuerzo_salida"]   = m["hora"].strftime("%H:%M")
                                     dia_info["almuerzo_regreso"]  = entrada_alm["hora"].strftime("%H:%M")
-                                    if duracion > max_almuerzo_per:
-                                        exceso = duracion - max_almuerzo_per
-                                        dia_info["almuerzo_exceso"] = exceso
-                                        if dia_info["estado"] == "ok":
-                                            dia_info["estado"] = "leve"
-                                        dia_info["observaciones"].append(
-                                            f"Exceso almuerzo (+{exceso}m)"
-                                        )
-                                        resumen["almuerzo_largo"] += 1
+                                    
+                                    if duracion > max_almuerzo_per: # Excedió su límite normal
+                                        if just_alm:
+                                            if duracion <= limite_alm: # Pero está dentro de la justificación
+                                                dia_info["observaciones"].append(f"Exceso almuerzo (+{duracion - max_almuerzo_per}m) JUSTIFICADO: {just_alm.get('motivo','')}")
+                                                dia_info["justificado"] = True
+                                                resumen["justificadas"] += 1
+                                                if dia_info["estado"] == "ok":
+                                                    dia_info["estado"] = "leve"
+                                            else: # Excedió también la justificación (o el límite por defecto si no lo ajustó)
+                                                exceso = duracion - limite_alm
+                                                dia_info["almuerzo_exceso"] = exceso
+                                                if dia_info["estado"] == "ok":
+                                                    dia_info["estado"] = "leve"
+                                                dia_info["observaciones"].append(
+                                                    f"Exceso almuerzo NO JUSTIF. (+{exceso}m sobre límite autorizado {limite_alm}m)"
+                                                )
+                                                resumen["almuerzo_largo"] += 1
+                                        else:
+                                            exceso = duracion - max_almuerzo_per
+                                            dia_info["almuerzo_exceso"] = exceso
+                                            if dia_info["estado"] == "ok":
+                                                dia_info["estado"] = "leve"
+                                            dia_info["observaciones"].append(
+                                                f"Exceso almuerzo (+{exceso}m)"
+                                            )
+                                            resumen["almuerzo_largo"] += 1
                                     break
                             break
-                elif just_alm:
-                    # Si está justificado el almuerzo
-                    # Buscar los registros de almuerzo para mostrarlos igual
-                    for i, m in enumerate(marcaciones):
-                        if m["tipo"] == "Salida" and i > 0:
-                            for j in range(i + 1, len(marcaciones)):
-                                if marcaciones[j]["tipo"] == "Entrada":
-                                    dia_info["almuerzo_duracion"] = int((marcaciones[j]["datetime"] - m["datetime"]).total_seconds() / 60)
-                                    dia_info["almuerzo_salida"]   = m["hora"].strftime("%H:%M")
-                                    dia_info["almuerzo_regreso"]  = marcaciones[j]["hora"].strftime("%H:%M")
-                                    break
+
+                # ── Análisis de salida anticipada ─────────────────────────
+                hora_salida_prog = info.get("hora_salida")
+                if hora_salida_prog and len(marcaciones) >= 2:
+                    just_salida = _get_justificado(fecha, "salida_anticipada")
+                    
+                    ultima_salida = None
+                    for m in reversed(marcaciones):
+                        if m["tipo"] == "Salida":
+                            ultima_salida = m["hora"]
                             break
-                    dia_info["observaciones"].append(f"Exceso almuerzo JUSTIFICADO: {just_alm.get('motivo','(Sin motivo)')}")
-                    dia_info["justificado"] = True
-                    resumen["justificadas"] += 1
-                    if dia_info["estado"] == "ok":
-                        dia_info["estado"] = "leve"
+                            
+                    if ultima_salida:
+                        if not just_salida:
+                            h_salida_t = datetime.strptime(hora_salida_prog, "%H:%M").time()
+                            salida_diff = -_minutos_diferencia(h_salida_t, ultima_salida)
+                            
+                            if salida_diff > 0:  # Salió antes
+                                if salida_diff > MARGEN_LEVE_MIN:
+                                    dia_info["estado"] = "severa"
+                                    dia_info["observaciones"].append(
+                                        f"Salida ant. severa (-{salida_diff}m sobre {hora_salida_prog})"
+                                    )
+                                    resumen["salida_anticipada_severa"] += 1
+                                else:
+                                    if dia_info["estado"] == "ok":
+                                        dia_info["estado"] = "leve"
+                                    dia_info["observaciones"].append(
+                                        f"Salida ant. leve (-{salida_diff}m sobre {hora_salida_prog})"
+                                    )
+                                    resumen["salida_anticipada_leve"] += 1
+                        else:
+                            hora_permitida = just_salida.get("hora_permitida")
+                            if hora_permitida:
+                                h_permitida_t = datetime.strptime(hora_permitida, "%H:%M").time()
+                                salida_diff = -_minutos_diferencia(h_permitida_t, ultima_salida)
+                                
+                                if salida_diff > 0: # Salió antes de lo permitido
+                                    dia_info["estado"] = "severa"
+                                    dia_info["observaciones"].append(
+                                        f"Salida ant. NO JUSTIF. (-{salida_diff}m, auth. {hora_permitida})"
+                                    )
+                                    resumen["salida_anticipada_severa"] += 1
+                                else:
+                                    dia_info["justificado"] = True
+                                    resumen["justificadas"] += 1
+                                    if dia_info["estado"] == "ok":
+                                        dia_info["estado"] = "leve"
+                                    dia_info["observaciones"].append(f"Salida JUSTIFICADA: {just_salida.get('motivo','(Sin motivo)')}")
+                            else:
+                                dia_info["justificado"] = True
+                                resumen["justificadas"] += 1
+                                if dia_info["estado"] == "ok":
+                                    dia_info["estado"] = "leve"
+                                dia_info["observaciones"].append(f"Salida JUSTIFICADA: {just_salida.get('motivo','(Sin motivo)')}")
 
             # Incluir en dias_list si hay novedad, o siempre si mostrar_todos
             if mostrar_todos or dia_info["estado"] != "ok" or dia_info["observaciones"]:
@@ -726,6 +842,7 @@ def _get_info_dia(horario_persona: dict, fecha) -> dict:
         {
             "trabaja":      bool,
             "hora_entrada": "HH:MM" | None,
+            "hora_salida":  "HH:MM" | None,
             "almuerzo_min": int,
         }
     """
@@ -736,19 +853,29 @@ def _get_info_dia(horario_persona: dict, fecha) -> dict:
     if es_domingo:
         columna = "domingo"
         hora_entrada = horario_persona.get("domingo")
+        hora_salida = horario_persona.get("domingo_salida")
         return {
             "trabaja":      hora_entrada is not None,
             "hora_entrada": hora_entrada,
+            "hora_salida":  hora_salida,
             "almuerzo_min": 0,
         }
 
     columna      = _WEEKDAY_COL.get(weekday, "viernes")
     hora_entrada = horario_persona.get(columna)
-    almuerzo_min = 0 if es_sabado else horario_persona.get("almuerzo_min", 0)
+    hora_salida  = horario_persona.get(f"{columna}_salida")
+    
+    col_almuerzo = f"{columna}_almuerzo_min"
+    almuerzo_dia = horario_persona.get(col_almuerzo)
+    if almuerzo_dia is None:
+        almuerzo_dia = horario_persona.get("almuerzo_min", 0)
+        
+    almuerzo_min = 0 if es_sabado else almuerzo_dia
 
     return {
         "trabaja":      hora_entrada is not None,
         "hora_entrada": hora_entrada,
+        "hora_salida":  hora_salida,
         "almuerzo_min": almuerzo_min,
     }
 
@@ -869,13 +996,14 @@ def generar_pdf_persona(
         sin_horario = []
 
     _F = {
-        "mostrar_ausencias":       filtros.get("mostrar_ausencias",       True),
-        "mostrar_tardanza_severa": filtros.get("mostrar_tardanza_severa", True),
-        "mostrar_tardanza_leve":   filtros.get("mostrar_tardanza_leve",   True),
-        "mostrar_almuerzo":        filtros.get("mostrar_almuerzo",        True),
-        "mostrar_incompletos":     filtros.get("mostrar_incompletos",     True),
-        "mostrar_todos_los_dias":  filtros.get("mostrar_todos_los_dias",  False),
-        "columna_tiempo_dentro":   filtros.get("columna_tiempo_dentro",   False),
+        "mostrar_ausencias":          filtros.get("mostrar_ausencias",          True),
+        "mostrar_tardanza_severa":    filtros.get("mostrar_tardanza_severa",    True),
+        "mostrar_tardanza_leve":      filtros.get("mostrar_tardanza_leve",      True),
+        "mostrar_almuerzo":           filtros.get("mostrar_almuerzo",           True),
+        "mostrar_incompletos":        filtros.get("mostrar_incompletos",        True),
+        "mostrar_salida_anticipada":  filtros.get("mostrar_salida_anticipada",  True),
+        "mostrar_todos_los_dias":     filtros.get("mostrar_todos_los_dias",     False),
+        "columna_tiempo_dentro":      filtros.get("columna_tiempo_dentro",      False),
     }
 
     doc = SimpleDocTemplate(
@@ -937,22 +1065,24 @@ def generar_pdf_persona(
     story.append(Spacer(1, 0.5*cm))
 
     enc_res = ["Persona", "Días", "Ausencias", "Tard. Sev.",
-               "Tard. Lev.", "Exc. Alm.", "Anóm.", "Justif."]
+               "Tard. Lev.", "Sal. Ant.", "Exc. Alm.", "Anóm.", "Justif."]
     filas_resumen = [enc_res]
     for nombre in sorted(analisis_persona.keys()):
         r = analisis_persona[nombre]["resumen"]
+        tot_salida = r.get("salida_anticipada_severa", 0) + r.get("salida_anticipada_leve", 0)
         filas_resumen.append([
             nombre,
             str(r.get("total_dias", 0)),
             str(r.get("ausencias", 0)),
             str(r.get("tardanza_severa", 0)),
             str(r.get("tardanza_leve",  0)),
+            str(tot_salida),
             str(r.get("almuerzo_largo", 0)),
             str(r.get("incompletos",    0)),
             str(r.get("justificadas",   0)),
         ])
     # Ajustar anchos para incluir la nueva columna
-    t_res = Table(filas_resumen, colWidths=[5.2*cm, 1.2*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm])
+    t_res = Table(filas_resumen, colWidths=[3.6*cm, 1.2*cm, 1.6*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm, 1.8*cm])
     t_res.setStyle(_estilo_tabla_datos(len(filas_resumen)))
     story.append(t_res)
 
@@ -1020,6 +1150,12 @@ def generar_pdf_persona(
         if _F["mostrar_incompletos"]:
             incompletos = [d for d in datos if d.get("estado") == "incompleto"]
             story += _seccion_incompletos_persona(st, incompletos)
+
+        # ── Salidas Anticipadas ────────────────────────────────────────
+        if _F["mostrar_salida_anticipada"]:
+            salidas_ant = [d for d in datos if any("Salida ant." in o
+                           for o in d.get("observaciones", []))]
+            story += _seccion_salidas_anticipadas_persona(st, salidas_ant)
 
         # ── Detalle Cronológico (Todos los días) ───────────────────────
         if _F["mostrar_todos_los_dias"]:
@@ -1221,6 +1357,37 @@ def _seccion_incompletos_persona(st, datos: list) -> list:
             ])
         t = Table(filas, colWidths=[4*cm, 2.5*cm, 10.9*cm])
         t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_TABLA_ALT))
+        for i, d in enumerate(datos):
+            if d.get("justificado"):
+                t.setStyle(TableStyle([("BACKGROUND", (0, i+1), (-1, i+1), COLOR_WARN)]))
+        story.append(t)
+    story.append(Spacer(1, 0.5*cm))
+    return story
+
+
+def _seccion_salidas_anticipadas_persona(st, datos: list) -> list:
+    """Sección de salidas anticipadas en el PDF por persona."""
+    story = []
+    story.append(Paragraph("  SALIDAS ANTICIPADAS", st["seccion"]))
+    story.append(Paragraph(
+        "Días en que el empleado salió antes de la hora de salida programada.",
+        st["pequeño"]
+    ))
+    story.append(Spacer(1, 0.2*cm))
+    if not datos:
+        story.append(Paragraph("✓ Sin salidas anticipadas.", st["ok"]))
+    else:
+        filas = [["Fecha", "Salida real", "Observación"]]
+        for d in datos:
+            obs_filtradas = [o for o in d.get("observaciones", []) if "Salida ant." in o]
+            obs_txt = " / ".join(obs_filtradas) or "—"
+            filas.append([
+                d["fecha"].strftime("%d/%m/%Y"),
+                d.get("salida") or "—",
+                Paragraph(obs_txt, st["pequeño"]),
+            ])
+        t = Table(filas, colWidths=[4*cm, 3.5*cm, 9.9*cm])
+        t.setStyle(_estilo_tabla_datos(len(filas), color_fila=COLOR_ERROR))
         for i, d in enumerate(datos):
             if d.get("justificado"):
                 t.setStyle(TableStyle([("BACKGROUND", (0, i+1), (-1, i+1), COLOR_WARN)]))

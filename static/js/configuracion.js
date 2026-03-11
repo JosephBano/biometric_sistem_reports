@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ════════════ HORARIOS ════════════════════════
 
 function cargarHorarios() {
-    apiCall('/horarios')
+    apiCall('/api/horarios')
         .then(data => {
             _horariosCache = data.horarios || [];
             document.getElementById('horarios-count').textContent = data.total || 0;
@@ -50,18 +50,24 @@ function filtrarTablaHorarios() {
 function renderTablaHorarios(lista) {
     const tbody = document.getElementById('horarios-tbody');
     if (!tbody) return;
-    
+
     if (lista.length === 0) {
         tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-4">No hay horarios.</td></tr>';
         return;
     }
 
     const html = lista.map(h => {
-        const d = dia => h[dia] ? h[dia] : '<span class="text-muted">—</span>';
+        // Muestra "entrada / salida" o solo "entrada" si no hay salida configurada
+        const d = dia => {
+            const ent = h[dia];
+            const sal = h[`${dia}_salida`];
+            if (!ent) return '<span class="text-muted">—</span>';
+            if (sal) return `<span class="text-nowrap">${ent}<br><small class="text-muted">${sal}</small></span>`;
+            return ent;
+        };
         const alm = h.almuerzo_min ? `${h.almuerzo_min} m` : '<span class="text-muted">0</span>';
-        // HTML encode to prevent XSS in the JSON stringify for edit button
         const hJson = JSON.stringify(h).replace(/"/g, '&quot;');
-        
+
         return `
             <tr>
                 <td class="fw-semibold text-nowrap">${h.nombre}</td>
@@ -91,7 +97,7 @@ function importarHorarios(file) {
     const formData = new FormData();
     formData.append('archivo', file);
 
-    fetch('/cargar-horarios', { method: 'POST', body: formData })
+    fetch('/api/horarios/importar', { method: 'POST', body: formData })
         .then(response => response.json().then(data => ({ status: response.status, ok: response.ok, body: data })))
         .then(res => {
             document.getElementById('horarios-upload-progress').style.display = 'none';
@@ -113,7 +119,7 @@ function importarHorarios(file) {
 }
 
 function exportarHorariosCsv() {
-    window.location.href = '/exportar-horarios-csv';
+    window.location.href = '/api/horarios/exportar';
 }
 
 const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -130,11 +136,12 @@ function abrirOffcanvasCrear() {
 
     DIAS.forEach(d => {
         document.getElementById(`mh-${d}`).value = '';
+        document.getElementById(`mh-${d}-salida`).value = '';
         const isWeekend = (d === 'sabado' || d === 'domingo');
         document.getElementById(`mh-libre-${d}`).checked = isWeekend;
         toggleDia(d);
     });
-    
+
     offcanvasHorario.show();
 }
 
@@ -156,6 +163,9 @@ function abrirOffcanvasEditar(h) {
             document.getElementById(`mh-${d}`).value = '';
             document.getElementById(`mh-libre-${d}`).checked = true;
         }
+        // Rellenar hora de salida si existe
+        const salidaKey = `${d}_salida`;
+        document.getElementById(`mh-${d}-salida`).value = h[salidaKey] || '';
         toggleDia(d);
     });
 
@@ -165,8 +175,13 @@ function abrirOffcanvasEditar(h) {
 function toggleDia(dia) {
     const isLibre = document.getElementById(`mh-libre-${dia}`).checked;
     const inputHora = document.getElementById(`mh-${dia}`);
+    const inputSalida = document.getElementById(`mh-${dia}-salida`);
     inputHora.disabled = isLibre;
-    if (isLibre) inputHora.value = '';
+    inputSalida.disabled = isLibre;
+    if (isLibre) {
+        inputHora.value = '';
+        inputSalida.value = '';
+    }
 }
 
 function guardarHorario() {
@@ -188,8 +203,11 @@ function guardarHorario() {
     for (const d of DIAS) {
         if (!document.getElementById(`mh-libre-${d}`).checked) {
             const h = document.getElementById(`mh-${d}`).value;
-            if (!h) return errMh(`Especifique la hora para ${d} o márquelo como libre.`);
+            if (!h) return errMh(`Especifique la hora de entrada para ${d} o márquelo como libre.`);
             payload[d] = h;
+            // Agregar hora de salida si fue especificada (opcional)
+            const salida = document.getElementById(`mh-${d}-salida`).value;
+            if (salida) payload[`${d}_salida`] = salida;
             countActivos++;
         }
     }
@@ -231,7 +249,7 @@ function eliminarHorario(idStr, nombre) {
 // ════════════ FERIADOS ════════════════════════
 
 function cargarFeriados() {
-    apiCall('/feriados')
+    apiCall('/api/feriados')
         .then(data => {
             const listaDiv = document.getElementById('feriados-lista');
             if(!listaDiv) return;
@@ -279,7 +297,7 @@ function agregarFeriado() {
         return;
     }
 
-    apiCall('/feriados', {
+    apiCall('/api/feriados', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fecha, descripcion: desc, tipo })
@@ -295,7 +313,7 @@ function agregarFeriado() {
 
 function eliminarFeriado(fecha) {
     if (!confirm('¿Eliminar el feriado del ' + fecha + '?')) return;
-    apiCall(`/feriados/${fecha}`, { method: 'DELETE' })
+    apiCall(`/api/feriados/${fecha}`, { method: 'DELETE' })
         .then(() => {
             cargarFeriados();
             showSuccess('Feriado eliminado.');
@@ -308,7 +326,7 @@ function importarFeriados(file) {
     const formData = new FormData();
     formData.append('archivo', file);
 
-    fetch('/feriados/importar', { method: 'POST', body: formData })
+    fetch('/api/feriados/importar', { method: 'POST', body: formData })
         .then(response => response.json().then(data => ({ status: response.status, ok: response.ok, body: data })))
         .then(res => {
             document.getElementById('feriados-import-file').value = '';

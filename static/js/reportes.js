@@ -98,7 +98,7 @@ function loadPersonasSingle() {
     const ff = document.getElementById('fecha-fin').value;
     if (!fi || !ff) return;
 
-    apiCall('/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
+    apiCall('/api/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
         .then(data => {
             tomSelectPersonaRpt.clear();
             tomSelectPersonaRpt.clearOptions();
@@ -115,7 +115,7 @@ function loadPersonasVarias() {
     const ff = document.getElementById('fecha-fin').value;
     if (!fi || !ff) return;
 
-    apiCall('/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
+    apiCall('/api/personas-db?fecha_inicio=' + fi + '&fecha_fin=' + ff)
         .then(data => {
             const sel = document.getElementById('personas-varias');
             sel.innerHTML = '';
@@ -142,16 +142,18 @@ function deseleccionarTodasPersonas() {
 }
 
 function leerFiltros() {
+    const chk = id => { const el = document.getElementById(id); return el ? el.checked : false; };
     return {
-        mostrar_ausencias: document.getElementById('f-ausencias').checked,
-        mostrar_tardanza_severa: document.getElementById('f-tardanza-severa').checked,
-        mostrar_tardanza_leve: document.getElementById('f-tardanza-leve').checked,
-        mostrar_almuerzo: document.getElementById('f-almuerzo').checked,
-        mostrar_incompletos: document.getElementById('f-incompletos').checked,
-        mostrar_todos_los_dias: document.getElementById('f-todos-dias').checked,
-        columna_tiempo_dentro: document.getElementById('f-tiempo-dentro').checked,
-        reporte_sin_horario: document.getElementById('f-sin-horario') && document.getElementById('f-sin-horario').checked,
-        reporte_todos_usuarios: document.getElementById('f-todos-usuarios') && document.getElementById('f-todos-usuarios').checked,
+        mostrar_ausencias:          chk('f-ausencias'),
+        mostrar_tardanza_severa:    chk('f-tardanza-severa'),
+        mostrar_tardanza_leve:      chk('f-tardanza-leve'),
+        mostrar_almuerzo:           chk('f-almuerzo'),
+        mostrar_incompletos:        chk('f-incompletos'),
+        mostrar_salida_anticipada:  chk('f-salida-anticipada'),
+        mostrar_todos_los_dias:     chk('f-todos-dias'),
+        columna_tiempo_dentro:      chk('f-tiempo-dentro'),
+        reporte_sin_horario:        chk('f-sin-horario'),
+        reporte_todos_usuarios:     chk('f-todos-usuarios'),
     };
 }
 
@@ -188,7 +190,7 @@ function generarReporte() {
     btn.disabled = true;
 
     // Use raw fetch for download capability
-    fetch('/generar-desde-db', {
+    fetch('/api/generar-desde-db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

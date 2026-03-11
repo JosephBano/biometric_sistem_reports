@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function abrirOffcanvasJustificacion() {
     // Load people for select specifically from horarios because justificaciones need someone with schedule
-    apiCall('/horarios')
+    apiCall('/api/horarios')
         .then(data => {
             tomSelectJustPersona.clear();
             tomSelectJustPersona.clearOptions();
@@ -40,6 +40,24 @@ function abrirOffcanvasJustificacion() {
     cambioTipoJustificacion();
     offcanvasJustificacion.show();
 }
+
+/**
+ * Función global requerida por base.html para actualizar si fuera necesario
+ */
+window.checkPendingJustifications = function() {
+    apiCall('/api/estado-sync')
+        .then(data => {
+            const badge = document.querySelector('.nav-link[href*="justificaciones"] .badge');
+            if (badge) {
+                if (data.justificaciones_pendientes > 0) {
+                    badge.textContent = data.justificaciones_pendientes;
+                    badge.style.display = 'block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        });
+};
 
 function cambioTipoJustificacion() {
     const tipo = document.getElementById('just-tipo').value;
@@ -70,7 +88,7 @@ function cambioTipoJustificacion() {
 function cargarJustificaciones() {
     const fi = document.getElementById('filtro-fecha-inicio').value;
     const ff = document.getElementById('filtro-fecha-fin').value;
-    let url = '/justificaciones';
+    let url = '/api/justificaciones';
     if(fi && ff) url += `?fecha_inicio=${fi}&fecha_fin=${ff}`;
     
     apiCall(url)
@@ -79,7 +97,7 @@ function cargarJustificaciones() {
             if(!tbody) return;
 
             if (!data.justificaciones || data.justificaciones.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-4">No se encontraron justificaciones para este período.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No se encontraron justificaciones para este período.</td></tr>';
                 return;
             }
 
@@ -91,23 +109,63 @@ function cargarJustificaciones() {
                 'salida_anticipada': '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2">Salida Ant.</span>'
             };
 
+            const statusBadges = {
+                'pendiente': '<span class="badge rounded-pill bg-danger border border-danger border-opacity-50 text-white px-2">Pendiente</span>',
+                'aprobada': '<span class="badge rounded-pill bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2">Aprobada</span>',
+                'rechazada': '<span class="badge rounded-pill bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 px-2">Rechazada</span>'
+            };
+
             const html = data.justificaciones.map(j => {
                 const b = badges[j.tipo] || `<span class="badge bg-secondary">${j.tipo}</span>`;
+                const sb = statusBadges[j.estado] || `<span class="badge bg-secondary">${j.estado}</span>`;
+                
+                let rules = [];
+                if (j.hora_permitida) rules.push(`Hora: ${j.hora_permitida}`);
+                if (j.duracion_permitida_min) rules.push(`Límite: ${j.duracion_permitida_min}m`);
+                let rulesStr = rules.length > 0 ? ` <small class="text-primary fw-bold">[${rules.join(', ')}]</small>` : '';
+                
                 return `
                     <tr>
                         <td class="fw-semibold text-nowrap">${j.fecha}</td>
                         <td>${j.nombre || ''} <small class="text-muted">(ID: ${j.id_usuario})</small></td>
                         <td>${b}</td>
-                        <td class="text-truncate" style="max-width: 250px;" title="${j.motivo || ''}">${j.motivo || '<em class="text-muted pl-2">Sin motivo</em>'}</td>
+                        <td class="text-truncate" style="max-width: 200px;" title="${j.motivo || ''}">${j.motivo || '<em class="text-muted pl-2">Sin motivo</em>'}${rulesStr}</td>
                         <td>${j.aprobado_por || '<span class="text-muted">—</span>'}</td>
+                        <td>${sb}</td>
                         <td class="text-end">
-                            <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="eliminarJustificacion(${j.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">delete</span></button>
+                            <div class="d-flex gap-1 justify-content-end">
+                            ${j.estado === 'pendiente' ? `
+                                <button class="btn btn-sm btn-success py-0 px-2" onclick="cambiarEstadoJustificacion(${j.id}, 'aprobada')" title="Aprobar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span></button>
+                                <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="cambiarEstadoJustificacion(${j.id}, 'rechazada')" title="Rechazar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">cancel</span></button>
+                            ` : ''}
+                                <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="eliminarJustificacion(${j.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">delete</span></button>
+                            </div>
                         </td>
                     </tr>
                 `;
             }).join("");
             tbody.innerHTML = html;
+        })
+        .catch(err => {
+            const tbody = document.getElementById('just-lista');
+            if(tbody) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error al cargar datos: ${err.message}</td></tr>`;
+            }
         });
+}
+
+function cambiarEstadoJustificacion(jid, nuevoEstado) {
+    apiCall(`/api/justificaciones/${jid}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: nuevoEstado })
+    })
+    .then(() => {
+        cargarJustificaciones();
+        showSuccess(`Justificación ${nuevoEstado} correctamente.`);
+        if(window.checkPendingJustifications) window.checkPendingJustifications();
+    })
+    .catch(err => showError(err.message));
 }
 
 function agregarJustificacion() {
@@ -130,7 +188,23 @@ function agregarJustificacion() {
         return showError('Fecha, Persona y Tipo son campos requeridos.');
     }
     
-    apiCall('/justificaciones', {
+    const hPermitida = document.getElementById('just-hora_permitida').value;
+    const durPermitida = document.getElementById('just-duracion_permitida').value;
+    const isMedia = document.getElementById('just-media_jornada').checked;
+    
+    if (hPermitida && (payload.tipo === 'tardanza' || payload.tipo === 'salida_anticipada')) {
+        payload.hora_permitida = hPermitida;
+    }
+    
+    if (durPermitida && payload.tipo === 'almuerzo') {
+        payload.duracion_permitida_min = durPermitida;
+    }
+    
+    if (isMedia && payload.tipo === 'ausencia') {
+        payload.motivo = "(Media Jornada) " + payload.motivo;
+    }
+    
+    apiCall('/api/justificaciones', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -139,6 +213,9 @@ function agregarJustificacion() {
         offcanvasJustificacion.hide();
         document.getElementById('just-motivo').value = '';
         document.getElementById('just-aprobado_por').value = '';
+        document.getElementById('just-hora_permitida').value = '';
+        document.getElementById('just-duracion_permitida').value = '';
+        document.getElementById('just-media_jornada').checked = false;
         cargarJustificaciones();
         showSuccess('Justificación agregada correctamente.');
     })
@@ -147,7 +224,7 @@ function agregarJustificacion() {
 
 function eliminarJustificacion(jid) {
     if (!confirm(`¿Eliminar la justificación ID ${jid}?`)) return;
-    apiCall(`/justificaciones/${jid}`, { method: 'DELETE' })
+    apiCall(`/api/justificaciones/${jid}`, { method: 'DELETE' })
         .then(() => {
             cargarJustificaciones();
             showSuccess('Justificación eliminada.');

@@ -147,14 +147,19 @@
         </div>
     </div>
 
-    <h6 class="fw-bold mb-3">Configuración de la Semana</h6>
-    
+    <h6 class="fw-bold mb-2">Configuración de la Semana</h6>
+    <div class="d-flex gap-1 mb-1 px-1" style="padding-left: 48px!important;">
+        <small class="text-muted fw-semibold flex-grow-1 text-center" style="font-size:0.7rem;">Entrada</small>
+        <small class="text-muted fw-semibold flex-grow-1 text-center" style="font-size:0.7rem;">Salida</small>
+        <div style="width:72px"></div>
+    </div>
     <div class="d-flex flex-column gap-2 mb-4">
         <!-- Lunes -->
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Lun</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-lunes">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-lunes-salida" placeholder="Salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-lunes" onchange="toggleDia('lunes')">
                 <label class="form-check-label small" for="mh-libre-lunes">Libre</label>
             </div>
@@ -163,7 +168,8 @@
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Mar</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-martes">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-martes-salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-martes" onchange="toggleDia('martes')">
                 <label class="form-check-label small" for="mh-libre-martes">Libre</label>
             </div>
@@ -172,7 +178,8 @@
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Mié</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-miercoles">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-miercoles-salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-miercoles" onchange="toggleDia('miercoles')">
                 <label class="form-check-label small" for="mh-libre-miercoles">Libre</label>
             </div>
@@ -181,7 +188,8 @@
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Jue</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-jueves">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-jueves-salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-jueves" onchange="toggleDia('jueves')">
                 <label class="form-check-label small" for="mh-libre-jueves">Libre</label>
             </div>
@@ -190,7 +198,8 @@
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Vie</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-viernes">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-viernes-salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-viernes" onchange="toggleDia('viernes')">
                 <label class="form-check-label small" for="mh-libre-viernes">Libre</label>
             </div>
@@ -199,7 +208,8 @@
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Sáb</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-sabado">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-sabado-salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-sabado" onchange="toggleDia('sabado')" checked>
                 <label class="form-check-label small" for="mh-libre-sabado">Libre</label>
             </div>
@@ -208,7 +218,8 @@
         <div class="d-flex align-items-center gap-2">
             <div style="width:40px"><small class="fw-bold text-muted">Dom</small></div>
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-domingo">
-            <div class="form-check form-switch mb-0">
+            <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-domingo-salida">
+            <div class="form-check form-switch mb-0" style="min-width:72px">
                 <input class="form-check-input" type="checkbox" id="mh-libre-domingo" onchange="toggleDia('domingo')" checked>
                 <label class="form-check-label small" for="mh-libre-domingo">Libre</label>
             </div>

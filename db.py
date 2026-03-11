@@ -83,7 +83,21 @@ def init_db():
                 viernes        TEXT,
                 sabado         TEXT,
                 domingo        TEXT,
+                lunes_salida   TEXT,
+                martes_salida  TEXT,
+                miercoles_salida TEXT,
+                jueves_salida  TEXT,
+                viernes_salida TEXT,
+                sabado_salida  TEXT,
+                domingo_salida TEXT,
                 almuerzo_min   INTEGER DEFAULT 0,
+                lunes_almuerzo_min    INTEGER,
+                martes_almuerzo_min   INTEGER,
+                miercoles_almuerzo_min INTEGER,
+                jueves_almuerzo_min   INTEGER,
+                viernes_almuerzo_min  INTEGER,
+                sabado_almuerzo_min   INTEGER,
+                domingo_almuerzo_min  INTEGER,
                 notas          TEXT,
                 fuente         TEXT,
                 actualizado_en TEXT    DEFAULT (datetime('now'))
@@ -97,6 +111,9 @@ def init_db():
                 tipo          TEXT    NOT NULL,
                 motivo        TEXT,
                 aprobado_por  TEXT,
+                hora_permitida TEXT,
+                estado        TEXT    DEFAULT 'aprobada',
+                duracion_permitida_min INTEGER,
                 creado_en     TEXT    DEFAULT (datetime('now')),
                 UNIQUE (id_usuario, fecha, tipo)
             );
@@ -107,6 +124,19 @@ def init_db():
                 tipo         TEXT DEFAULT 'nacional'
             );
         """)
+        
+        # Migraciones (Sección 8.1)
+        _migrar_columna(conn, "justificaciones", "hora_permitida", "TEXT")
+        _migrar_columna(conn, "justificaciones", "estado",         "TEXT DEFAULT 'aprobada'")
+        _migrar_columna(conn, "justificaciones", "duracion_permitida_min", "INTEGER")
+
+
+def _migrar_columna(conn, tabla, columna, tipo):
+    """Agrega una columna si no existe (Sección 8.1 del plan)."""
+    try:
+        conn.execute(f"ALTER TABLE {tabla} ADD COLUMN {columna} {tipo}")
+    except sqlite3.OperationalError:
+        pass  # La columna ya existe
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -134,28 +164,30 @@ def upsert_usuarios(usuarios: list[dict]):
 def insertar_asistencias(registros: list[dict]) -> int:
     """
     Inserta registros ignorando duplicados (UNIQUE id_usuario + fecha_hora).
+    Usa INSERT OR IGNORE + executemany para rendimiento óptimo.
     Retorna la cantidad de filas realmente insertadas.
     """
-    nuevos = 0
+    if not registros:
+        return 0
+    params = [
+        (
+            str(r["id_usuario"]),
+            r["nombre"],
+            r["fecha_hora"],
+            r.get("punch_raw"),
+            r["tipo"],
+            r.get("fuente", "zk"),
+        )
+        for r in registros
+    ]
     with _conn() as conn:
-        for r in registros:
-            try:
-                conn.execute("""
-                    INSERT INTO asistencias
-                        (id_usuario, nombre, fecha_hora, punch_raw, tipo, fuente)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                """, (
-                    str(r["id_usuario"]),
-                    r["nombre"],
-                    r["fecha_hora"],
-                    r.get("punch_raw"),
-                    r["tipo"],
-                    r.get("fuente", "zk"),
-                ))
-                nuevos += 1
-            except sqlite3.IntegrityError:
-                pass  # Duplicado, ignorar
-    return nuevos
+        antes = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO asistencias
+                (id_usuario, nombre, fecha_hora, punch_raw, tipo, fuente)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, params)
+        return conn.total_changes - antes
 
 
 def consultar_asistencias(fecha_inicio, fecha_fin) -> list[dict]:
@@ -271,9 +303,12 @@ def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
             conn.execute("""
                 INSERT INTO horarios_personal
                     (id_usuario, nombre, lunes, martes, miercoles, jueves,
-                     viernes, sabado, domingo, almuerzo_min, notas, fuente,
-                     actualizado_en)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+                     viernes, sabado, domingo, 
+                     lunes_salida, martes_salida, miercoles_salida, jueves_salida, viernes_salida, sabado_salida, domingo_salida,
+                     almuerzo_min, 
+                     lunes_almuerzo_min, martes_almuerzo_min, miercoles_almuerzo_min, jueves_almuerzo_min, viernes_almuerzo_min, sabado_almuerzo_min, domingo_almuerzo_min,
+                     notas, fuente, actualizado_en)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
                 ON CONFLICT(id_usuario) DO UPDATE SET
                     nombre        = excluded.nombre,
                     lunes         = excluded.lunes,
@@ -283,7 +318,21 @@ def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
                     viernes       = excluded.viernes,
                     sabado        = excluded.sabado,
                     domingo       = excluded.domingo,
+                    lunes_salida  = excluded.lunes_salida,
+                    martes_salida = excluded.martes_salida,
+                    miercoles_salida = excluded.miercoles_salida,
+                    jueves_salida = excluded.jueves_salida,
+                    viernes_salida = excluded.viernes_salida,
+                    sabado_salida = excluded.sabado_salida,
+                    domingo_salida = excluded.domingo_salida,
                     almuerzo_min  = excluded.almuerzo_min,
+                    lunes_almuerzo_min = excluded.lunes_almuerzo_min,
+                    martes_almuerzo_min = excluded.martes_almuerzo_min,
+                    miercoles_almuerzo_min = excluded.miercoles_almuerzo_min,
+                    jueves_almuerzo_min = excluded.jueves_almuerzo_min,
+                    viernes_almuerzo_min = excluded.viernes_almuerzo_min,
+                    sabado_almuerzo_min = excluded.sabado_almuerzo_min,
+                    domingo_almuerzo_min = excluded.domingo_almuerzo_min,
                     notas         = excluded.notas,
                     fuente        = excluded.fuente,
                     actualizado_en = datetime('now')
@@ -297,7 +346,21 @@ def upsert_horarios(horarios: list[dict], fuente: str = "") -> int:
                 h.get("viernes"),
                 h.get("sabado"),
                 h.get("domingo"),
+                h.get("lunes_salida"),
+                h.get("martes_salida"),
+                h.get("miercoles_salida"),
+                h.get("jueves_salida"),
+                h.get("viernes_salida"),
+                h.get("sabado_salida"),
+                h.get("domingo_salida"),
                 int(h.get("almuerzo_min", 0)),
+                int(h["lunes_almuerzo_min"]) if h.get("lunes_almuerzo_min") is not None else None,
+                int(h["martes_almuerzo_min"]) if h.get("martes_almuerzo_min") is not None else None,
+                int(h["miercoles_almuerzo_min"]) if h.get("miercoles_almuerzo_min") is not None else None,
+                int(h["jueves_almuerzo_min"]) if h.get("jueves_almuerzo_min") is not None else None,
+                int(h["viernes_almuerzo_min"]) if h.get("viernes_almuerzo_min") is not None else None,
+                int(h["sabado_almuerzo_min"]) if h.get("sabado_almuerzo_min") is not None else None,
+                int(h["domingo_almuerzo_min"]) if h.get("domingo_almuerzo_min") is not None else None,
                 h.get("notas", ""),
                 fuente,
             ))
@@ -316,7 +379,11 @@ def get_horarios() -> dict:
     with _conn() as conn:
         rows = conn.execute("""
             SELECT id_usuario, nombre, lunes, martes, miercoles, jueves,
-                   viernes, sabado, domingo, almuerzo_min, notas
+                   viernes, sabado, domingo, 
+                   lunes_salida, martes_salida, miercoles_salida, jueves_salida, viernes_salida, sabado_salida, domingo_salida,
+                   almuerzo_min, 
+                   lunes_almuerzo_min, martes_almuerzo_min, miercoles_almuerzo_min, jueves_almuerzo_min, viernes_almuerzo_min, sabado_almuerzo_min, domingo_almuerzo_min,
+                   notas
             FROM horarios_personal
         """).fetchall()
 
@@ -343,7 +410,11 @@ def get_horario(id_usuario: str) -> dict | None:
     with _conn() as conn:
         row = conn.execute("""
             SELECT id_usuario, nombre, lunes, martes, miercoles, jueves,
-                   viernes, sabado, domingo, almuerzo_min, notas
+                   viernes, sabado, domingo, 
+                   lunes_salida, martes_salida, miercoles_salida, jueves_salida, viernes_salida, sabado_salida, domingo_salida,
+                   almuerzo_min, 
+                   lunes_almuerzo_min, martes_almuerzo_min, miercoles_almuerzo_min, jueves_almuerzo_min, viernes_almuerzo_min, sabado_almuerzo_min, domingo_almuerzo_min,
+                   notas
             FROM horarios_personal
             WHERE id_usuario = ?
         """, (str(id_usuario),)).fetchone()
@@ -396,25 +467,30 @@ def get_personas_con_id(fecha_inicio, fecha_fin) -> list[dict]:
 # ══════════════════════════════════════════════════════════════════════════
 
 def insertar_justificacion(id_usuario: str, nombre: str, fecha: str,
-                           tipo: str, motivo: str = "", aprobado_por: str = "") -> dict:
+                           tipo: str, motivo: str = "", aprobado_por: str = "",
+                           hora_permitida: str = None, estado: str = "aprobada",
+                           duracion_permitida_min: int = None) -> dict:
     """
     Inserta o reemplaza una justificación.
     fecha debe ser string 'YYYY-MM-DD'.
-    tipo: 'ausencia' | 'tardanza' | 'almuerzo' | 'incompleto'
+    tipo: 'ausencia' | 'tardanza' | 'almuerzo' | 'incompleto' | 'salida_anticipada'
     """
     with _conn() as conn:
         conn.execute("""
             INSERT INTO justificaciones
-                (id_usuario, nombre, fecha, tipo, motivo, aprobado_por)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id_usuario, fecha, tipo) DO UPDATE SET
                 nombre       = excluded.nombre,
                 motivo       = excluded.motivo,
                 aprobado_por = excluded.aprobado_por,
+                hora_permitida = excluded.hora_permitida,
+                estado       = excluded.estado,
+                duracion_permitida_min = excluded.duracion_permitida_min,
                 creado_en    = datetime('now')
-        """, (str(id_usuario), nombre, fecha, tipo, motivo or "", aprobado_por or ""))
+        """, (str(id_usuario), nombre, fecha, tipo, motivo or "", aprobado_por or "", hora_permitida, estado, duracion_permitida_min))
         row = conn.execute("""
-            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, creado_en
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, creado_en
             FROM justificaciones WHERE id_usuario=? AND fecha=? AND tipo=?
         """, (str(id_usuario), fecha, tipo)).fetchone()
     return dict(row) if row else {}
@@ -425,7 +501,7 @@ def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
     with _conn() as conn:
         if fecha_inicio and fecha_fin:
             rows = conn.execute("""
-                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, creado_en
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, creado_en
                 FROM justificaciones
                 WHERE fecha >= ? AND fecha <= ?
                 ORDER BY fecha, nombre
@@ -435,7 +511,7 @@ def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
             )).fetchall()
         else:
             rows = conn.execute("""
-                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, creado_en
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, creado_en
                 FROM justificaciones ORDER BY fecha DESC, nombre
             """).fetchall()
     return [dict(r) for r in rows]
@@ -448,6 +524,33 @@ def get_justificaciones_dict(fecha_inicio=None, fecha_fin=None) -> dict:
     """
     lista = get_justificaciones(fecha_inicio, fecha_fin)
     return {(j["id_usuario"], j["fecha"], j["tipo"]): j for j in lista}
+
+
+def get_justificaciones_pendientes() -> list:
+    """
+    Retorna justificaciones en estado 'pendiente'.
+    Usada por el dashboard para mostrar el badge de cantidad.
+    """
+    with _conn() as conn:
+        rows = conn.execute("""
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, creado_en
+            FROM justificaciones
+            WHERE estado = 'pendiente'
+            ORDER BY fecha, nombre
+        """).fetchall()
+    return [dict(r) for r in rows]
+
+
+def actualizar_estado_justificacion(id_justificacion: int, estado: str) -> bool:
+    """
+    Cambia estado de 'pendiente' a 'aprobada' o 'rechazada'.
+    """
+    with _conn() as conn:
+        cursor = conn.execute(
+            "UPDATE justificaciones SET estado = ?, creado_en = datetime('now') WHERE id = ?",
+            (estado, id_justificacion)
+        )
+    return cursor.rowcount > 0
 
 
 def eliminar_justificacion(id_justificacion: int) -> bool:

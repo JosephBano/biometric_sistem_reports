@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function fetchStatus() {
-    apiCall('/estado-sync')
+    apiCall('/api/estado-sync')
         .then(data => updateStatusBar(data))
         .catch(() => updateStatusBar(null));
 }
@@ -47,7 +47,7 @@ function updateStatusBar(data) {
 }
 
 function fetchEstadoHorarios() {
-    apiCall('/estado-horarios')
+    apiCall('/api/horarios/estado')
         .then(data => {
             const statusDot = document.getElementById('horarios-dot');
             const statusText = document.getElementById('horarios-status-text');
@@ -67,7 +67,7 @@ function iniciarSync() {
     document.getElementById('btn-sync').disabled = true;
     updateSyncUI({ estado: 'conectando' });
 
-    apiCall('/sincronizar', {
+    apiCall('/api/sincronizar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -84,7 +84,7 @@ function iniciarSync() {
 function pollSyncJob(jobId) {
     if (syncJobInterval) clearInterval(syncJobInterval);
     syncJobInterval = setInterval(() => {
-        apiCall('/sync-status/' + jobId)
+        apiCall('/api/sync-status/' + jobId)
             .then(data => {
                 updateSyncUI(data);
                 if (data.estado === 'completado') {
@@ -156,7 +156,7 @@ function ejecutarLimpiar() {
     const errObj = document.getElementById('limpiar-error');
     errObj.style.display = 'none';
 
-    apiCall('/limpiar-dispositivo', {
+    apiCall('/api/limpiar-dispositivo', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirmar: true, password: pwd })

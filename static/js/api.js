@@ -1,5 +1,44 @@
 // static/js/api.js
 
+/**
+ * Helper centralizado para llamadas al backend (Sección D.2)
+ */
+const API = {
+    async get(path) {
+        const res = await fetch(path);
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw await res.json();
+        return res.json();
+    },
+    async post(path, body) {
+        const res = await fetch(path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw await res.json();
+        return res.json();
+    },
+    async delete(path) {
+        const res = await fetch(path, { method: 'DELETE' });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw await res.json();
+        return res.json();
+    },
+    async patch(path, body) {
+        const res = await fetch(path, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (!res.ok) throw await res.json();
+        return res.json();
+    }
+};
+
+// Funciones para legacy compatibility o helpers directos
 function apiCall(url, options = {}) {
     return fetch(url, options)
         .then(response => {
@@ -21,22 +60,22 @@ function apiCall(url, options = {}) {
 function showSuccess(msg) {
     const alert = document.getElementById('global-success-alert');
     if(alert) {
-        document.getElementById('global-success-msg').textContent = msg;
+        const msgEl = document.getElementById('global-success-msg');
+        if (msgEl) msgEl.textContent = msg;
         alert.style.display = 'block';
         setTimeout(() => alert.style.display = 'none', 5000);
+    } else {
+        alert(msg);
     }
 }
 
 function showError(msg) {
     const alert = document.getElementById('global-error-alert');
     if(alert) {
-        document.getElementById('global-error-msg').textContent = msg;
+        const msgEl = document.getElementById('global-error-msg');
+        if (msgEl) msgEl.textContent = msg;
         alert.style.display = 'block';
+    } else {
+        alert("ERROR: " + msg);
     }
-}
-
-function checkPendingJustifications() {
-    // Para simplificar, obtenemos todas las justificaciones del mes para ver si hay pendientes
-    // Si la DB soporta estado, esto sirve para el badge rojo.
-    // Actualmente 'estado' es parte del rediseño.
 }
