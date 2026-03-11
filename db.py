@@ -5,7 +5,7 @@ Todas las rutas se leen desde variables de entorno.
 
 import os
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from contextlib import contextmanager
 
 DB_PATH = os.getenv("DB_PATH", "data/asistencias.db")
@@ -120,6 +120,20 @@ def init_db():
                 UNIQUE (id_usuario, fecha, tipo)
             );
 
+            CREATE TABLE IF NOT EXISTS breaks_categorizados (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                id_usuario   TEXT    NOT NULL,
+                fecha        TEXT    NOT NULL,
+                hora_inicio  TEXT    NOT NULL,   -- HH:MM — hora de Salida del break
+                hora_fin     TEXT    NOT NULL,   -- HH:MM — hora de Entrada de retorno
+                duracion_min INTEGER,
+                categoria    TEXT    NOT NULL CHECK(categoria IN ('almuerzo','permiso','injustificado')),
+                motivo       TEXT,
+                aprobado_por TEXT,
+                creado_en    TEXT    DEFAULT (datetime('now')),
+                UNIQUE (id_usuario, fecha, hora_inicio)
+            );
+
             CREATE TABLE IF NOT EXISTS feriados (
                 fecha        TEXT PRIMARY KEY,
                 descripcion  TEXT NOT NULL,
@@ -131,6 +145,8 @@ def init_db():
         _migrar_columna(conn, "justificaciones", "hora_permitida", "TEXT")
         _migrar_columna(conn, "justificaciones", "estado",         "TEXT DEFAULT 'aprobada'")
         _migrar_columna(conn, "justificaciones", "duracion_permitida_min", "INTEGER")
+        _migrar_columna(conn, "justificaciones", "hora_retorno_permiso", "TEXT")
+        _migrar_columna(conn, "justificaciones", "incluye_almuerzo",    "INTEGER DEFAULT 0")
         _migrar_columna(conn, "horarios_personal", "horas_semana", "REAL")
         _migrar_columna(conn, "horarios_personal", "horas_mes",    "REAL")
 
@@ -477,28 +493,39 @@ def get_personas_con_id(fecha_inicio, fecha_fin) -> list[dict]:
 def insertar_justificacion(id_usuario: str, nombre: str, fecha: str,
                            tipo: str, motivo: str = "", aprobado_por: str = "",
                            hora_permitida: str = None, estado: str = "aprobada",
-                           duracion_permitida_min: int = None) -> dict:
+                           duracion_permitida_min: int = None,
+                           hora_retorno_permiso: str = None,
+                           incluye_almuerzo: int = 0) -> dict:
     """
     Inserta o reemplaza una justificación.
     fecha debe ser string 'YYYY-MM-DD'.
-    tipo: 'ausencia' | 'tardanza' | 'almuerzo' | 'incompleto' | 'salida_anticipada'
+    tipo: 'ausencia' | 'tardanza' | 'almuerzo' | 'incompleto' | 'salida_anticipada' | 'permiso'
+    incluye_almuerzo: 1 si el permiso absorbe el almuerzo habitual del empleado.
     """
     with _conn() as conn:
         conn.execute("""
             INSERT INTO justificaciones
-                (id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id_usuario, nombre, fecha, tipo, motivo, aprobado_por,
+                 hora_permitida, estado, duracion_permitida_min,
+                 hora_retorno_permiso, incluye_almuerzo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id_usuario, fecha, tipo) DO UPDATE SET
-                nombre       = excluded.nombre,
-                motivo       = excluded.motivo,
-                aprobado_por = excluded.aprobado_por,
-                hora_permitida = excluded.hora_permitida,
-                estado       = excluded.estado,
+                nombre                 = excluded.nombre,
+                motivo                 = excluded.motivo,
+                aprobado_por           = excluded.aprobado_por,
+                hora_permitida         = excluded.hora_permitida,
+                estado                 = excluded.estado,
                 duracion_permitida_min = excluded.duracion_permitida_min,
-                creado_en    = datetime('now')
-        """, (str(id_usuario), nombre, fecha, tipo, motivo or "", aprobado_por or "", hora_permitida, estado, duracion_permitida_min))
+                hora_retorno_permiso   = excluded.hora_retorno_permiso,
+                incluye_almuerzo       = excluded.incluye_almuerzo,
+                creado_en              = datetime('now')
+        """, (str(id_usuario), nombre, fecha, tipo, motivo or "", aprobado_por or "",
+              hora_permitida, estado, duracion_permitida_min,
+              hora_retorno_permiso, 1 if incluye_almuerzo else 0))
         row = conn.execute("""
-            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, creado_en
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por,
+                   hora_permitida, estado, duracion_permitida_min,
+                   hora_retorno_permiso, incluye_almuerzo, creado_en
             FROM justificaciones WHERE id_usuario=? AND fecha=? AND tipo=?
         """, (str(id_usuario), fecha, tipo)).fetchone()
     return dict(row) if row else {}
@@ -509,7 +536,7 @@ def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
     with _conn() as conn:
         if fecha_inicio and fecha_fin:
             rows = conn.execute("""
-                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, creado_en
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, hora_retorno_permiso, incluye_almuerzo, creado_en
                 FROM justificaciones
                 WHERE fecha >= ? AND fecha <= ?
                 ORDER BY fecha, nombre
@@ -519,7 +546,7 @@ def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
             )).fetchall()
         else:
             rows = conn.execute("""
-                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, creado_en
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, hora_retorno_permiso, incluye_almuerzo, creado_en
                 FROM justificaciones ORDER BY fecha DESC, nombre
             """).fetchall()
     return [dict(r) for r in rows]
@@ -541,7 +568,7 @@ def get_justificaciones_pendientes() -> list:
     """
     with _conn() as conn:
         rows = conn.execute("""
-            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, creado_en
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, hora_retorno_permiso, creado_en
             FROM justificaciones
             WHERE estado = 'pendiente'
             ORDER BY fecha, nombre
@@ -646,15 +673,14 @@ def importar_feriados_csv(filepath: str) -> int:
                 count += 1
     return count
 
-
 def get_estado_horarios() -> dict:
     """
     Retorna un resumen del estado de los horarios cargados.
     """
     with _conn() as conn:
-        total = conn.execute(
-            "SELECT COUNT(*) FROM horarios_personal"
-        ).fetchone()[0]
+        row_total = conn.execute("SELECT COUNT(*) FROM horarios_personal").fetchone()
+        total = row_total[0] if row_total else 0
+        
         ultima = conn.execute("""
             SELECT fuente, actualizado_en
             FROM horarios_personal
@@ -662,8 +688,62 @@ def get_estado_horarios() -> dict:
             LIMIT 1
         """).fetchone()
 
+        con_semana = conn.execute("SELECT COUNT(*) FROM horarios_personal WHERE horas_semana IS NOT NULL").fetchone()[0]
+        con_mes    = conn.execute("SELECT COUNT(*) FROM horarios_personal WHERE horas_mes IS NOT NULL").fetchone()[0]
+        con_almuerzo = conn.execute("SELECT COUNT(*) FROM horarios_personal WHERE almuerzo_min > 0").fetchone()[0]
+
     return {
         "total":          total,
-        "fuente":         ultima["fuente"]        if ultima else None,
+        "cargados":       total > 0,
+        "fuente":         ultima["fuente"] if ultima else None,
         "actualizado_en": ultima["actualizado_en"] if ultima else None,
+        "con_semana":     con_semana,
+        "con_mes":        con_mes,
+        "con_almuerzo":   con_almuerzo
     }
+
+# --- Múltiples Breaks / Categorización (Parte II) ---
+
+def get_breaks_categorizados_dict(fecha_inicio: date = None, fecha_fin: date = None) -> dict:
+    """
+    Retorna { id_usuario: { fecha_iso: [ {hora_inicio, hora_fin, categoria, ...}, ... ] } }
+    """
+    with _conn() as conn:
+        query = "SELECT id_usuario, fecha, hora_inicio, hora_fin, duracion_min, categoria, motivo, aprobado_por FROM breaks_categorizados"
+        params = []
+        if fecha_inicio and fecha_fin:
+            query += " WHERE fecha >= ? AND fecha <= ?"
+            params = [fecha_inicio.isoformat(), fecha_fin.isoformat()]
+        
+        rows = conn.execute(query, params).fetchall()
+        
+        res = {}
+        for r in rows:
+            uid = r["id_usuario"]
+            fec = r["fecha"]
+            if uid not in res: res[uid] = {}
+            if fec not in res[uid]: res[uid][fec] = []
+            res[uid][fec].append(dict(r))
+        return res
+
+def insertar_break_categorizado(id_usuario, fecha, hora_inicio, hora_fin, categoria, motivo="", aprobado_por=""):
+    """Inserta o actualiza la categorización de un break."""
+    duracion = None
+    try:
+        from datetime import datetime
+        t1 = datetime.strptime(hora_inicio, "%H:%M")
+        t2 = datetime.strptime(hora_fin, "%H:%M")
+        duracion = int((t2 - t1).total_seconds() / 60)
+    except: pass
+    
+    with _conn() as conn:
+        conn.execute("""
+            INSERT INTO breaks_categorizados (id_usuario, fecha, hora_inicio, hora_fin, duracion_min, categoria, motivo, aprobado_por)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id_usuario, fecha, hora_inicio) DO UPDATE SET
+                hora_fin = excluded.hora_fin,
+                duracion_min = excluded.duracion_min,
+                categoria = excluded.categoria,
+                motivo = excluded.motivo,
+                aprobado_por = excluded.aprobado_por
+        """, (str(id_usuario), fecha, hora_inicio, hora_fin, duracion, categoria, motivo, aprobado_por))

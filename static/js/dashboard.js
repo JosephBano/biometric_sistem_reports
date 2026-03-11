@@ -1,4 +1,5 @@
 let syncJobInterval = null;
+let _biometricPersonCount = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchStatus();
@@ -8,7 +9,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function fetchStatus() {
     apiCall('/api/estado-sync')
-        .then(data => updateStatusBar(data))
+        .then(data => {
+            _biometricPersonCount = data.personas_en_db || 0;
+            updateStatusBar(data);
+            fetchEstadoHorarios(); 
+        })
         .catch(() => updateStatusBar(null));
 }
 
@@ -24,7 +29,7 @@ function updateStatusBar(data) {
 
     if (data.dispositivo_accesible) {
         dot.className = 'status-dot dot-green';
-        text.textContent = 'Dispositivo en línea (' + (data.dispositivo_accesible ? '192.168.7.129' : '') + ')';
+        text.textContent = 'Dispositivo en línea (192.168.7.129)';
     } else {
         dot.className = 'status-dot dot-red';
         text.textContent = 'Dispositivo no accesible — modo offline';
@@ -35,12 +40,7 @@ function updateStatusBar(data) {
 
     if (data.ultima_sync) {
         const ts = new Date(data.ultima_sync.fecha_sync);
-        const fmt = ts.toLocaleString('es-ES', {
-            day: '2-digit', month: '2-digit', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
-        document.getElementById('status-ultima-sync').textContent =
-            fmt + ' (' + (data.ultima_sync.registros_nuevos > 0 ? '+' : '') + data.ultima_sync.registros_nuevos + ' nuevos)';
+        document.getElementById('status-ultima-sync').textContent = ts.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' (+' + data.ultima_sync.registros_nuevos + ')';
     } else {
         document.getElementById('status-ultima-sync').textContent = 'Nunca';
     }
@@ -51,13 +51,39 @@ function fetchEstadoHorarios() {
         .then(data => {
             const statusDot = document.getElementById('horarios-dot');
             const statusText = document.getElementById('horarios-status-text');
+            const detalles = document.getElementById('horarios-detalles');
             
             if (data.cargados) {
                 statusDot.className = 'status-dot dot-green';
-                statusText.innerHTML = `${data.total} personas con horario (fuente: ${data.fuente})`;
+                statusText.innerHTML = `${data.total} personas configuradas`;
+                
+                detalles.style.display = 'block';
+                document.getElementById('stat-semana').textContent = `${data.con_semana} sem`;
+                document.getElementById('stat-mes').textContent = `${data.con_mes} mes`;
+                document.getElementById('stat-almuerzo').textContent = `${data.con_almuerzo} con almuerzo`;
+                
+                // Cálculo de cobertura
+                if (_biometricPersonCount > 0) {
+                    const cobertura = Math.min(100, Math.round((data.total / _biometricPersonCount) * 100));
+                    let statCobertura = document.getElementById('stat-cobertura');
+                    if (!statCobertura) {
+                        const container = document.querySelector('#horarios-detalles .d-flex');
+                        statCobertura = document.createElement('span');
+                        statCobertura.id = 'stat-cobertura';
+                        statCobertura.className = 'badge bg-primary bg-opacity-10 text-primary fw-bold border border-primary border-opacity-25';
+                        container.appendChild(statCobertura);
+                    }
+                    statCobertura.textContent = `${cobertura}% cobertura`;
+                    statCobertura.title = `${data.total} de ${_biometricPersonCount} personas del biométrico tienen horario.`;
+                }
+                if (data.actualizado_en) {
+                    const ts = new Date(data.actualizado_en);
+                    document.getElementById('stat-actualizado').textContent = ts.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' + ts.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                }
             } else {
                 statusDot.className = 'status-dot dot-red';
                 statusText.innerHTML = 'Falta cargar el archivo de horarios';
+                detalles.style.display = 'none';
             }
         });
 }

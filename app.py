@@ -214,6 +214,7 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
     # Cargar justificaciones y feriados para el período
     justificaciones = db_module.get_justificaciones_dict(fecha_inicio, fecha_fin)
     feriados        = db_module.get_feriados_set(fecha_inicio, fecha_fin)
+    breaks_cat      = db_module.get_breaks_categorizados_dict(fecha_inicio, fecha_fin)
 
     permitir_sin_horario = filtros.get("reporte_sin_horario", False) or filtros.get("reporte_todos_usuarios", False)
 
@@ -222,8 +223,11 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
             registros, config, horarios=horarios,
             fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
             justificaciones=justificaciones, feriados=feriados,
+            breaks_categorizados=breaks_cat,
             mostrar_todos=filtros.get("mostrar_todos_los_dias", False),
             permitir_sin_horario=permitir_sin_horario,
+            verificar_horas=filtros.get("verificar_horas", False),
+            mostrar_tiempo_extra=filtros.get("mostrar_tiempo_extra", False),
         )
 
         if modo == "persona":
@@ -382,6 +386,8 @@ def generar_desde_db():
         "columna_tiempo_dentro":      False,
         "reporte_sin_horario":        False,
         "reporte_todos_usuarios":     False,
+        "verificar_horas":            False,
+        "mostrar_tiempo_extra":       False,
     }
     filtros_raw = data.get('filtros', {})
     filtros = {k: filtros_raw.get(k, v) for k, v in _DEFAULT_FILTROS.items()}
@@ -587,6 +593,32 @@ def _validar_horario_body(data: dict):
         return None, "almuerzo_min debe ser 0, 30 o 60."
     horario["almuerzo_min"] = almuerzo_min
 
+    # --- Horas de contrato (Parte I) ---
+    horas_semana = data.get("horas_semana")
+    horas_mes    = data.get("horas_mes")
+
+    def _parse_horas(val, campo):
+        if val is None or str(val).strip() == "":
+            return None, None
+        try:
+            v = float(val)
+            if v <= 0:
+                raise ValueError
+            return v, None
+        except (ValueError, TypeError):
+            return None, f"'{campo}' debe ser un número positivo."
+
+    hs, err = _parse_horas(horas_semana, "horas_semana")
+    if err: return None, err
+    hm, err = _parse_horas(horas_mes, "horas_mes")
+    if err: return None, err
+
+    if hs is not None and hm is not None:
+        return None, "Solo puede especificarse 'horas_semana' O 'horas_mes', no ambas."
+
+    horario["horas_semana"] = hs
+    horario["horas_mes"]    = hm
+
     return horario, None
 
 
@@ -603,7 +635,7 @@ def exportar_horarios_csv():
                      "lunes_salida", "martes_salida", "miercoles_salida", "jueves_salida", "viernes_salida", "sabado_salida", "domingo_salida",
                      "almuerzo_min",
                      "lunes_almuerzo_min", "martes_almuerzo_min", "miercoles_almuerzo_min", "jueves_almuerzo_min", "viernes_almuerzo_min", "sabado_almuerzo_min", "domingo_almuerzo_min",
-                     "notas"])
+                     "horas_semana", "horas_mes", "notas"])
     for h in lista:
         writer.writerow([
             h["id_usuario"],
@@ -630,6 +662,8 @@ def exportar_horarios_csv():
             h.get("viernes_almuerzo_min", ""),
             h.get("sabado_almuerzo_min", ""),
             h.get("domingo_almuerzo_min", ""),
+            h.get("horas_semana") or "",
+            h.get("horas_mes") or "",
             h.get("notas")   or "",
         ])
 
@@ -711,7 +745,9 @@ def crear_justificacion():
     aprobado   = str(data.get('aprobado_por', '')).strip()
     hora_permitida = str(data.get('hora_permitida', '')).strip() or None
     estado     = str(data.get('estado', 'aprobada')).strip()
-    
+    hora_retorno_permiso = str(data.get('hora_retorno_permiso', '')).strip() or None
+    incluye_almuerzo = 1 if data.get('incluye_almuerzo') else 0
+
     duracion_permitida_min = data.get('duracion_permitida_min')
     if duracion_permitida_min is not None and str(duracion_permitida_min).strip() != "":
         try:
@@ -723,10 +759,26 @@ def crear_justificacion():
 
     if not id_usuario or not nombre or not fecha or not tipo:
         return jsonify({'error': 'Campos requeridos: id_usuario, nombre, fecha, tipo'}), 400
-    if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto', 'salida_anticipada'):
-        return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto | salida_anticipada"}), 400
+    
+    if tipo == 'permiso':
+        if not hora_permitida:
+            return jsonify({'error': 'Para permisos es obligatoria la hora de salida'}), 400
+        if not hora_retorno_permiso:
+            return jsonify({'error': 'Para permisos es obligatoria la hora de retorno'}), 400
+        if not _HORA_RE.match(hora_permitida) or not _HORA_RE.match(hora_retorno_permiso):
+            return jsonify({'error': 'Las horas deben tener formato HH:MM'}), 400
+        if hora_retorno_permiso <= hora_permitida:
+            return jsonify({'error': 'La hora de retorno debe ser posterior a la de salida'}), 400
+            
+    if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto', 'salida_anticipada', 'permiso'):
+        return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto | salida_anticipada | permiso"}), 400
     try:
-        result = db_module.insertar_justificacion(id_usuario, nombre, fecha, tipo, motivo, aprobado, hora_permitida, estado, duracion_permitida_min)
+        result = db_module.insertar_justificacion(
+            id_usuario, nombre, fecha, tipo, motivo, aprobado,
+            hora_permitida, estado, duracion_permitida_min,
+            hora_retorno_permiso=hora_retorno_permiso,
+            incluye_almuerzo=incluye_almuerzo
+        )
         return jsonify({'success': True, 'justificacion': result}), 201
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -836,6 +888,29 @@ def exportar_feriados():
 # ══════════════════════════════════════════════════════════════════════════
 # ARRANQUE
 # ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/categorizar-break', methods=['POST'])
+def API_categorizar_break():
+    data = request.json or {}
+    id_usuario = data.get('id_usuario')
+    fecha      = data.get('fecha')
+    h_ini      = data.get('hora_inicio')
+    h_fin      = data.get('hora_fin')
+    cat        = data.get('categoria') # 'almuerzo' | 'permiso' | 'injustificado'
+    motivo     = data.get('motivo', '')
+    aprobado   = session.get('usuario', 'Admin')
+
+    if not all([id_usuario, fecha, h_ini, h_fin, cat]):
+        return jsonify({'error': 'Faltan campos (id_usuario, fecha, hora_inicio, hora_fin, categoria)'}), 400
+    
+    if cat not in ('almuerzo', 'permiso', 'injustificado'):
+        return jsonify({'error': 'Categoría inválida'}), 400
+
+    try:
+        db_module.insertar_break_categorizado(id_usuario, fecha, h_ini, h_fin, cat, motivo, aprobado)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(

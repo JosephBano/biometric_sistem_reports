@@ -1,5 +1,6 @@
 let offcanvasJustificacion = null;
 let tomSelectJustPersona = null;
+let _horariosJust = []; // Cache de horarios para calcular almuerzo_min del permiso
 
 document.addEventListener('DOMContentLoaded', () => {
     // Basic date setup
@@ -24,21 +25,57 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function abrirOffcanvasJustificacion() {
-    // Load people for select specifically from horarios because justificaciones need someone with schedule
     apiCall('/api/horarios')
         .then(data => {
+            _horariosJust = data.horarios || [];
             tomSelectJustPersona.clear();
             tomSelectJustPersona.clearOptions();
-            if(data.horarios) {
-                data.horarios.forEach(h => {
-                    // Valor será ID, y el text será el nombre completo.
-                    tomSelectJustPersona.addOption({ value: h.id_usuario, text: `${h.id_usuario} — ${h.nombre}` });
-                });
-            }
+            _horariosJust.forEach(h => {
+                tomSelectJustPersona.addOption({ value: h.id_usuario, text: `${h.id_usuario} — ${h.nombre}` });
+            });
         });
 
     cambioTipoJustificacion();
     offcanvasJustificacion.show();
+}
+
+/** Retorna almuerzo_min del empleado seleccionado, o 0 si no tiene. */
+function _getAlmuerzoMinPersona() {
+    const id = tomSelectJustPersona ? tomSelectJustPersona.getValue() : null;
+    if (!id) return 0;
+    const h = _horariosJust.find(x => String(x.id_usuario) === String(id));
+    return h ? (parseInt(h.almuerzo_min) || 0) : 0;
+}
+
+/** Calcula y actualiza el texto "Permiso neto estimado" en tiempo real. */
+function actualizarPermisoNeto() {
+    const tipo = document.getElementById('just-tipo').value;
+    if (tipo !== 'permiso') return;
+
+    const hSalida  = document.getElementById('just-hora_permitida').value;
+    const hRetorno = document.getElementById('just-hora_retorno_permiso').value;
+    const incluyeAlm = document.getElementById('just-incluye_almuerzo').checked;
+    const netoInfo = document.getElementById('permiso-neto-info');
+    const netoValor = document.getElementById('permiso-neto-valor');
+
+    if (!hSalida || !hRetorno) { netoInfo.style.display = 'none'; return; }
+
+    const [hs, ms] = hSalida.split(':').map(Number);
+    const [hr, mr] = hRetorno.split(':').map(Number);
+    let totalMin = (hr * 60 + mr) - (hs * 60 + ms);
+
+    if (totalMin <= 0) { netoInfo.style.display = 'none'; return; }
+
+    let netoMin = totalMin;
+    if (incluyeAlm) {
+        const almMin = _getAlmuerzoMinPersona();
+        netoMin = Math.max(0, totalMin - almMin);
+    }
+
+    const h = Math.floor(netoMin / 60);
+    const m = netoMin % 60;
+    netoValor.textContent = h > 0 ? `${h}h ${m.toString().padStart(2,'0')}m` : `${m}m`;
+    netoInfo.style.display = 'block';
 }
 
 /**
@@ -63,17 +100,24 @@ function cambioTipoJustificacion() {
     const tipo = document.getElementById('just-tipo').value;
     const container = document.getElementById('dynamic-fields-container');
     const dHora = document.getElementById('df-hora_permitida');
+    const dRetorno = document.getElementById('df-hora_retorno_permiso');
     const dDuracion = document.getElementById('df-duracion_permitida');
     const dMedia = document.getElementById('df-media_jornada');
+    const panelBreaks = document.getElementById('panel-categorizacion-breaks');
+
+    const dIncluyeAlm = document.getElementById('df-incluye_almuerzo');
 
     // Reset visibility
     dHora.style.display = 'none';
+    dRetorno.style.display = 'none';
     dDuracion.style.display = 'none';
     dMedia.style.display = 'none';
+    dIncluyeAlm.style.display = 'none';
     container.style.display = 'none';
+    panelBreaks.style.display = 'none';
+    document.getElementById('permiso-neto-info').style.display = 'none';
 
-    // Para la Sección C, esto será activo. Por ahora mostramos los campos pero advertimos si backend falla.
-    if(tipo === 'tardanza' || tipo === 'salida_anticipada') {
+    if (tipo === 'tardanza' || tipo === 'salida_anticipada') {
         container.style.display = 'block';
         dHora.style.display = 'block';
     } else if (tipo === 'almuerzo') {
@@ -82,6 +126,14 @@ function cambioTipoJustificacion() {
     } else if (tipo === 'ausencia') {
         container.style.display = 'block';
         dMedia.style.display = 'block';
+    } else if (tipo === 'incompleto') {
+        panelBreaks.style.display = 'block';
+    } else if (tipo === 'permiso') {
+        container.style.display = 'block';
+        dHora.style.display = 'block';
+        dRetorno.style.display = 'block';
+        dIncluyeAlm.style.display = 'block';
+        actualizarPermisoNeto();
     }
 }
 
@@ -189,13 +241,22 @@ function agregarJustificacion() {
     }
     
     const hPermitida = document.getElementById('just-hora_permitida').value;
+    const hRetorno = document.getElementById('just-hora_retorno_permiso').value;
     const durPermitida = document.getElementById('just-duracion_permitida').value;
     const isMedia = document.getElementById('just-media_jornada').checked;
     
-    if (hPermitida && (payload.tipo === 'tardanza' || payload.tipo === 'salida_anticipada')) {
+    if (hPermitida && (payload.tipo === 'tardanza' || payload.tipo === 'salida_anticipada' || payload.tipo === 'permiso')) {
         payload.hora_permitida = hPermitida;
     }
     
+    if (hRetorno && payload.tipo === 'permiso') {
+        payload.hora_retorno_permiso = hRetorno;
+    }
+
+    if (payload.tipo === 'permiso') {
+        payload.incluye_almuerzo = document.getElementById('just-incluye_almuerzo').checked;
+    }
+
     if (durPermitida && payload.tipo === 'almuerzo') {
         payload.duracion_permitida_min = durPermitida;
     }
@@ -214,8 +275,11 @@ function agregarJustificacion() {
         document.getElementById('just-motivo').value = '';
         document.getElementById('just-aprobado_por').value = '';
         document.getElementById('just-hora_permitida').value = '';
+        document.getElementById('just-hora_retorno_permiso').value = '';
         document.getElementById('just-duracion_permitida').value = '';
         document.getElementById('just-media_jornada').checked = false;
+        document.getElementById('just-incluye_almuerzo').checked = false;
+        document.getElementById('permiso-neto-info').style.display = 'none';
         cargarJustificaciones();
         showSuccess('Justificación agregada correctamente.');
     })
@@ -230,4 +294,35 @@ function eliminarJustificacion(jid) {
             showSuccess('Justificación eliminada.');
         })
         .catch(err => showError(err.message));
+}
+
+function categorizarBreak() {
+    const idUsuario = tomSelectJustPersona.getValue();
+    const fecha = document.getElementById('just-fecha').value;
+    const hIni = document.getElementById('cat-hora-ini').value;
+    const hFin = document.getElementById('cat-hora-fin').value;
+    const tipo = document.getElementById('cat-tipo').value;
+    const motivo = document.getElementById('just-motivo').value;
+
+    if (!idUsuario || !fecha || !hIni || !hFin || !tipo) {
+        return showError('Todos los campos de categorización son requeridos.');
+    }
+
+    apiCall('/api/categorizar-break', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id_usuario: idUsuario,
+            fecha: fecha,
+            hora_inicio: hIni,
+            hora_fin: hFin,
+            categoria: tipo,
+            motivo: motivo
+        })
+    })
+    .then(() => {
+        showSuccess('Categorización guardada. Se aplicará en el próximo análisis.');
+        offcanvasJustificacion.hide();
+    })
+    .catch(err => showError(`Error al categorizar: ${err.message}`));
 }

@@ -79,10 +79,25 @@ function formatIsoDate(date) {
 
 function actualizarVisibilidadModo() {
     const v = document.getElementById('modo').value;
+    const esGeneral = v === 'general';
+
     document.getElementById('persona-group').style.display = v === 'persona' ? 'block' : 'none';
     document.getElementById('varias-group').style.display = v === 'varias' ? 'block' : 'none';
-    
-    document.getElementById('especiales-group').style.display = v === 'general' ? 'block' : 'none';
+    document.getElementById('especiales-group').style.display = esGeneral ? 'block' : 'none';
+
+    // Grupo de filtros exclusivos de persona/varias
+    const grupoPersona = document.getElementById('filtros-persona-only');
+    if (grupoPersona) {
+        grupoPersona.style.display = esGeneral ? 'none' : 'block';
+        // Al cambiar a general, desactivar los filtros que no aplican
+        // para que no se envíen como activos y confundan al backend
+        if (esGeneral) {
+            ['f-ausencias', 'f-tiempo-dentro', 'f-horas-contrato', 'f-tiempo-extra'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.checked = false;
+            });
+        }
+    }
 
     reloadPersonas();
 }
@@ -154,6 +169,8 @@ function leerFiltros() {
         columna_tiempo_dentro:      chk('f-tiempo-dentro'),
         reporte_sin_horario:        chk('f-sin-horario'),
         reporte_todos_usuarios:     chk('f-todos-usuarios'),
+        verificar_horas:            chk('f-horas-contrato'),
+        mostrar_tiempo_extra:       chk('f-tiempo-extra'),
     };
 }
 

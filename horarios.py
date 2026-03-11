@@ -317,6 +317,11 @@ def parsear_csv(ruta: str) -> list[dict]:
                 except (ValueError, TypeError):
                     continue
 
+                def _to_float(val):
+                    if val is None or str(val).strip() == "": return None
+                    try: return float(str(val).strip())
+                    except: return None
+
                 horario = {
                     "id_usuario":   id_usuario,
                     "nombre":       nombre,
@@ -342,6 +347,8 @@ def parsear_csv(ruta: str) -> list[dict]:
                     "viernes_almuerzo_min": _normalizar_almuerzo(fila.get("viernes_almuerzo_min")) if fila.get("viernes_almuerzo_min") else None,
                     "sabado_almuerzo_min": _normalizar_almuerzo(fila.get("sabado_almuerzo_min")) if fila.get("sabado_almuerzo_min") else None,
                     "domingo_almuerzo_min": _normalizar_almuerzo(fila.get("domingo_almuerzo_min")) if fila.get("domingo_almuerzo_min") else None,
+                    "horas_semana": _to_float(fila.get("horas_semana")),
+                    "horas_mes":    _to_float(fila.get("horas_mes")),
                     "notas":        (fila.get("notas") or "").strip(),
                 }
                 horarios.append(horario)

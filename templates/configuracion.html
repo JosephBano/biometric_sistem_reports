@@ -26,10 +26,10 @@
                         Importar archivo
                         <input type="file" id="horarios-input" style="display:none" accept=".obd,.ods,.csv">
                     </label>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="exportarHorariosCsv()" id="btn-exportar-csv" title="Descargar horarios como CSV">
+                    <button class="btn btn-sm btn-outline-secondary" onclick="exportarHorariosCsv();" id="btn-exportar-csv" title="Descargar horarios como CSV">
                         Exportar CSV
                     </button>
-                    <button class="btn btn-sm btn-primary" onclick="abrirOffcanvasCrear()" id="btn-agregar-persona" title="Agregar persona manualmente">
+                    <button class="btn btn-sm btn-primary" onclick="abrirOffcanvasCrear();" id="btn-agregar-persona" title="Agregar persona manualmente">
                         + Agregar
                     </button>
                 </div>
@@ -45,7 +45,7 @@
 
                 <div class="row mb-3">
                     <div class="col-md-4">
-                        <input type="text" class="form-control form-control-sm" id="search-horarios" placeholder="Buscar por nombre o ID..." onkeyup="filtrarTablaHorarios()">
+                        <input type="text" class="form-control form-control-sm" id="search-horarios" placeholder="Buscar por nombre o ID..." onkeyup="filtrarTablaHorarios();">
                     </div>
                 </div>
 
@@ -63,11 +63,13 @@
                                 <th>S</th>
                                 <th>D</th>
                                 <th>Almuerzo</th>
+                                <th>H. contrato</th>
+                                <th>Notas</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="horarios-tbody">
-                            <tr><td colspan="11" class="text-center text-muted py-4">Cargando horarios...</td></tr>
+                            <tr><td colspan="13" class="text-center text-muted py-4">Cargando horarios...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -100,7 +102,7 @@
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <button class="btn btn-sm btn-primary w-100" onclick="agregarFeriado()">+ Agregar</button>
+                        <button class="btn btn-sm btn-primary w-100" onclick="agregarFeriado();">+ Agregar</button>
                     </div>
                 </div>
 
@@ -111,8 +113,8 @@
                             Importar CSV
                             <input type="file" id="feriados-import-file" style="display:none" accept=".csv">
                         </label>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="window.location.href='{{ url_for('exportar_feriados') }}'">Exportar CSV</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="cargarFeriados()"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">sync</span></button>
+                        <a href="{{ url_for('exportar_feriados') }}" class="btn btn-sm btn-outline-secondary">Exportar CSV</a>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="cargarFeriados();"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">sync</span></button>
                     </div>
                 </div>
 
@@ -160,7 +162,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-lunes">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-lunes-salida" placeholder="Salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-lunes" onchange="toggleDia('lunes')">
+                <input class="form-check-input" type="checkbox" id="mh-libre-lunes" onchange="toggleDia('lunes');">
                 <label class="form-check-label small" for="mh-libre-lunes">Libre</label>
             </div>
         </div>
@@ -170,7 +172,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-martes">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-martes-salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-martes" onchange="toggleDia('martes')">
+                <input class="form-check-input" type="checkbox" id="mh-libre-martes" onchange="toggleDia('martes');">
                 <label class="form-check-label small" for="mh-libre-martes">Libre</label>
             </div>
         </div>
@@ -180,7 +182,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-miercoles">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-miercoles-salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-miercoles" onchange="toggleDia('miercoles')">
+                <input class="form-check-input" type="checkbox" id="mh-libre-miercoles" onchange="toggleDia('miercoles');">
                 <label class="form-check-label small" for="mh-libre-miercoles">Libre</label>
             </div>
         </div>
@@ -190,7 +192,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-jueves">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-jueves-salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-jueves" onchange="toggleDia('jueves')">
+                <input class="form-check-input" type="checkbox" id="mh-libre-jueves" onchange="toggleDia('jueves');">
                 <label class="form-check-label small" for="mh-libre-jueves">Libre</label>
             </div>
         </div>
@@ -200,7 +202,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-viernes">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-viernes-salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-viernes" onchange="toggleDia('viernes')">
+                <input class="form-check-input" type="checkbox" id="mh-libre-viernes" onchange="toggleDia('viernes');">
                 <label class="form-check-label small" for="mh-libre-viernes">Libre</label>
             </div>
         </div>
@@ -210,7 +212,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-sabado">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-sabado-salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-sabado" onchange="toggleDia('sabado')" checked>
+                <input class="form-check-input" type="checkbox" id="mh-libre-sabado" onchange="toggleDia('sabado');" checked>
                 <label class="form-check-label small" for="mh-libre-sabado">Libre</label>
             </div>
         </div>
@@ -220,7 +222,7 @@
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-domingo">
             <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-domingo-salida">
             <div class="form-check form-switch mb-0" style="min-width:72px">
-                <input class="form-check-input" type="checkbox" id="mh-libre-domingo" onchange="toggleDia('domingo')" checked>
+                <input class="form-check-input" type="checkbox" id="mh-libre-domingo" onchange="toggleDia('domingo');" checked>
                 <label class="form-check-label small" for="mh-libre-domingo">Libre</label>
             </div>
         </div>
@@ -234,6 +236,33 @@
             <option value="60">60 minutos</option>
         </select>
     </div>
+
+    <!-- Horas de Contrato (Parte I) -->
+    <div class="mb-3 p-3 bg-light rounded-3 border">
+        <label class="form-label small fw-bold d-block mb-2">Horas de Contrato</label>
+        <div class="d-flex gap-3 mb-2">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasNone" value="none" checked onchange="toggleTipoHoras();">
+                <label class="form-check-label small" for="tipoHorasNone">Ninguno</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasSemana" value="semana" onchange="toggleTipoHoras();">
+                <label class="form-check-label small" for="tipoHorasSemana">Semanal</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasMes" value="mes" onchange="toggleTipoHoras();">
+                <label class="form-check-label small" for="tipoHorasMes">Mensual</label>
+            </div>
+        </div>
+        <div id="div-horas-semana" style="display:none">
+            <label class="form-label mb-1" style="font-size:0.75rem;">Horas por semana</label>
+            <input type="number" class="form-control form-control-sm" id="mh-horas-semana" min="1" step="0.5" placeholder="Ej: 40">
+        </div>
+        <div id="div-horas-mes" style="display:none">
+            <label class="form-label mb-1" style="font-size:0.75rem;">Horas por mes</label>
+            <input type="number" class="form-control form-control-sm" id="mh-horas-mes" min="1" step="0.5" placeholder="Ej: 160">
+        </div>
+    </div>
     
     <div class="mb-4">
         <label class="form-label small fw-semibold text-muted">Notas</label>
@@ -243,7 +272,7 @@
   </div>
   <div class="offcanvas-footer p-3 border-top d-flex justify-content-end gap-2">
     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="offcanvas">Cancelar</button>
-    <button type="button" class="btn btn-primary btn-sm px-4" onclick="guardarHorario()">Guardar</button>
+    <button type="button" class="btn btn-primary btn-sm px-4" onclick="guardarHorario();">Guardar</button>
   </div>
 </div>
 {% endblock %}
