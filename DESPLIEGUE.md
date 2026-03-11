@@ -414,7 +414,7 @@ Usa este flujo cuando quieres instalar el sistema en otra PC **sin copiar el có
 Primero asegurarse de que la imagen está construida:
 
 ```bash
-docker compose build
+docker compose build --no-cache
 ```
 
 Luego exportarla a un archivo `.tar`:

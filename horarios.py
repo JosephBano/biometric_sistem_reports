@@ -289,11 +289,7 @@ def parsear_csv(ruta: str) -> list[dict]:
     """
     import csv as _csv
 
-    COLUMNAS_REQ = {
-        "id_usuario", "nombre",
-        "lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo",
-        "almuerzo_min",
-    }
+    COLUMNAS_REQ = {"id_usuario", "nombre"}
 
     try:
         with open(ruta, encoding="utf-8-sig", newline="") as f:
