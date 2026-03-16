@@ -1,6 +1,7 @@
 let offcanvasJustificacion = null;
 let tomSelectJustPersona = null;
 let _horariosJust = []; // Cache de horarios para calcular almuerzo_min del permiso
+let justificacionEditandoId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     // Basic date setup
@@ -25,6 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function abrirOffcanvasJustificacion() {
+    justificacionEditandoId = null;
+    document.getElementById('offcanvasJustificacionLabel').textContent = 'Nueva Justificación';
+    const btnSubmit = document.querySelector('#offcanvas-justificacion .offcanvas-footer .btn-primary');
+    if (btnSubmit) {
+        btnSubmit.textContent = 'Crear y Aprobar';
+        btnSubmit.setAttribute('onclick', 'agregarJustificacion()');
+    }
+
     apiCall('/api/horarios')
         .then(data => {
             _horariosJust = data.horarios || [];
@@ -96,6 +105,14 @@ window.checkPendingJustifications = function() {
         });
 };
 
+function toggleCamposRecuperacion() {
+    const chk = document.getElementById('just-recuperable');
+    const campos = document.getElementById('campos-recuperacion');
+    if (chk && campos) {
+        campos.style.display = chk.checked ? 'flex' : 'none';
+    }
+}
+
 function cambioTipoJustificacion() {
     const tipo = document.getElementById('just-tipo').value;
     const container = document.getElementById('dynamic-fields-container');
@@ -103,6 +120,7 @@ function cambioTipoJustificacion() {
     const dRetorno = document.getElementById('df-hora_retorno_permiso');
     const dDuracion = document.getElementById('df-duracion_permitida');
     const dMedia = document.getElementById('df-media_jornada');
+    const dRecuperable = document.getElementById('df-recuperable');
     const panelBreaks = document.getElementById('panel-categorizacion-breaks');
 
     const dIncluyeAlm = document.getElementById('df-incluye_almuerzo');
@@ -112,6 +130,7 @@ function cambioTipoJustificacion() {
     dRetorno.style.display = 'none';
     dDuracion.style.display = 'none';
     dMedia.style.display = 'none';
+    if (dRecuperable) dRecuperable.style.display = 'none';
     dIncluyeAlm.style.display = 'none';
     container.style.display = 'none';
     panelBreaks.style.display = 'none';
@@ -120,6 +139,7 @@ function cambioTipoJustificacion() {
     if (tipo === 'tardanza' || tipo === 'salida_anticipada') {
         container.style.display = 'block';
         dHora.style.display = 'block';
+        if (dRecuperable && tipo === 'tardanza') dRecuperable.style.display = 'block';
     } else if (tipo === 'almuerzo') {
         container.style.display = 'block';
         dDuracion.style.display = 'block';
@@ -133,6 +153,7 @@ function cambioTipoJustificacion() {
         dHora.style.display = 'block';
         dRetorno.style.display = 'block';
         dIncluyeAlm.style.display = 'block';
+        if (dRecuperable) dRecuperable.style.display = 'block';
         actualizarPermisoNeto();
     }
 }
@@ -190,6 +211,7 @@ function cargarJustificaciones() {
                                 <button class="btn btn-sm btn-success py-0 px-2" onclick="cambiarEstadoJustificacion(${j.id}, 'aprobada')" title="Aprobar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">check_circle</span></button>
                                 <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="cambiarEstadoJustificacion(${j.id}, 'rechazada')" title="Rechazar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">cancel</span></button>
                             ` : ''}
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="abrirEditarJustificacion(${j.id})" title="Editar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">edit</span></button>
                                 <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="eliminarJustificacion(${j.id})" title="Eliminar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">delete</span></button>
                             </div>
                         </td>
@@ -264,6 +286,13 @@ function agregarJustificacion() {
     if (isMedia && payload.tipo === 'ausencia') {
         payload.motivo = "(Media Jornada) " + payload.motivo;
     }
+
+    const isRecuperable = document.getElementById('just-recuperable') ? document.getElementById('just-recuperable').checked : false;
+    if (isRecuperable && (payload.tipo === 'tardanza' || payload.tipo === 'permiso')) {
+        payload.recuperable = true;
+        payload.fecha_recuperacion = document.getElementById('just-fecha_recuperacion').value;
+        payload.hora_recuperacion = document.getElementById('just-hora_recuperacion').value;
+    }
     
     apiCall('/api/justificaciones', {
         method: 'POST',
@@ -279,6 +308,10 @@ function agregarJustificacion() {
         document.getElementById('just-duracion_permitida').value = '';
         document.getElementById('just-media_jornada').checked = false;
         document.getElementById('just-incluye_almuerzo').checked = false;
+        if(document.getElementById('just-recuperable')) document.getElementById('just-recuperable').checked = false;
+        if(document.getElementById('just-fecha_recuperacion')) document.getElementById('just-fecha_recuperacion').value = '';
+        if(document.getElementById('just-hora_recuperacion')) document.getElementById('just-hora_recuperacion').value = '';
+        if(typeof toggleCamposRecuperacion === 'function') toggleCamposRecuperacion();
         document.getElementById('permiso-neto-info').style.display = 'none';
         cargarJustificaciones();
         showSuccess('Justificación agregada correctamente.');
@@ -325,4 +358,109 @@ function categorizarBreak() {
         offcanvasJustificacion.hide();
     })
     .catch(err => showError(`Error al categorizar: ${err.message}`));
+}
+
+function abrirEditarJustificacion(jid) {
+    justificacionEditandoId = jid;
+    document.getElementById('offcanvasJustificacionLabel').textContent = 'Editar Justificación';
+    const btnSubmit = document.querySelector('#offcanvas-justificacion .offcanvas-footer .btn-primary');
+    if (btnSubmit) {
+        btnSubmit.textContent = 'Guardar Cambios';
+        btnSubmit.setAttribute('onclick', 'guardarCambiosJustificacion()');
+    }
+
+    // Cargar Catálogo de personas primero (o ya está cargado si se abrió antes)
+    apiCall('/api/horarios')
+        .then(data => {
+            _horariosJust = data.horarios || [];
+            tomSelectJustPersona.clearOptions();
+            _horariosJust.forEach(h => {
+                tomSelectJustPersona.addOption({ value: h.id_usuario, text: `${h.id_usuario} — ${h.nombre}` });
+            });
+            return apiCall(`/api/justificaciones/${jid}`);
+        })
+        .then(data => {
+            const j = data.justificacion;
+            tomSelectJustPersona.setValue(j.id_usuario);
+            document.getElementById('just-fecha').value = j.fecha;
+            document.getElementById('just-tipo').value = j.tipo;
+            document.getElementById('just-motivo').value = j.motivo || '';
+            document.getElementById('just-aprobado_por').value = j.aprobado_por || '';
+
+            document.getElementById('just-hora_permitida').value = j.hora_permitida || '';
+            document.getElementById('just-hora_retorno_permiso').value = j.hora_retorno_permiso || '';
+            document.getElementById('just-incluye_almuerzo').checked = j.incluye_almuerzo === 1;
+            document.getElementById('just-duracion_permitida').value = j.duracion_permitida_min || '';
+
+            if (document.getElementById('just-recuperable')) {
+                document.getElementById('just-recuperable').checked = j.recuperable === 1;
+                document.getElementById('just-fecha_recuperacion').value = j.fecha_recuperacion || '';
+                document.getElementById('just-hora_recuperacion').value = j.hora_recuperacion || '';
+                toggleCamposRecuperacion();
+            }
+
+            cambioTipoJustificacion();
+            offcanvasJustificacion.show();
+        })
+        .catch(err => showError(`Error al cargar datos: ${err.message}`));
+}
+
+function guardarCambiosJustificacion() {
+    if (!justificacionEditandoId) return;
+
+    const payload = {
+        fecha: document.getElementById('just-fecha').value,
+        tipo: document.getElementById('just-tipo').value,
+        motivo: document.getElementById('just-motivo').value.trim(),
+        aprobado_por: document.getElementById('just-aprobado_por').value.trim()
+    };
+
+    const hPermitida = document.getElementById('just-hora_permitida').value;
+    const hRetorno = document.getElementById('just-hora_retorno_permiso').value;
+    const durPermitida = document.getElementById('just-duracion_permitida').value;
+
+    if (hPermitida && (payload.tipo === 'tardanza' || payload.tipo === 'salida_anticipada' || payload.tipo === 'permiso')) {
+        payload.hora_permitida = hPermitida;
+    } else {
+        payload.hora_permitida = null;
+    }
+    
+    if (hRetorno && payload.tipo === 'permiso') {
+        payload.hora_retorno_permiso = hRetorno;
+    } else {
+        payload.hora_retorno_permiso = null;
+    }
+
+    if (payload.tipo === 'permiso') {
+        payload.incluye_almuerzo = document.getElementById('just-incluye_almuerzo').checked;
+    }
+
+    if (durPermitida && payload.tipo === 'almuerzo') {
+        payload.duracion_permitida_min = durPermitida;
+    } else {
+         payload.duracion_permitida_min = null;
+    }
+
+    const isRecuperable = document.getElementById('just-recuperable') ? document.getElementById('just-recuperable').checked : false;
+    if (isRecuperable && (payload.tipo === 'tardanza' || payload.tipo === 'permiso')) {
+        payload.recuperable = true;
+        payload.fecha_recuperacion = document.getElementById('just-fecha_recuperacion').value;
+        payload.hora_recuperacion = document.getElementById('just-hora_recuperacion').value;
+    } else {
+        payload.recuperable = false;
+        payload.fecha_recuperacion = null;
+        payload.hora_recuperacion = null;
+    }
+
+    apiCall(`/api/justificaciones/${justificacionEditandoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(() => {
+        offcanvasJustificacion.hide();
+        cargarJustificaciones();
+        showSuccess('Justificación actualizada correctamente.');
+    })
+    .catch(err => showError(`Error actualizando: ${err.message}`));
 }
