@@ -922,16 +922,49 @@ def analizar_por_persona(
                 from collections import defaultdict as _dd
                 semanas = _dd(int)
                 for d in dias_list:
-                    if d.get("tiempo_neto_min", 0) > 0:
-                        iso = d["fecha"].isocalendar()
-                        semanas[(iso[0], iso[1])] += d["tiempo_neto_min"]
+                    # Incluimos todos los días para no perder déficits de semanas incompletas
+                    iso = d["fecha"].isocalendar()
+                    semanas[(iso[0], iso[1])] += d.get("tiempo_neto_min", 0)
 
-                esperado_sem_min = int(hs * 60)
                 detalle_semanas, deficit_total_min, excedente_total_min = [], 0, 0
                 for (anio, num_sem), worked in sorted(semanas.items()):
+                    # Obtener inicio y fin de la semana ISO
+                    monday = date.fromisocalendar(anio, num_sem, 1)
+                    sunday = date.fromisocalendar(anio, num_sem, 7)
+
+                    # Intersección con el periodo de evaluación
+                    start_eval = max(monday, fecha_inicio) if fecha_inicio else monday
+                    end_eval = min(sunday, fecha_fin) if fecha_fin else sunday
+
+                    total_scheduled_days = 0
+                    scheduled_days_in_period = 0
+
+                    d_eval = monday
+                    while d_eval <= sunday:
+                        info = _get_info_dia(horario_persona, d_eval)
+                        if info["trabaja"]:
+                            total_scheduled_days += 1
+                            if (not fecha_inicio or d_eval >= fecha_inicio) and \
+                               (not fecha_fin or d_eval <= fecha_fin) and \
+                               (d_eval not in feriados):
+                                scheduled_days_in_period += 1
+                        d_eval += timedelta(days=1)
+
+                    if total_scheduled_days > 0:
+                        prop = scheduled_days_in_period / total_scheduled_days
+                        esperado_sem_min = int(hs * 60 * prop)
+                    else:
+                        esperado_sem_min = 0
+
                     diff = worked - esperado_sem_min
+                    
+                    # Formatear el rango de fechas para mostrar
+                    start_str = start_eval.strftime("%d/%m/%Y")
+                    end_str = end_eval.strftime("%d/%m/%Y")
+                    semana_rango = f"{start_str} - {end_str}"
+
                     detalle_semanas.append({
-                        "semana":         f"{anio}-S{num_sem:02d}",
+                        "semana":         semana_rango,
                         "trabajados_min": worked,
                         "esperados_min":  esperado_sem_min,
                         "diferencia_min": diff,
