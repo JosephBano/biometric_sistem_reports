@@ -515,6 +515,7 @@ def analizar_por_persona(
             continue
 
         dias_list = []
+        todos_los_dias = []
         resumen = {
             "total_dias":      0,
             "tardanza_leve":   0,
@@ -877,6 +878,7 @@ def analizar_por_persona(
                                     dia_info["estado"] = "leve"
                                 dia_info["observaciones"].append(f"Salida JUSTIFICADA: {just_salida.get('motivo','(Sin motivo)')}")
 
+            todos_los_dias.append(dia_info)
             # Incluir en dias_list si hay novedad, o siempre si mostrar_todos
             if mostrar_todos or dia_info["estado"] != "ok" or dia_info["observaciones"]:
                 dias_list.append(dia_info)
@@ -915,19 +917,21 @@ def analizar_por_persona(
                             resumen["total_dias"] += 1
                             dia_aus["observaciones"] = [f"AUSENCIA JUSTIFICADA: {just_aus.get('motivo','(Sin motivo)')}"]
                         
+                        todos_los_dias.append(dia_aus)
                         dias_list.append(dia_aus)
                 d += timedelta(days=1)
             dias_list.sort(key=lambda x: x["fecha"])
+            todos_los_dias.sort(key=lambda x: x["fecha"])
 
         if (verificar_horas or mostrar_tiempo_extra) and (horario_persona.get("horas_semana") or horario_persona.get("horas_mes")):
             hs = horario_persona.get("horas_semana")
             hm = horario_persona.get("horas_mes")
-            total_neto_min = sum(d.get("tiempo_neto_min", 0) for d in dias_list)
+            total_neto_min = sum(d.get("tiempo_neto_min", 0) for d in todos_los_dias)
 
             if hs:
                 from collections import defaultdict as _dd
                 semanas = _dd(int)
-                for d in dias_list:
+                for d in todos_los_dias:
                     # Incluimos todos los días para no perder déficits de semanas incompletas
                     iso = d["fecha"].isocalendar()
                     semanas[(iso[0], iso[1])] += d.get("tiempo_neto_min", 0)
