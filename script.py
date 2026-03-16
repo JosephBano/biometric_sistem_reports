@@ -816,6 +816,12 @@ def analizar_por_persona(
                 
                 dia_info["tiempo_neto_min"] = _calcular_tiempo_neto_min(marcaciones)
 
+                if n == 2 and max_almuerzo_per > 0:
+                    td_min = int((ultima["datetime"] - primera["datetime"]).total_seconds() / 60)
+                    if td_min > 360:  # Mayor a 6 horas
+                        dia_info["tiempo_neto_min"] = max(0, dia_info["tiempo_neto_min"] - max_almuerzo_per)
+                        dia_info["observaciones"].append(f"Almuerzo deducido autom. (-{max_almuerzo_per}m) por falta de marcaciones.")
+
                 # ── Análisis de salida anticipada ─────────────────────────
                 hora_salida_prog = info.get("hora_salida")
                 if hora_salida_prog and len(marcaciones) >= 2:
