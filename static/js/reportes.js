@@ -233,3 +233,53 @@ function generarReporte() {
         showError("Error al generar: " + err.message);
     });
 }
+
+function enviarPorEmail() {
+    const btn = document.querySelector('#persona-group button');
+    const emailInput = document.getElementById('email-destino');
+    const loading = document.getElementById('loading-spinner');
+    
+    const email = emailInput ? emailInput.value.trim() : '';
+    if (!email) return showError("Debe ingresar un correo electrónico.");
+    if (!email.includes('@') || !email.includes('.')) {
+        return showError("Formato de correo inválido.");
+    }
+    
+    const fi = document.getElementById('fecha-inicio').value;
+    const ff = document.getElementById('fecha-fin').value;
+    const excl = document.getElementById('excluidos').value.split(',').map(s => s.trim()).filter(s => s);
+    const filtros = leerFiltros();
+    const p = tomSelectPersonaRpt ? tomSelectPersonaRpt.getValue() : '';
+
+    if (!p) return showError("Debe seleccionar una persona.");
+    if (!fi || !ff) return showError("Debe seleccionar un rango de fechas.");
+
+    const payload = {
+        fecha_inicio: fi,
+        fecha_fin: ff,
+        persona: p,
+        email: email,
+        filtros: filtros,
+        excluidos: excl
+    };
+
+    if(loading) loading.style.display = 'block';
+    if(btn) btn.disabled = true;
+
+    apiCall('/api/reportes/enviar-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(data => {
+        if(loading) loading.style.display = 'none';
+        if(btn) btn.disabled = false;
+        showSuccess(data.message || 'Reporte enviado por correo correctamente.');
+        if(emailInput) emailInput.value = '';
+    })
+    .catch(err => {
+        if(loading) loading.style.display = 'none';
+        if(btn) btn.disabled = false;
+        showError("Error al enviar: " + err.message);
+    });
+}
