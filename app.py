@@ -19,6 +19,10 @@ import re
 import csv
 import io
 import sys
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
 import threading
 import time
 from datetime import datetime, date
@@ -140,6 +144,46 @@ def utility_processor():
 # ══════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════
+
+def enviar_correo(destinatario: str, asunto: str, cuerpo: str, adjunto_path: str = None) -> bool:
+    """
+    Envia un correo usando SMTP configurado en el entorno.
+    """
+    host = os.getenv("SMTP_HOST")
+    port = os.getenv("SMTP_PORT")
+    user = os.getenv("SMTP_USER")
+    pwd  = os.getenv("SMTP_PASSWORD")
+    use_tls = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
+    sender = os.getenv("SMTP_FROM", user)
+
+    if not all([host, port, user, pwd]):
+         return False
+
+    try:
+         msg = MIMEMultipart()
+         msg['From'] = sender
+         msg['To'] = destinatario
+         msg['Subject'] = asunto
+         msg.attach(MIMEText(cuerpo, 'html'))
+
+         if adjunto_path and os.path.exists(adjunto_path):
+              filename = os.path.basename(adjunto_path)
+              with open(adjunto_path, "rb") as f:
+                   part = MIMEApplication(f.read(), Name=filename)
+                   part['Content-Disposition'] = f'attachment; filename="{filename}"'
+                   msg.attach(part)
+
+         server = smtplib.SMTP(host, int(port), timeout=10)
+         if use_tls:
+              server.starttls()
+         server.login(user, pwd)
+         server.send_message(msg)
+         server.quit()
+         return True
+    except Exception as e:
+         print(f"Error enviando correo: {e}", file=sys.stderr)
+         return False
+
 
 def _parse_config(data: dict) -> dict:
     return {
@@ -359,6 +403,59 @@ def personas_db():
     return jsonify({'personas': personas})
 
 
+@app.route('/api/alertas/tardanzas-severas')
+def alertas_tardanzas_severas():
+    """Retorna personas con 3 o más tardanzas severas en el mes actual."""
+    hoy = date.today()
+    fecha_inicio = hoy.replace(day=1)
+    fecha_fin = hoy
+
+    registros = db_module.consultar_asistencias(fecha_inicio, fecha_fin)
+    if not registros:
+        return jsonify({'alertas': []})
+
+    config = {
+        "duplicado_min": DEFAULT_CONFIG["duplicado_min"],
+        "excluidos":     [],
+    }
+    justificaciones = db_module.get_justificaciones_dict(fecha_inicio, fecha_fin)
+    feriados = db_module.get_feriados_set(fecha_inicio, fecha_fin)
+    breaks_cat = db_module.get_breaks_categorizados_dict(fecha_inicio, fecha_fin)
+    horarios = db_module.get_horarios()
+
+    if not horarios["by_id"]:
+        return jsonify({'alertas': [], 'warning': 'No hay horarios cargados'})
+
+    try:
+        registros_dedup, _ = deduplicar(registros, config["duplicado_min"])
+        
+        analisis = analizar_por_persona(
+            registros_dedup, config, horarios=horarios,
+            fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
+            justificaciones=justificaciones, feriados=feriados,
+            breaks_categorizados=breaks_cat
+        )
+        
+        alertas = []
+        for persona, info in analisis.items():
+            conteo = info["resumen"].get("tardanza_severa", 0)
+            if conteo >= 3:
+                # Buscar id_usuario en los registros
+                id_u = ""
+                for r in registros:
+                    if r["nombre"] == persona:
+                        id_u = r.get("id_usuario") or ""
+                        break
+                alertas.append({
+                    "persona": persona,
+                    "id_usuario": id_u,
+                    "conteo": conteo
+                })
+        return jsonify({'alertas': alertas})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/generar-desde-db', methods=['POST'])
 def generar_desde_db():
     data = request.json
@@ -419,6 +516,66 @@ def generar_desde_db():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/reportes/enviar-email', methods=['POST'])
+def enviar_reporte_email():
+    """Genera el reporte de una persona y lo envía por correo electrónico."""
+    data = request.json or {}
+    try:
+        fecha_inicio = datetime.strptime(data['fecha_inicio'], "%Y-%m-%d").date()
+        fecha_fin    = datetime.strptime(data['fecha_fin'],    "%Y-%m-%d").date()
+    except (KeyError, ValueError):
+        return jsonify({'error': 'Fechas requeridas en formato YYYY-MM-DD'}), 400
+
+    persona = data.get('persona', '')
+    destinatario = data.get('email', '').strip()
+
+    if not persona:
+        return jsonify({'error': 'Especifique una persona para el reporte.'}), 400
+    if not destinatario:
+        return jsonify({'error': 'Especifique un correo electrónico de destino.'}), 400
+    if '@' not in destinatario or '.' not in destinatario:
+        return jsonify({'error': 'Formato de correo electrónico inválido.'}), 400
+
+    config = _parse_config(data)
+    filtros = data.get('filtros', {})
+    registros = db_module.consultar_asistencias(fecha_inicio, fecha_fin)
+    if not registros:
+        return jsonify({'error': 'No hay registros en la base de datos para ese rango de fechas.'}), 400
+
+    nombre_origen = f"Base de datos ({fecha_inicio.strftime('%d/%m/%Y')} — {fecha_fin.strftime('%d/%m/%Y')})"
+    pdf_filename = f"reporte_{uuid.uuid4().hex[:8]}.pdf"
+    pdf_path     = os.path.join(app.config['REPORTS_FOLDER'], pdf_filename)
+
+    try:
+        _build_pdf(registros, config, "persona", persona, pdf_path, nombre_origen,
+                   fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, filtros=filtros)
+        
+        asunto = f"Informe de Asistencia - {persona}"
+        cuerpo = f"""
+        <p>Estimado/a,</p>
+        <p>Adjunto encontrará el informe de asistencia para <b>{persona}</b> correspondiente al período {fecha_inicio.strftime('%d/%m/%Y')} - {fecha_fin.strftime('%d/%m/%Y')}.</p>
+        <br>
+        <p>Saludos cordiales,<br>Sistema de Asistencia</p>
+        """
+        
+        exito = enviar_correo(destinatario, asunto, cuerpo, pdf_path)
+        
+        if os.path.exists(pdf_path):
+            os.remove(pdf_path)
+             
+        if exito:
+            return jsonify({'success': True, 'message': f'Correo enviado correctamente a {destinatario}'})
+        else:
+            return jsonify({'error': 'Error al enviar el correo. Verifique la configuración SMTP.'}), 500
+
+    except ValueError as e:
+        if os.path.exists(pdf_path): os.remove(pdf_path)
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        if os.path.exists(pdf_path): os.remove(pdf_path)
         return jsonify({'error': str(e)}), 500
 
 
@@ -747,6 +904,10 @@ def crear_justificacion():
     estado     = str(data.get('estado', 'aprobada')).strip()
     hora_retorno_permiso = str(data.get('hora_retorno_permiso', '')).strip() or None
     incluye_almuerzo = 1 if data.get('incluye_almuerzo') else 0
+    
+    recuperable = 1 if data.get('recuperable') else 0
+    fecha_recuperacion = str(data.get('fecha_recuperacion', '')).strip() or None
+    hora_recuperacion = str(data.get('hora_recuperacion', '')).strip() or None
 
     duracion_permitida_min = data.get('duracion_permitida_min')
     if duracion_permitida_min is not None and str(duracion_permitida_min).strip() != "":
@@ -770,6 +931,18 @@ def crear_justificacion():
         if hora_retorno_permiso <= hora_permitida:
             return jsonify({'error': 'La hora de retorno debe ser posterior a la de salida'}), 400
             
+    if recuperable:
+        if not fecha_recuperacion or not hora_recuperacion:
+            return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha y hora de recuperación'}), 400
+        try:
+            f_rec = datetime.strptime(fecha_recuperacion, "%Y-%m-%d").date()
+            if f_rec < date.today():
+                return jsonify({'error': 'La fecha de recuperación debe ser futura o el día de hoy'}), 400
+        except ValueError:
+            return jsonify({'error': 'Formato de fecha_recuperacion inválido. Use YYYY-MM-DD'}), 400
+        if not _HORA_RE.match(hora_recuperacion):
+            return jsonify({'error': 'La hora de recuperación debe tener formato HH:MM'}), 400
+
     if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto', 'salida_anticipada', 'permiso'):
         return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto | salida_anticipada | permiso"}), 400
     try:
@@ -777,7 +950,10 @@ def crear_justificacion():
             id_usuario, nombre, fecha, tipo, motivo, aprobado,
             hora_permitida, estado, duracion_permitida_min,
             hora_retorno_permiso=hora_retorno_permiso,
-            incluye_almuerzo=incluye_almuerzo
+            incluye_almuerzo=incluye_almuerzo,
+            recuperable=recuperable,
+            fecha_recuperacion=fecha_recuperacion,
+            hora_recuperacion=hora_recuperacion
         )
         return jsonify({'success': True, 'justificacion': result}), 201
     except Exception as e:
@@ -798,6 +974,66 @@ def actualizar_justificacion_estado(jid):
     if db_module.actualizar_estado_justificacion(jid, estado):
         return jsonify({'success': True})
     return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
+
+
+@app.route('/api/justificaciones/<int:jid>', methods=['GET'])
+def get_justificacion(jid):
+    """Retorna los datos de una justificación por su ID."""
+    j = db_module.get_justificacion_by_id(jid)
+    if not j:
+        return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
+    return jsonify({'justificacion': j})
+
+
+@app.route('/api/justificaciones/<int:jid>', methods=['PUT'])
+def actualizar_justificacion(jid):
+    """Actualiza una justificación completa por su ID."""
+    current = db_module.get_justificacion_by_id(jid)
+    if not current:
+        return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
+        
+    data = request.json or {}
+    campos = {}
+    
+    permitidos = [
+        'fecha', 'tipo', 'motivo', 'aprobado_por', 'hora_permitida', 'estado', 
+        'duracion_permitida_min', 'hora_retorno_permiso', 
+        'incluye_almuerzo', 'recuperable', 'fecha_recuperacion', 'hora_recuperacion'
+    ]
+    for k in permitidos:
+        if k in data:
+            campos[k] = data[k]
+            
+    # Validaciones
+    if 'duracion_permitida_min' in campos and campos['duracion_permitida_min'] is not None and str(campos['duracion_permitida_min']).strip() != "":
+        try:
+            campos['duracion_permitida_min'] = int(campos['duracion_permitida_min'])
+        except ValueError:
+            return jsonify({'error': 'duracion_permitida_min debe ser un número entero'}), 400
+    elif 'duracion_permitida_min' in campos:
+        campos['duracion_permitida_min'] = None
+        
+    if 'incluye_almuerzo' in campos:
+        campos['incluye_almuerzo'] = 1 if campos['incluye_almuerzo'] else 0
+        
+    if 'recuperable' in campos:
+        campos['recuperable'] = 1 if campos['recuperable'] else 0
+        
+    rec = campos.get('recuperable', current.get('recuperable', 0))
+    if rec:
+        f_rec = campos.get('fecha_recuperacion', current.get('fecha_recuperacion'))
+        h_rec = campos.get('hora_recuperacion', current.get('hora_recuperacion'))
+        if not f_rec or not h_rec:
+             return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha y hora de recuperación'}), 400
+        if not _HORA_RE.match(str(h_rec)):
+             return jsonify({'error': 'La hora de recuperación debe tener formato HH:MM'}), 400
+
+    try:
+        if db_module.actualizar_justificacion_completa(jid, **campos):
+            return jsonify({'success': True})
+        return jsonify({'error': 'No se realizaron cambios o campos inválidos'}), 400
+    except Exception as e:
+        return jsonify({'error': f"Error al actualizar: {str(e)}"}), 500
 
 
 @app.route('/api/justificaciones/<int:jid>', methods=['DELETE'])

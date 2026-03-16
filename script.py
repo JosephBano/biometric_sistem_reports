@@ -46,7 +46,7 @@ from reportlab.platypus import KeepTogether
 DEFAULT_CONFIG = {
     # Minutos máximos entre dos marcaciones consecutivas iguales
     # para considerar la segunda como duplicado por error
-    "duplicado_min": 5,
+    "duplicado_min": 0.5,
 
     # Personas a excluir del reporte (por nombre exacto o parcial)
     "excluidos": [],
@@ -181,7 +181,7 @@ def filtrar_excluidos(registros: list[dict], excluidos: list[str]) -> list[dict]
     ]
 
 
-def deduplicar(registros: list[dict], max_min: int = 10) -> tuple[list[dict], list[dict]]:
+def deduplicar(registros: list[dict], max_min: float = 0.5) -> tuple[list[dict], list[dict]]:
     """
     Elimina marcaciones duplicadas por error humano.
 
@@ -533,7 +533,13 @@ def analizar_por_persona(
         def _get_justificado(fecha_eval: date, tipo_obs: str) -> dict:
             if not id_usuario:
                 return None
-            return justificaciones.get((str(id_usuario), fecha_eval.isoformat(), tipo_obs))
+            j = justificaciones.get((str(id_usuario), fecha_eval.isoformat(), tipo_obs))
+            if j and j.get("recuperable") == 1:
+                # Modificar el motivo para incluir la nota
+                nota = f" [RECUPERABLE – se compensará {j.get('fecha_recuperacion')} {j.get('hora_recuperacion')}]"
+                j = dict(j)  # copiar para no mutar el dict global
+                j["motivo"] = (j.get("motivo") or "") + nota
+            return j
 
         for fecha, marcaciones in sorted(por_fecha.items()):
             marcaciones.sort(key=lambda x: x["datetime"])
@@ -2097,7 +2103,7 @@ def main():
     parser.add_argument("--excluir", nargs="+", metavar="NOMBRE",
         default=[],
         help='Personas a excluir (ej: --excluir "Juan Perez" "Maria Lopez")')
-    parser.add_argument("--duplicado-min", type=int,
+    parser.add_argument("--duplicado-min", type=float,
         default=DEFAULT_CONFIG["duplicado_min"],
         metavar="MINUTOS",
         help=f"Minutos máximos para considerar marcación como duplicado (default: {DEFAULT_CONFIG['duplicado_min']})")

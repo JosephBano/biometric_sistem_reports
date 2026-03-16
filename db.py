@@ -147,6 +147,9 @@ def init_db():
         _migrar_columna(conn, "justificaciones", "duracion_permitida_min", "INTEGER")
         _migrar_columna(conn, "justificaciones", "hora_retorno_permiso", "TEXT")
         _migrar_columna(conn, "justificaciones", "incluye_almuerzo",    "INTEGER DEFAULT 0")
+        _migrar_columna(conn, "justificaciones", "recuperable",         "INTEGER DEFAULT 0")
+        _migrar_columna(conn, "justificaciones", "fecha_recuperacion",  "TEXT")
+        _migrar_columna(conn, "justificaciones", "hora_recuperacion",   "TEXT")
         
         # Nuevas columnas de Horarios (Part II: Salidas y Almuerzos por día)
         _migrar_columna(conn, "horarios_personal", "domingo",          "TEXT")
@@ -513,7 +516,10 @@ def insertar_justificacion(id_usuario: str, nombre: str, fecha: str,
                            hora_permitida: str = None, estado: str = "aprobada",
                            duracion_permitida_min: int = None,
                            hora_retorno_permiso: str = None,
-                           incluye_almuerzo: int = 0) -> dict:
+                           incluye_almuerzo: int = 0,
+                           recuperable: int = 0,
+                           fecha_recuperacion: str = None,
+                           hora_recuperacion: str = None) -> dict:
     """
     Inserta o reemplaza una justificación.
     fecha debe ser string 'YYYY-MM-DD'.
@@ -525,8 +531,9 @@ def insertar_justificacion(id_usuario: str, nombre: str, fecha: str,
             INSERT INTO justificaciones
                 (id_usuario, nombre, fecha, tipo, motivo, aprobado_por,
                  hora_permitida, estado, duracion_permitida_min,
-                 hora_retorno_permiso, incluye_almuerzo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 hora_retorno_permiso, incluye_almuerzo,
+                 recuperable, fecha_recuperacion, hora_recuperacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id_usuario, fecha, tipo) DO UPDATE SET
                 nombre                 = excluded.nombre,
                 motivo                 = excluded.motivo,
@@ -536,14 +543,19 @@ def insertar_justificacion(id_usuario: str, nombre: str, fecha: str,
                 duracion_permitida_min = excluded.duracion_permitida_min,
                 hora_retorno_permiso   = excluded.hora_retorno_permiso,
                 incluye_almuerzo       = excluded.incluye_almuerzo,
+                recuperable            = excluded.recuperable,
+                fecha_recuperacion     = excluded.fecha_recuperacion,
+                hora_recuperacion      = excluded.hora_recuperacion,
                 creado_en              = datetime('now')
         """, (str(id_usuario), nombre, fecha, tipo, motivo or "", aprobado_por or "",
               hora_permitida, estado, duracion_permitida_min,
-              hora_retorno_permiso, 1 if incluye_almuerzo else 0))
+              hora_retorno_permiso, 1 if incluye_almuerzo else 0,
+              recuperable, fecha_recuperacion, hora_recuperacion))
         row = conn.execute("""
             SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por,
                    hora_permitida, estado, duracion_permitida_min,
-                   hora_retorno_permiso, incluye_almuerzo, creado_en
+                   hora_retorno_permiso, incluye_almuerzo, creado_en,
+                   recuperable, fecha_recuperacion, hora_recuperacion
             FROM justificaciones WHERE id_usuario=? AND fecha=? AND tipo=?
         """, (str(id_usuario), fecha, tipo)).fetchone()
     return dict(row) if row else {}
@@ -554,7 +566,7 @@ def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
     with _conn() as conn:
         if fecha_inicio and fecha_fin:
             rows = conn.execute("""
-                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, hora_retorno_permiso, incluye_almuerzo, creado_en
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, hora_retorno_permiso, incluye_almuerzo, creado_en, recuperable, fecha_recuperacion, hora_recuperacion
                 FROM justificaciones
                 WHERE fecha >= ? AND fecha <= ?
                 ORDER BY fecha, nombre
@@ -564,7 +576,7 @@ def get_justificaciones(fecha_inicio=None, fecha_fin=None) -> list[dict]:
             )).fetchall()
         else:
             rows = conn.execute("""
-                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, hora_retorno_permiso, incluye_almuerzo, creado_en
+                SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, duracion_permitida_min, hora_retorno_permiso, incluye_almuerzo, creado_en, recuperable, fecha_recuperacion, hora_recuperacion
                 FROM justificaciones ORDER BY fecha DESC, nombre
             """).fetchall()
     return [dict(r) for r in rows]
@@ -586,7 +598,7 @@ def get_justificaciones_pendientes() -> list:
     """
     with _conn() as conn:
         rows = conn.execute("""
-            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, hora_retorno_permiso, creado_en
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, hora_permitida, estado, hora_retorno_permiso, creado_en, recuperable, fecha_recuperacion, hora_recuperacion
             FROM justificaciones
             WHERE estado = 'pendiente'
             ORDER BY fecha, nombre
@@ -612,6 +624,50 @@ def eliminar_justificacion(id_justificacion: int) -> bool:
         cursor = conn.execute(
             "DELETE FROM justificaciones WHERE id = ?", (id_justificacion,)
         )
+    return cursor.rowcount > 0
+
+
+def get_justificacion_by_id(id_justificacion: int) -> dict:
+    """Retorna los datos de una justificación por su ID."""
+    with _conn() as conn:
+        row = conn.execute("""
+            SELECT id, id_usuario, nombre, fecha, tipo, motivo, aprobado_por, 
+                   hora_permitida, estado, duracion_permitida_min, 
+                   hora_retorno_permiso, incluye_almuerzo, creado_en,
+                   recuperable, fecha_recuperacion, hora_recuperacion
+            FROM justificaciones WHERE id = ?
+        """, (id_justificacion,)).fetchone()
+    return dict(row) if row else {}
+
+
+def actualizar_justificacion_completa(id_justificacion: int, **campos) -> bool:
+    """
+    Actualiza campos específicos de una justificación de forma dinámica.
+    """
+    if not campos:
+        return False
+    
+    permitidos = {
+        'fecha', 'tipo', 'motivo', 'aprobado_por', 'hora_permitida', 'estado', 
+        'duracion_permitida_min', 'hora_retorno_permiso', 
+        'incluye_almuerzo', 'recuperable', 'fecha_recuperacion', 'hora_recuperacion'
+    }
+    set_clauses = []
+    params = []
+    for k, v in campos.items():
+        if k in permitidos:
+            set_clauses.append(f"{k} = ?")
+            params.append(v)
+            
+    if not set_clauses:
+        return False
+        
+    set_clauses.append("creado_en = datetime('now')")
+    query = f"UPDATE justificaciones SET {', '.join(set_clauses)} WHERE id = ?"
+    params.append(id_justificacion)
+    
+    with _conn() as conn:
+        cursor = conn.execute(query, params)
     return cursor.rowcount > 0
 
 
