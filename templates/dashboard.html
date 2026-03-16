@@ -69,6 +69,28 @@
     </div>
 </div>
 
+<div class="row g-4 mb-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0" style="border-radius: 12px; border-left: 4px solid #ffc107 !important;">
+            <div class="card-body p-3">
+                <h5 class="fw-bold mb-3 text-warning">
+                    <span class="material-symbols-outlined align-middle" style="font-size: 1.3rem;">warning</span> Alertas de Asistencia 
+                    <small class="text-muted fw-normal" style="font-size: 0.75rem;">(Mes actual)</small>
+                </h5>
+                <div id="alertas-loading" class="text-center py-3 text-muted">
+                    <div class="spinner-border spinner-border-sm text-warning" role="status"></div> Calculando alertas...
+                </div>
+                <div id="alertas-vacio" style="display:none;" class="alert alert-success py-2 mb-0 small">
+                     No hay alertas críticas de tardanzas severas este mes. ¡Buen trabajo!
+                </div>
+                <div id="alertas-lista" style="display:none;" class="list-group list-group-flush mb-0">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-12">
         <div class="danger-zone shadow-sm bg-white" style="border-radius: 12px; border-left: 4px solid #dc3545;">

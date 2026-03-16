@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fetchStatus();
     setInterval(fetchStatus, 30000);
     fetchEstadoHorarios();
+    fetchAlertasTardanzas();
 });
 
 function fetchStatus() {
@@ -196,4 +197,51 @@ function ejecutarLimpiar() {
         errObj.textContent = err.message;
         errObj.style.display = 'block';
     });
+}
+
+function fetchAlertasTardanzas() {
+    const loading = document.getElementById('alertas-loading');
+    const vacio = document.getElementById('alertas-vacio');
+    const lista = document.getElementById('alertas-lista');
+    
+    if(!loading) return;
+
+    loading.style.display = 'block';
+    vacio.style.display = 'none';
+    lista.style.display = 'none';
+
+    apiCall('/api/alertas/tardanzas-severas')
+        .then(data => {
+            loading.style.display = 'none';
+            if (data.warning) {
+                vacio.textContent = data.warning;
+                vacio.className = 'alert alert-warning py-2 mb-0 small';
+                vacio.style.display = 'block';
+                return;
+            }
+            if (!data.alertas || data.alertas.length === 0) {
+                vacio.style.display = 'block';
+                return;
+            }
+
+            lista.innerHTML = data.alertas.map(a => `
+                <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-1 bg-light bg-opacity-10">
+                    <div>
+                        <span class="fw-bold text-dark">${a.persona}</span>
+                        <br>
+                        <small class="text-muted">ID: ${a.id_usuario}</small>
+                    </div>
+                    <span class="badge bg-danger text-white rounded-pill px-2 py-1">${a.conteo} tardanzas severas</span>
+                </div>
+            `).join('');
+            lista.style.display = 'block';
+        })
+        .catch(err => {
+            if(loading) loading.style.display = 'none';
+            if(vacio) {
+                vacio.textContent = `Error cargando alertas: ${err.message}`;
+                vacio.className = 'alert alert-danger py-2 mb-0 small';
+                vacio.style.display = 'block';
+            }
+        });
 }
