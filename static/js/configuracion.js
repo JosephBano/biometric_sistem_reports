@@ -393,3 +393,44 @@ function importarFeriados(file) {
 function exportarFeriados() {
     window.location.href = "/api/feriados/exportar";
 }
+
+// ════════════ MANTENIMIENTO E HISTÓRICOS (Fase 4: Paso 4.3) ════════════════
+
+function subirHistorico() {
+    const fileInput = document.getElementById('historico-input');
+    const statusDiv = document.getElementById('historico-status');
+    const btn = document.getElementById('btn-subir-historico');
+    
+    if (!fileInput.files || fileInput.files.length === 0) {
+        showError('Seleccione un archivo (.csv o .xlsx) primero.');
+        return;
+    }
+    
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('archivo', file);
+    
+    statusDiv.style.display = 'block';
+    statusDiv.className = 'mt-2 small text-muted';
+    statusDiv.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Subiendo y procesando histórico...';
+    btn.disabled = true;
+
+    fetch('/api/historicos/importar', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json().then(data => ({ ok: response.ok, body: data })))
+    .then(res => {
+        btn.disabled = false;
+        if (!res.ok) throw new Error(res.body.error || 'Error desconocido');
+        
+        statusDiv.className = 'mt-2 alert alert-success py-2 small mb-0';
+        statusDiv.innerHTML = `<b>¡Éxito!</b><br> Leídos: ${res.body.total_leidos}<br> Válidos: ${res.body.total_validos}<br> Inserts nuevos: ${res.body.insertados_nuevos}`;
+        fileInput.value = '';
+    })
+    .catch(err => {
+        btn.disabled = false;
+        statusDiv.className = 'mt-2 alert alert-danger py-2 small mb-0';
+        statusDiv.innerHTML = `Error: ${err.message}`;
+    });
+}

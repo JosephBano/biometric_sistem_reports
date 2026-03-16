@@ -45,6 +45,40 @@ function updateStatusBar(data) {
     } else {
         document.getElementById('status-ultima-sync').textContent = 'Nunca';
     }
+
+    // --- Monitoreo de Capacidad (Fase 1: Paso 4.1) ---
+    const capMax = data.capacidad_maxima || 80000;
+    const capOcupada = data.registros_en_dispositivo || 0;
+    const pct = data.porcentaje_ocupado || 0;
+
+    const spanOcupada = document.getElementById('status-capacidad-ocupada');
+    const spanMax = document.getElementById('status-capacidad-max');
+    const spanPct = document.getElementById('status-capacidad-pct');
+    const bar = document.getElementById('status-capacidad-bar');
+    const divWarning = document.getElementById('status-capacidad-warning');
+    const spanDias = document.getElementById('status-capacidad-dias');
+
+    if (spanOcupada) spanOcupada.textContent = capOcupada.toLocaleString('es');
+    if (spanMax) spanMax.textContent = capMax.toLocaleString('es');
+    if (spanPct) spanPct.textContent = pct + '%';
+    
+    if (bar) {
+        bar.style.width = pct + '%';
+        bar.className = 'progress-bar'; // reset
+        if (pct >= 85) bar.className += ' bg-danger';
+        else if (pct >= 75) bar.className += ' bg-warning';
+        else if (pct >= 60) bar.className += ' bg-info';
+        else bar.className += ' bg-success';
+    }
+
+    if (divWarning && spanDias) {
+        if (pct >= 60) {
+            divWarning.classList.remove('d-none');
+            spanDias.textContent = data.dias_para_llenado || 0;
+        } else {
+            divWarning.classList.add('d-none');
+        }
+    }
 }
 
 function fetchEstadoHorarios() {

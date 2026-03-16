@@ -13,6 +13,9 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="feriados-tab" data-bs-toggle="tab" data-bs-target="#feriados" type="button" role="tab" aria-controls="feriados" aria-selected="false">Feriados</button>
   </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="mantenimiento-tab" data-bs-toggle="tab" data-bs-target="#mantenimiento" type="button" role="tab" aria-controls="mantenimiento" aria-selected="false">Respaldos y Históricos</button>
+  </li>
 </ul>
 
 <div class="tab-content" id="configTabsContent">
@@ -120,6 +123,49 @@
 
                 <div id="feriados-lista" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
                     <!-- Loaded dynamically via configuracion.js -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MANTENIMIENTO TAB (Fase 4: Paso 4.3) -->
+    <div class="tab-pane fade" id="mantenimiento" role="tabpanel" aria-labelledby="mantenimiento-tab">
+        <div class="row g-4 p-2">
+            <!-- Backups -->
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Copias de Seguridad (Backups)</h5>
+                        <p class="small text-muted mb-4">Descargue respaldos de seguridad de la base de datos completa para guardado externo.</p>
+                        <div class="d-flex flex-column gap-2" style="max-width: 320px;">
+                            <a href="/api/backup/descargar" class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center gap-2">
+                                <span class="material-symbols-outlined" style="font-size: 1.1rem;">download</span> Descargar Base de Datos (.db)
+                            </a>
+                            <a href="/api/backup/csv" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
+                                <span class="material-symbols-outlined" style="font-size: 1.1rem;">table_chart</span> Descargar Historial completo (CSV)
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Carga de Históricos -->
+            <div class="col-md-6">
+                <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3">Carga de Datos Históricos</h5>
+                        <p class="small text-muted mb-3">Importe marcaciones antiguas desde archivos XLSX o CSV de forma segura.</p>
+                        <div class="p-2 bg-light border rounded mb-3">
+                            <small class="text-muted d-block mb-1 fw-bold">Columnas requeridas:</small>
+                            <code class="small text-dark">nombre, fecha_hora</code>
+                            <small class="text-muted d-block mt-1">Opcionales: <code class="text-dark">id_usuario, tipo</code></small>
+                        </div>
+                        <div class="mb-3">
+                             <input type="file" class="form-control form-control-sm" id="historico-input" accept=".csv,.xlsx">
+                        </div>
+                        <button class="btn btn-sm btn-primary w-100" onclick="subirHistorico();" id="btn-subir-historico">Importar Histórico</button>
+                        <div id="historico-status" class="mt-2" style="display:none"></div>
+                    </div>
                 </div>
             </div>
         </div>

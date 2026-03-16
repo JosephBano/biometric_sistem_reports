@@ -170,6 +170,9 @@ def init_db():
         
         _migrar_columna(conn, "horarios_personal", "horas_semana", "REAL")
         _migrar_columna(conn, "horarios_personal", "horas_mes",    "REAL")
+        
+        # Migraciones para capacidad del dispositivo (Backup Plan)
+        _migrar_columna(conn, "sync_log", "registros_en_dispositivo", "INTEGER DEFAULT 0")
 
 
 def _migrar_columna(conn, tabla, columna, tipo):
@@ -288,7 +291,7 @@ def get_estado() -> dict:
         total    = conn.execute("SELECT COUNT(*) FROM asistencias").fetchone()[0]
         personas = conn.execute("SELECT COUNT(DISTINCT nombre) FROM asistencias").fetchone()[0]
         ultima   = conn.execute("""
-            SELECT fecha_sync, registros_nuevos, exito, error_detalle
+            SELECT fecha_sync, registros_nuevos, exito, error_detalle, registros_en_dispositivo
             FROM sync_log ORDER BY id DESC LIMIT 1
         """).fetchone()
     return {
@@ -305,13 +308,14 @@ def registrar_sync(
     nuevos: int,
     exito: bool,
     error: str = None,
+    registros_en_dispositivo: int = 0,
 ):
     with _conn() as conn:
         conn.execute("""
             INSERT INTO sync_log
                 (fecha_inicio_sync, fecha_fin_sync,
-                 registros_obtenidos, registros_nuevos, exito, error_detalle)
-            VALUES (?, ?, ?, ?, ?, ?)
+                 registros_obtenidos, registros_nuevos, exito, error_detalle, registros_en_dispositivo)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             fecha_inicio.isoformat() if fecha_inicio else None,
             fecha_fin.isoformat()    if fecha_fin    else None,
@@ -319,6 +323,7 @@ def registrar_sync(
             nuevos,
             1 if exito else 0,
             error,
+            registros_en_dispositivo,
         ))
 
 

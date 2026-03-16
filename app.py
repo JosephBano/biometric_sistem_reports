@@ -344,6 +344,26 @@ def estado_sync():
     estado = db_module.get_estado()
     estado['dispositivo_accesible'] = sync_module.ping_dispositivo()
     estado['justificaciones_pendientes'] = len(db_module.get_justificaciones_pendientes())
+    
+    # --- Monitoreo de Capacidad (Fase 1) ---
+    capacidad_max = int(os.getenv("ZK_CAPACIDAD_MAX", "80000"))
+    estado["capacidad_maxima"] = capacidad_max
+    
+    ultima = estado.get("ultima_sync")
+    # Recuperar registros_en_dispositivo de la DB
+    if ultima and ultima.get("registros_en_dispositivo") is not None:
+        registros = ultima["registros_en_dispositivo"]
+        estado["registros_en_dispositivo"] = registros
+        estado["porcentaje_ocupado"] = round((registros / capacidad_max) * 100, 1)
+    else:
+        estado["registros_en_dispositivo"] = 0
+        estado["porcentaje_ocupado"] = 0.0
+        
+    # Proyección (por defecto 680 registros/día según análisis de ISTPET)
+    tasa_diaria = 680 
+    registros_restantes = max(0, capacidad_max - estado["registros_en_dispositivo"])
+    estado["dias_para_llenado"] = int(registros_restantes / tasa_diaria)
+    
     return jsonify(estado)
 
 
@@ -593,10 +613,149 @@ def limpiar_dispositivo():
         if not password or not check_password_hash(pwd_hash_check, password):
             return jsonify({'error': 'Contraseña incorrecta. Esta acción requiere autenticación.'}), 403
     try:
+        # --- Backup Pre-Limpieza Automático (Fase 2: Paso 2.3) ---
+        import shutil
+        dir_backups = os.path.join(os.getenv("DATA_DIR", "data"), "backups")
+        os.makedirs(dir_backups, exist_ok=True)
+        backup_name = f"pre_limpieza_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        shutil.copy2(db_module.DB_PATH, os.path.join(dir_backups, backup_name))
+        
         total_borrado = sync_module.limpiar_log_dispositivo()
-        return jsonify({'success': True, 'registros_borrados': total_borrado})
+        return jsonify({
+            'success': True, 
+            'registros_borrados': total_borrado,
+            'backup_creado': backup_name
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# RUTAS DE RESPALDOS (BACKUPS)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/backup/descargar')
+def descargar_backup_db():
+    dir_backups = os.path.join(os.getenv("DATA_DIR", "data"), "backups")
+    os.makedirs(dir_backups, exist_ok=True)
+    temp_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    dest_path = os.path.join(dir_backups, temp_name)
+    
+    import shutil
+    try:
+        shutil.copy2(db_module.DB_PATH, dest_path)
+        return send_file(dest_path, as_attachment=True, download_name=os.path.basename(db_module.DB_PATH))
+    except Exception as e:
+        return jsonify({'error': f'Error creando backup: {str(e)}'}), 500
+
+
+@app.route('/api/backup/csv')
+def descargar_backup_csv():
+    import csv as csv_writer
+    import io
+    from datetime import date as dt_date
+    
+    registros = db_module.consultar_asistencias(dt_date(2000, 1, 1), dt_date.today())
+    if not registros:
+         return jsonify({'error': 'No hay datos para exportar'}), 400
+         
+    output = io.StringIO()
+    writer = csv_writer.writer(output)
+    writer.writerow(["id_usuario", "nombre", "fecha", "hora", "tipo"])
+    
+    for r in registros:
+         writer.writerow([
+             r["id_usuario"], 
+             r["nombre"], 
+             r["fecha"].strftime('%Y-%m-%d'), 
+             r["hora"].strftime('%H:%M:%S'), 
+             r["tipo"]
+         ])
+         
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename=asistencias_backup_{datetime.now().strftime('%Y%m%d')}.csv"}
+    )
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# INGESTA DE HISTÓRICOS (.csv / .xlsx)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/api/historicos/importar', methods=['POST'])
+def importar_historicos():
+    if 'archivo' not in request.files:
+         return jsonify({'error': 'No se envió ningún archivo'}), 400
+         
+    file = request.files['archivo']
+    if file.filename == '':
+         return jsonify({'error': 'Archivo no seleccionado'}), 400
+         
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ('.csv', '.xlsx'):
+         return jsonify({'error': 'Formato no soportado. Use .csv o .xlsx'}), 400
+         
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"historico_{uuid.uuid4().hex}_{filename}")
+    file.save(filepath)
+    
+    registros = []
+    try:
+         import csv as csv_reader
+         if ext == '.csv':
+              with open(filepath, newline='', encoding='utf-8-sig') as f:
+                   reader = csv_reader.DictReader(f)
+                   for row in reader:
+                        r_norm = {k.lower().strip(): v for k, v in row.items()}
+                        registros.append({
+                             "id_usuario": str(r_norm.get("id_usuario") or "").strip(),
+                             "nombre":     str(r_norm.get("nombre") or "").strip(),
+                             "fecha_hora": str(r_norm.get("fecha_hora") or "").strip(),
+                             "tipo":       str(r_norm.get("tipo", "Entrada") or "").strip().title(),
+                             "fuente":     "historico"
+                        })
+         else: # .xlsx
+              import openpyxl
+              wb = openpyxl.load_workbook(filepath, read_only=True)
+              sheet = wb.active
+              headers = [str(cell.value).lower().strip() for cell in sheet[1]]
+              for row in sheet.iter_rows(min_row=2, values_only=True):
+                   if not any(row): continue
+                   r_dict = dict(zip(headers, row))
+                   f_h = r_dict.get("fecha_hora")
+                   if hasattr(f_h, "isoformat"):
+                        f_h = f_h.isoformat()
+                   registros.append({
+                        "id_usuario": str(r_dict.get("id_usuario") or "").strip(),
+                        "nombre":     str(r_dict.get("nombre") or "").strip(),
+                        "fecha_hora": str(f_h or "").strip(),
+                        "tipo":       str(r_dict.get("tipo", "Entrada") or "").strip().title(),
+                        "fuente":     "historico"
+                   })
+                   
+         registros_validos = []
+         for r in registros:
+              if r["nombre"] and r["fecha_hora"]:
+                   registros_validos.append(r)
+                   
+         if not registros_validos:
+              return jsonify({'error': 'No se encontraron registros válidos con columnas: nombre, fecha_hora'}), 400
+              
+         nuevos = db_module.insertar_asistencias(registros_validos)
+         return jsonify({
+              'success': True,
+              'total_leidos': len(registros),
+              'total_validos': len(registros_validos),
+              'insertados_nuevos': nuevos
+         })
+         
+    except Exception as e:
+         return jsonify({'error': f"Error procesando el archivo: {str(e)}"}), 500
+    finally:
+         if os.path.exists(filepath):
+              os.remove(filepath)
 
 
 # ══════════════════════════════════════════════════════════════════════════

@@ -228,6 +228,7 @@ ZK_PORT=4370               # Puerto del protocolo ZK (casi siempre 4370)
 ZK_PASSWORD=XXXX           # Contraseña del dispositivo (Menú → Opciones → Comunicación). Fábrica: 0
 ZK_TIMEOUT=5               # Segundos de espera para conectar
 ZK_UDP=false               # true = protocolo UDP (más rápido, probar primero)
+ZK_CAPACIDAD_MAX=80000     # Capacidad máxima del dispositivo ZK K30 para monitoreo
 
 # ── Sincronización automática ──────────────────────
 SYNC_AUTO=false            # true = activa sync automático en background
@@ -546,6 +547,19 @@ docker compose restart
 
 ---
 
+### 8.1 Respaldos y Carga de Históricos (Fases 2 y 3)
+
+Desde la pestaña de **Respaldos y Históricos** en Configuración, el sistema ahora permite:
+*   **Descargar Base de Datos (.db)**: Descarga una copia de seguridad en caliente del archivo SQLite actual.
+*   **Descargar Historial completa (CSV)**: Exporta todas las marcaciones existentes para guardado plano.
+*   **Importar Históricos (.csv / .xlsx)**: Ingesta de asistencias antiguas de forma asistida. Se requiere que el archivo contenga las columnas `nombre` y `fecha_hora` como mínimo.
+
+> **Backup automático en Limpieza**: Al ejecutar la acción "Limpiar log" desde la zona de peligro en el Dashboard, el sistema genera automáticamente un respaldo pre-limpieza en la máquina para salvaguardar los datos ante cualquier percance.
+
+---
+
+---
+
 ## 9. Referencia de la API
 
 ### `GET /estado-sync`
@@ -844,6 +858,31 @@ curl -X POST http://localhost:5000/api/enviar-informe \
 ```json
 { "success": true, "mensaje": "Informe enviado a jperez@istpet.edu.ec" }
 ```
+
+---
+
+### `GET /api/backup/descargar`
+
+Descarga el archivo `.db` de la base de datos actual en caliente para respaldo.
+
+---
+
+### `GET /api/backup/csv`
+
+Exporta todas las marcaciones vigentes en la base de datos a un archivo de formato CSV plano.
+
+---
+
+### `POST /api/historicos/importar`
+
+Permite la ingesta de marcaciones históricas desde archivos de hoja de cálculo.
+
+**Campos del request:**
+*   `archivo` (Form-data / File): Archivo de formato `.csv` o `.xlsx`.
+
+Debe contener como mínimo las columnas `nombre` y `fecha_hora`.
+
+---
 
 ---
 

@@ -238,6 +238,7 @@ def sincronizar(
             len(registros),
             nuevos,
             True,
+            registros_en_dispositivo=total_dispositivo
         )
 
         _set_job(job_id, {

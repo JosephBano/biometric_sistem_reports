@@ -22,6 +22,21 @@
                     <br>
                     <span>Última sync: <b id="status-ultima-sync">—</b></span>
                 </div>
+
+                <!-- Capacidad del dispositivo (Fase 1: Paso 4.1) -->
+                <div class="mt-3 pt-2 border-top">
+                    <div class="small text-muted d-flex justify-content-between">
+                        <span>Ocupación ZK (<span id="status-capacidad-ocupada">0</span>/<span id="status-capacidad-max">0</span>)</span>
+                        <span class="fw-bold" id="status-capacidad-pct">0%</span>
+                    </div>
+                    <div class="progress mt-1" style="height: 8px;">
+                        <div class="progress-bar" id="status-capacidad-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                    <div class="small text-warning mt-1 d-none" id="status-capacidad-warning" style="font-size: 0.75rem;">
+                         <span class="material-symbols-outlined align-bottom" style="font-size: 0.95rem;">warning</span>
+                         Quedan aprox. <b id="status-capacidad-dias">0</b> días para llenado.
+                    </div>
+                </div>
                 
                 <button class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2" id="btn-sync" onclick="iniciarSync();">
                     <span>Sincronizar ahora</span>
