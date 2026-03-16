@@ -15,6 +15,9 @@ Aplicación web para generar informes PDF de asistencia del personal a partir de
    - [6.1 Horarios personalizados](#61-horarios-personalizados-card-superior)
    - [6.2 Panel del dispositivo ZK](#62-panel-del-dispositivo-biométrico-zk)
    - [6.3 Parámetros fijos del análisis](#63-parámetros-fijos-del-análisis)
+   - [6.4 Gestión de justificaciones](#64-gestión-de-justificaciones)
+   - [6.5 Dashboard y alertas](#65-dashboard-y-alertas)
+   - [6.6 Envío de informes por email](#66-envío-de-informes-por-email)
 7. [Horarios personalizados por persona](#7-horarios-personalizados-por-persona)
 8. [Gestión y mantenimiento](#8-gestión-y-mantenimiento)
 9. [Referencia de la API](#9-referencia-de-la-api)
@@ -62,9 +65,20 @@ script_informe_asistencia/
 ├── horarios.py             # Parser de horarios personalizados (.obd/.ods)
 │
 ├── templates/
-│   └── index.html          # Interfaz web de una sola página
+│   ├── base.html           # Layout base (navbar, scripts comunes)
+│   ├── dashboard.html      # Panel principal — estado, alertas de tardanzas severas
+│   ├── reportes.html       # Generación de PDF e informe por email
+│   ├── justificaciones.html# Gestión de justificaciones (crear, editar, aprobar)
+│   ├── configuracion.html  # Horarios, feriados, dispositivo ZK
+│   └── login.html          # Pantalla de autenticación
 ├── static/
-│   └── style.css           # Estilos de la UI
+│   ├── style.css           # Estilos de la UI
+│   └── js/
+│       ├── api.js          # Helper fetch centralizado
+│       ├── dashboard.js    # Lógica del dashboard y alertas
+│       ├── reportes.js     # Lógica de reportes y envío por email
+│       ├── justificaciones.js # CRUD de justificaciones
+│       └── configuracion.js   # Horarios, feriados, mantenimiento ZK
 │
 ├── .env                    # Variables de entorno (NO subir al repo)
 ├── .env.example            # Plantilla para crear el .env
@@ -90,6 +104,9 @@ script_informe_asistencia/
 | `usuarios_zk` | Directorio de usuarios registrados en el dispositivo |
 | `sync_log` | Historial de sincronizaciones con el dispositivo |
 | `horarios_personal` | Horarios individuales por día de la semana (cargados desde `.obd`) |
+| `justificaciones` | Permisos, ausencias y tardanzas justificadas, con soporte de recuperación |
+| `breaks_categorizados` | Salidas intermedias del día clasificadas (almuerzo, permiso, injustificado) |
+| `feriados` | Días feriados nacionales o institucionales; excluidos del análisis |
 
 ---
 
@@ -227,6 +244,14 @@ FLASK_SECRET_KEY=cadena_larga_aleatoria_y_secreta
 FLASK_HOST=0.0.0.0
 FLASK_PORT=5000
 FLASK_DEBUG=false          # Nunca true en producción
+
+# ── Correo electrónico (SMTP) ──────────────────────
+SMTP_HOST=smtp.gmail.com           # Servidor SMTP (Gmail, Outlook, institucional)
+SMTP_PORT=587                      # 587 con STARTTLS o 465 con SSL directo
+SMTP_USER=notificaciones@tuinstituto.edu.ec
+SMTP_PASSWORD=abcd efgh ijkl mnop  # App Password si usa Gmail/Outlook (ver sección 5.1)
+SMTP_FROM=notificaciones@tuinstituto.edu.ec
+SMTP_USE_TLS=true                  # true para puerto 587; false para 465 SSL directo
 ```
 
 ### Generar una `FLASK_SECRET_KEY` segura
@@ -234,6 +259,20 @@ FLASK_DEBUG=false          # Nunca true en producción
 ```bash
 python3 -c "import secrets; print(secrets.token_hex(32))"
 ```
+
+### 5.1 Configurar Gmail para el envío de correos
+
+Gmail no permite usar la contraseña normal de la cuenta. Requiere una **Contraseña de Aplicación**:
+
+1. Ir a `Cuenta de Google → Seguridad`.
+2. Activar la **Verificación en dos pasos** (si no está activa).
+3. Buscar **"Contraseñas de aplicaciones"** → crear una nueva con nombre "Sistema Asistencia".
+4. Google genera un código de 16 letras (ej: `abcd efgh ijkl mnop`).
+5. Pegar ese código en `SMTP_PASSWORD` del `.env` (con o sin espacios; ambos funcionan).
+
+Para Outlook el proceso es equivalente. Para un servidor institucional, consultar con el administrador de correos de la institución.
+
+---
 
 ### Cómo encontrar la contraseña del dispositivo ZK
 
@@ -321,6 +360,56 @@ La lógica de tardanzas usa una **tolerancia fija de 5 minutos** sobre la hora p
 El límite de almuerzo se toma del archivo de horarios de cada persona (0, 30 ó 60 minutos). Estos valores no son configurables desde la UI.
 
 El único parámetro ajustable es **Personas a excluir** — campo de texto visible siempre debajo del selector de modo.
+
+---
+
+### 6.4 Gestión de justificaciones
+
+La página **Justificaciones** permite registrar y administrar los permisos, ausencias y tardanzas justificadas del personal. Los datos cargados aquí son considerados por el motor de análisis al generar cualquier informe PDF.
+
+#### Crear una justificación
+
+1. En la tabla de justificaciones, hacer clic en **Nueva Justificación**.
+2. Completar: empleado, fecha, tipo (`ausencia`, `tardanza`, `permiso`, `almuerzo`, `salida_anticipada`, `incompleto`), motivo y aprobador.
+3. Para tipos `permiso` y `tardanza`, se puede activar el checkbox **"¿Es recuperable / compensable?"**. Al hacerlo aparecen dos campos obligatorios:
+   - **Fecha de recuperación** — día en que se compensarán las horas.
+   - **Hora de recuperación** — hora acordada.
+   El informe PDF incluirá automáticamente la nota `[RECUPERABLE – se compensará DD/MM/AAAA HH:MM]` junto al motivo.
+4. Guardar. La justificación queda en estado **aprobada** por defecto (puede cambiarse a `pendiente` para flujos de aprobación).
+
+#### Editar una justificación existente
+
+1. En cada fila de la tabla aparece el botón de edición (ícono de lápiz).
+2. Al pulsarlo, el panel lateral se carga con todos los datos actuales.
+3. Modificar los campos necesarios (motivo, horas, recuperable, etc.) y guardar.
+
+#### Cambiar estado de aprobación
+
+El selector de estado en cada fila permite cambiar entre `pendiente`, `aprobada` y `rechazada` sin abrir el formulario completo.
+
+---
+
+### 6.5 Dashboard y alertas
+
+El **Dashboard** (panel principal) muestra al abrirse:
+
+- Estado de sincronización con el dispositivo (último sync, registros totales, personas).
+- **Tarjeta de alertas de tardanzas severas:** escanea el mes en curso y lista a las personas que acumulan **3 o más tardanzas severas**. Se calcula de forma asíncrona sin bloquear el resto de la interfaz. Si no hay incidencias, se muestra un mensaje verde confirmando que no hay alertas críticas.
+
+La tarjeta de alertas muestra nombre, ID de usuario y cantidad de tardanzas para cada caso detectado.
+
+---
+
+### 6.6 Envío de informes por email
+
+Desde la página **Reportes**, cuando el modo seleccionado es **"Por persona"**:
+
+1. Seleccionar el empleado y el período.
+2. Completar el campo **Correo electrónico de destino**.
+3. Hacer clic en **Enviar Informe ahora**.
+4. El sistema genera el PDF, lo adjunta al correo, lo envía y elimina el archivo temporal del disco.
+
+Requiere que las variables `SMTP_*` estén configuradas en `.env` (ver [sección 5.1](#51-configurar-gmail-para-el-envío-de-correos)).
 
 ---
 
@@ -630,6 +719,134 @@ curl -X POST http://localhost:5000/limpiar-dispositivo \
 
 ---
 
+### `GET /api/justificaciones`
+
+Lista todas las justificaciones. Acepta parámetros opcionales `fecha_inicio` y `fecha_fin` (formato `YYYY-MM-DD`).
+
+```bash
+curl "http://localhost:5000/api/justificaciones?fecha_inicio=2026-03-01&fecha_fin=2026-03-31"
+```
+
+---
+
+### `POST /api/justificaciones`
+
+Crea una nueva justificación.
+
+**Campos del body:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `id_usuario` | string | Sí | ID del usuario en el dispositivo ZK |
+| `nombre` | string | Sí | Nombre del empleado |
+| `fecha` | `"YYYY-MM-DD"` | Sí | Fecha de la novedad |
+| `tipo` | string | Sí | `ausencia`, `tardanza`, `permiso`, `almuerzo`, `salida_anticipada`, `incompleto` |
+| `motivo` | string | No | Descripción libre |
+| `aprobado_por` | string | No | Nombre del responsable que aprueba |
+| `hora_permitida` | `"HH:MM"` | No | Hora de llegada autorizada (para tardanzas justificadas) |
+| `estado` | string | No | `aprobada` (default), `pendiente`, `rechazada` |
+| `recuperable` | int (0/1) | No | 1 si la novedad será compensada en otra fecha |
+| `fecha_recuperacion` | `"YYYY-MM-DD"` | Condicional | Obligatorio si `recuperable=1` |
+| `hora_recuperacion` | `"HH:MM"` | Condicional | Obligatorio si `recuperable=1` |
+
+---
+
+### `GET /api/justificaciones/<id>`
+
+Retorna todos los campos de una justificación por su ID.
+
+```bash
+curl http://localhost:5000/api/justificaciones/42
+```
+
+---
+
+### `PUT /api/justificaciones/<id>`
+
+Actualiza todos los campos editables de una justificación existente. Acepta los mismos campos que el `POST`.
+
+```bash
+curl -X PUT http://localhost:5000/api/justificaciones/42 \
+  -H "Content-Type: application/json" \
+  -d '{"motivo": "Consulta médica urgente", "recuperable": 1, "fecha_recuperacion": "2026-03-20", "hora_recuperacion": "17:00"}'
+```
+
+---
+
+### `PATCH /api/justificaciones/<id>`
+
+Cambia únicamente el campo `estado` (`aprobada`, `pendiente`, `rechazada`).
+
+```bash
+curl -X PATCH http://localhost:5000/api/justificaciones/42 \
+  -H "Content-Type: application/json" \
+  -d '{"estado": "aprobada"}'
+```
+
+---
+
+### `DELETE /api/justificaciones/<id>`
+
+Elimina una justificación por su ID.
+
+```bash
+curl -X DELETE http://localhost:5000/api/justificaciones/42
+```
+
+---
+
+### `GET /api/alertas/tardanzas-severas`
+
+Retorna la lista de personas con 3 o más tardanzas severas en el mes indicado.
+
+**Parámetros:** `anio` (default: año actual), `mes` (default: mes actual).
+
+```bash
+curl "http://localhost:5000/api/alertas/tardanzas-severas?anio=2026&mes=3"
+```
+
+```json
+{
+  "alertas": [
+    {
+      "nombre": "PEREZ GARCIA JUAN",
+      "id_usuario": "42",
+      "conteo": 4,
+      "fechas": ["2026-03-03", "2026-03-10", "2026-03-17", "2026-03-24"]
+    }
+  ]
+}
+```
+
+Si no hay horarios cargados, retorna `{ "alertas": [], "warning": "No hay horarios cargados" }`.
+
+---
+
+### `POST /api/enviar-informe`
+
+Genera el informe PDF de una persona y lo envía por correo electrónico. Requiere variables `SMTP_*` en `.env`.
+
+**Campos del body:**
+
+| Campo | Tipo | Requerido | Descripción |
+|-------|------|-----------|-------------|
+| `fecha_inicio` | `"YYYY-MM-DD"` | Sí | Inicio del período |
+| `fecha_fin` | `"YYYY-MM-DD"` | Sí | Fin del período |
+| `persona` | string | Sí | Nombre exacto del empleado |
+| `email` | string | Sí | Correo electrónico de destino |
+
+```bash
+curl -X POST http://localhost:5000/api/enviar-informe \
+  -H "Content-Type: application/json" \
+  -d '{"fecha_inicio": "2026-03-01", "fecha_fin": "2026-03-31", "persona": "PEREZ GARCIA JUAN", "email": "jperez@istpet.edu.ec"}'
+```
+
+```json
+{ "success": true, "mensaje": "Informe enviado a jperez@istpet.edu.ec" }
+```
+
+---
+
 ## 10. Solución de problemas
 
 ### El dispositivo aparece como "no accesible"
@@ -702,6 +919,17 @@ docker compose logs rrhh-app
 Causas comunes:
 - El archivo `.env` no existe o tiene variables mal formateadas (espacios alrededor del `=`).
 - El puerto 5000 ya está en uso. En Linux: `sudo ss -tlnp | grep 5000`. En Windows: `netstat -ano | findstr :5000`.
+
+---
+
+### El correo de informe no se envía
+
+| Error | Causa probable | Solución |
+|-------|---------------|----------|
+| `535 Authentication Failed` | Credenciales incorrectas o Gmail requiere App Password | Generar una Contraseña de Aplicación (ver [sección 5.1](#51-configurar-gmail-para-el-envío-de-correos)) |
+| `Connection refused` / timeout | Puerto 587 o 465 bloqueado por firewall o ISP | Probar cambiando `SMTP_PORT` entre `587` y `465`; verificar con el administrador de red |
+| Correo llega a SPAM | El dominio emisor no tiene SPF/DKIM configurado | Usar un correo institucional o verificar con el área de IT |
+| Variables SMTP no cargadas | `.env` no tiene las variables o el contenedor no fue reiniciado | Agregar variables y ejecutar `docker compose restart` |
 
 ---
 
