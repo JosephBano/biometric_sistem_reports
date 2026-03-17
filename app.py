@@ -160,11 +160,40 @@ def autenticar_request():
     g.nombre        = session.get("nombre", "")
     g.tenant_id     = session.get("tenant_id")
 
-    # Cargar tipos de persona del tenant (para @require_tipo_persona)
+    # 4. Validar si el tenant está activo antes de continuar
+    if g.tenant_schema != 'public':
+        try:
+            tenant_info = db_module.get_tenant_by_slug(g.tenant_schema)
+            if not tenant_info:
+                 # El tenant fue eliminado o no existe
+                 session.clear()
+                 return jsonify({"error": "Tenant no encontrado"}), 404 if request.path.startswith("/api/") else redirect(url_for("login"))
+
+            if tenant_info and not tenant_info.get("activo", True):
+                 # El tenant está inactivo
+                 session.clear()
+                 if request.path.startswith("/api/"):
+                     return jsonify({"error": "Cuenta de institución suspendida"}), 403
+                 return render_template("login.html", error="Acceso suspendido. Contacte a soporte."), 403
+
+            # Asignar a variable global
+            g.tenant = tenant_info
+        except Exception as e:
+            # Fallback en caso de problemas con la DB
+            g.tenant = {"nombre": "Desconocido", "activo": True, "slug": g.tenant_schema}
+
+    # Cargar tipos de persona del tenant (capacidad para @require_tipo_persona)
     try:
-        g.tenant_tipos = db_module.get_tipos_persona()
+        g.tenant_tipos = db_module.get_tipos_persona(g.tenant_schema)
     except Exception:
         g.tenant_tipos = []
+
+
+# Helper dinámico para templates Jinja2 y lógica interna
+def tenant_tiene_tipo(nombre_tipo: str) -> bool:
+    """Helper para validar si un tipo de persona está disponible en el tenant."""
+    tipos = getattr(g, "tenant_tipos", []) or []
+    return any(t["nombre"].lower() == nombre_tipo.lower() for t in tipos)
 
 
 @app.context_processor
@@ -173,6 +202,9 @@ def inject_user_info():
     return dict(
         current_user_nombre=session.get("nombre", ""),
         current_user_roles=session.get("roles", []),
+        tenant=getattr(g, "tenant", None),
+        tenant_tipos=getattr(g, "tenant_tipos", []),
+        tenant_tiene_tipo=tenant_tiene_tipo,
     )
 
 
@@ -247,6 +279,28 @@ def logout():
         pass
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route('/admin/switch-tenant', methods=['POST'])
+@require_role('superadmin')
+def switch_tenant():
+    """Permite al superadmin impersonar otro tenant."""
+    slug = request.form.get("tenant_slug")
+    if not slug:
+        return "Slug requerido", 400
+        
+    if slug == 'public':
+        # Volver al contexto administrativo global
+        session["tenant_schema"] = 'public'
+        return redirect(url_for("dashboard"))
+
+    tenant = db_module.get_tenant_by_slug(slug)
+    if not tenant:
+        return "Tenant no encontrado", 404
+
+    session["tenant_schema"] = tenant["slug"]
+    session["tenant_id"] = tenant["id"]
+    return redirect(url_for("dashboard"))
 
 
 @app.context_processor
@@ -593,6 +647,36 @@ def alertas_tardanzas_severas():
         return jsonify({'alertas': alertas})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# VISTA DE PRESENCIA CRUDA (Para todos los tenants)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/presencia')
+def vista_presencia():
+    """Muestra registros crudos de asistencia."""
+    fi_str = request.args.get('fecha_inicio')
+    ff_str = request.args.get('fecha_fin')
+    try:
+        fi = datetime.strptime(fi_str, "%Y-%m-%d").date() if fi_str else date.today()
+        ff = datetime.strptime(ff_str, "%Y-%m-%d").date() if ff_str else date.today()
+    except ValueError:
+        return "Formato de fecha inválido", 400
+
+    registros = db_module.consultar_asistencias(fi, ff)
+    
+    if request.args.get('export') == 'csv':
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID Usuario", "Nombre", "Fecha", "Hora", "Tipo"])
+        for r in registros:
+            writer.writerow([r["id_usuario"], r["nombre"], r["fecha"].strftime('%Y-%m-%d'), r["hora"].strftime('%H:%M:%S'), r["tipo"]])
+        output.seek(0)
+        return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename=presencia_{fi}_{ff}.csv"})
+
+    return render_template("presencia.html", registros=registros, fecha_inicio=fi, fecha_fin=ff)
 
 
 @app.route('/api/generar-desde-db', methods=['POST'])
@@ -1432,6 +1516,61 @@ def API_categorizar_break():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ══════════════════════════════════════════════════════════════════════════
+# ADMINISTRACIÓN DE TENANTS (Superadmin)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/tenants', methods=['GET'])
+@require_role('superadmin')
+def admin_tenants():
+    """Lista todos los tenants."""
+    tenants = db_module.listar_tenants()
+    return render_template("admin/tenants.html", tenants=tenants, active_page="admin_tenants")
+
+
+@app.route('/admin/tenants', methods=['POST'])
+@require_role('superadmin')
+def admin_crear_tenant():
+    """Crea un nuevo tenant y provisiona su schema."""
+    nombre = request.form.get("nombre", "").strip()
+    nombre_corto = request.form.get("nombre_corto", "").strip()
+    slug = request.form.get("slug", "").strip().lower()
+    zona_horaria = request.form.get("zona_horaria", "America/Guayaquil")
+    
+    # Validaciones básicas
+    if not nombre or not slug:
+        return "Nombre y Slug son requeridos", 400
+        
+    if not all(c.isalnum() or c == '_' for c in slug):
+        return "Slug debe contener solo letras, números y guiones bajos", 400
+
+    try:
+        # 1. Crear registro en public.tenants
+        nuevo_tenant = db_module.crear_tenant(nombre, nombre_corto, slug, zona_horaria)
+        
+        # 2. Provisionar Schema (Tablas y Datos iniciales)
+        # Por defecto, habilitar 'Empleado' y 'Practicante'
+        db_module.provisionar_schema(slug, tipos_persona=["Empleado", "Practicante"])
+        
+        return redirect(url_for("admin_tenants") + "?msg=Tenant+creado+con+éxito")
+    except Exception as e:
+        return f"Error al crear tenant: {str(e)}", 500
+
+
+@app.route('/admin/tenants/<tenant_id>', methods=['POST'])
+@require_role('superadmin')
+def admin_actualizar_tenant(tenant_id):
+    """Actualiza datos de un tenant (ej: activar/desactivar)."""
+    # En HTML los formularios no soportan PUT directamente
+    activo = request.form.get("activo") == "1"
+    
+    try:
+        db_module.actualizar_tenant(tenant_id, {"activo": activo})
+        return redirect(url_for("admin_tenants") + "?msg=Tenant+actualizado")
+    except Exception as e:
+         return f"Error: {e}", 500
+
 
 # ══════════════════════════════════════════════════════════════════════════
 # ADMINISTRACIÓN DE USUARIOS

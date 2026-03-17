@@ -6,9 +6,9 @@ from sqlalchemy import text
 from db.connection import get_connection
 
 
-def insertar_feriado(fecha: str, descripcion: str, tipo: str = "nacional") -> dict:
+def insertar_feriado(fecha: str, descripcion: str, tipo: str = "nacional", schema: str = None) -> dict:
     """Inserta o reemplaza un feriado. fecha debe ser 'YYYY-MM-DD'."""
-    with get_connection() as conn:
+    with get_connection(schema) as conn:
         conn.execute(
             text("""
                 INSERT INTO feriados (fecha, descripcion, tipo)

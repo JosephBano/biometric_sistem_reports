@@ -84,6 +84,17 @@ from db.queries.auth import (
     set_device_password_enc,
 )
 
+from db.queries.tenants import (
+    get_tenant_by_slug,
+    listar_tenants,
+    crear_tenant,
+    actualizar_tenant,
+    insertar_tipo_persona,
+    eliminar_tenant_de_public,
+)
+
+from db.tenant_provisioner import provisionar_schema
+
 __all__ = [
     # conexión
     "get_connection",
@@ -140,4 +151,12 @@ __all__ = [
     "get_tipos_persona",
     "get_device_password_enc",
     "set_device_password_enc",
+    # tenants
+    "get_tenant_by_slug",
+    "listar_tenants",
+    "crear_tenant",
+    "actualizar_tenant",
+    "insertar_tipo_persona",
+    "eliminar_tenant_de_public",
+    "provisionar_schema",
 ]
