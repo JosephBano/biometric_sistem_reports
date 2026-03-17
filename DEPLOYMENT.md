@@ -15,10 +15,23 @@ En todos los casos el flujo de despliegue y actualización es el mismo una vez q
 
 > **Inicio rápido** — Si ya tienes Docker y el `.env` configurado:
 > ```bash
-> docker compose up -d --build   # primera vez
+> docker compose up -d --build   # primera vez (levanta PostgreSQL + la app)
 > docker compose up -d --build   # para aplicar actualizaciones
 > docker compose logs -f          # ver qué hace
 > ```
+
+---
+
+## Arquitectura de servicios
+
+El sistema corre con **dos contenedores Docker** que se coordinan automáticamente:
+
+| Servicio | Imagen | Función |
+|----------|--------|---------|
+| `biometrico-db` | `postgres:16-alpine` | Base de datos PostgreSQL. Arranca primero. |
+| `biometrico-app` | construida desde `Dockerfile` | Aplicación Flask. Espera a que la DB esté lista (healthcheck). |
+
+Los datos de PostgreSQL se guardan en el volumen nombrado `postgres_data`. Los uploads y reportes PDF se guardan en el volumen `app_data`. **Ambos volúmenes persisten entre reinicios, actualizaciones y `docker compose down`.**
 
 ---
 
@@ -102,6 +115,15 @@ nano .env          # o gedit .env si prefieres editor gráfico
 
 Rellenar los valores obligatorios (ver sección [Referencia del .env](#referencia-del-env) al final).
 
+Los valores más importantes en esta instalación son:
+
+- `ZK_IP`, `ZK_PORT`, `ZK_PASSWORD` — datos del dispositivo biométrico
+- `POSTGRES_PASSWORD` — contraseña de la base de datos (elegir una segura)
+- `FLASK_SECRET_KEY` — clave aleatoria para sesiones Flask
+- `NOMBRE_INSTITUCION` — aparece en los encabezados de los PDFs
+
+> La variable `DATABASE_URL` se configura automáticamente en el `docker-compose.yml` para usar el servicio `db` como host. En el `.env` local puedes dejarla apuntando a `localhost:5432` para desarrollo sin Docker.
+
 ---
 
 ## A4 — Iniciar el sistema
@@ -110,15 +132,17 @@ Rellenar los valores obligatorios (ver sección [Referencia del .env](#referenci
 docker compose up -d --build
 ```
 
-La primera vez descarga la imagen base de Python e instala las dependencias: puede tardar 3–5 minutos.
+La primera vez descarga las imágenes base de Python y PostgreSQL, e instala las dependencias: puede tardar 3–5 minutos.
 
-Verificar que está corriendo:
+Docker levanta primero el servicio `biometrico-db` y espera a que PostgreSQL esté listo (healthcheck). Recién entonces arranca `biometrico-app`, que al iniciar ejecuta `init_db()` para crear el schema y sembrar datos iniciales.
+
+Verificar que ambos servicios están corriendo:
 
 ```bash
 docker compose ps
 ```
 
-La columna `Status` debe decir `Up`. Abrir el navegador en:
+La columna `Status` debe decir `Up` para ambos contenedores. Abrir el navegador en:
 
 ```
 http://localhost:5000
@@ -128,11 +152,11 @@ http://localhost:5000
 
 ## A5 — Comportamiento al reiniciar la PC
 
-El contenedor tiene `restart: unless-stopped`. Esto significa:
+Ambos contenedores tienen `restart: unless-stopped`. Esto significa:
 
-- Si reinicias la PC: el contenedor **arranca automáticamente** cuando Docker arranca.
+- Si reinicias la PC: los contenedores **arrancan automáticamente** cuando Docker arranca.
 - Docker arranca automáticamente con el sistema en la mayoría de distribuciones Linux tras la instalación.
-- Si detuviste el contenedor manualmente con `docker compose down`, **no** arrancará solo al reiniciar.
+- Si detuviste los contenedores manualmente con `docker compose down`, **no** arrancarán solos al reiniciar.
 
 Para verificar si Docker arranca con el sistema:
 
@@ -235,7 +259,7 @@ Rellenar los valores (ver sección [Referencia del .env](#referencia-del-env)).
 docker compose up -d --build
 ```
 
-Verificar:
+Verificar ambos servicios:
 
 ```bash
 docker compose ps
@@ -252,35 +276,43 @@ http://IP_DEL_SERVIDOR:5000
 
 ## B5 — Abrir el firewall (si aplica)
 
-Si el servidor tiene UFW activado:
+Si el servidor tiene UFW activado, solo es necesario abrir el puerto de la app (PostgreSQL no necesita estar expuesto externamente):
 
 ```bash
 sudo ufw allow 5000/tcp
 sudo ufw status
 ```
 
+El puerto `5432` de PostgreSQL está mapeado **solo a localhost** (`127.0.0.1:5432`) por diseño — no es accesible desde la red externa.
+
 ---
 
 ## B6 — Optimización de red para Linux (opcional)
 
-En Linux con Docker Engine, existe una alternativa más directa para el networking que elimina la capa NAT. Editar `docker-compose.yml` y cambiar:
+En Linux con Docker Engine, si el dispositivo ZK está en una subred que no es alcanzable por el NAT de Docker, se puede usar `network_mode: host` para la app. **Esta opción es incompatible con `depends_on`** (que coordina el arranque de PostgreSQL).
+
+Para usarla, editar `docker-compose.yml` en el servicio `biometrico-app`:
 
 ```yaml
-# Comentar el bloque ports:
+# Comentar el bloque ports y depends_on:
 # ports:
 #   - "5000:5000"
+# depends_on:
+#   db:
+#     condition: service_healthy
 
 # Descomentar esta línea:
 network_mode: host
 ```
 
-Reiniciar:
+Cuando se usa `network_mode: host`, levantar primero la base de datos por separado:
 
 ```bash
-docker compose up -d --build
+docker compose up -d db       # esperar unos segundos a que esté healthy
+docker compose up -d biometrico-app
 ```
 
-Con `network_mode: host` el contenedor usa directamente la red del host. Útil si el dispositivo ZK está en una subred específica que no es alcanzable por el NAT de Docker. **No usar esta opción en Windows ni macOS.**
+**No usar esta opción en Windows ni macOS.**
 
 ---
 
@@ -370,7 +402,7 @@ La primera vez tarda 3–5 minutos. Cuando termine:
 docker compose ps
 ```
 
-Abrir el navegador en:
+Deben aparecer **dos contenedores** en estado `Up`: `biometrico-db` y `biometrico-app`. Abrir el navegador en:
 
 ```
 http://localhost:5000
@@ -385,7 +417,7 @@ Docker Desktop tiene una opción para arrancar con Windows. Para activarla:
 1. Hacer clic derecho en el ícono de Docker en la barra de tareas → **Settings**
 2. En la sección **General** → activar **"Start Docker Desktop when you sign in to your computer"**
 
-El contenedor tiene `restart: unless-stopped`, así que cuando Docker Desktop arranque, el contenedor también lo hará automáticamente.
+Ambos contenedores tienen `restart: unless-stopped`, así que cuando Docker Desktop arranque, los contenedores también lo harán automáticamente.
 
 ---
 
@@ -405,47 +437,52 @@ Si el contenedor no puede alcanzar el dispositivo ZK:
 
 # ESCENARIO D — Distribuir la imagen sin código fuente
 
-Usa este flujo cuando quieres instalar el sistema en otra PC **sin copiar el código fuente** — solo la imagen Docker compilada. Es el método más rápido para entregar la aplicación a máquinas de producción que no tienen acceso al repositorio.
+Usa este flujo cuando quieres instalar el sistema en otra PC **sin copiar el código fuente** — solo las imágenes Docker compiladas. Es el método más rápido para entregar la aplicación a máquinas de producción que no tienen acceso al repositorio.
 
 ---
 
-## D1 — Construir y exportar la imagen (desde la PC de desarrollo)
+## D1 — Construir y exportar las imágenes (desde la PC de desarrollo)
 
-Primero asegurarse de que la imagen está construida:
+Primero asegurarse de que las imágenes están construidas:
 
 ```bash
 docker compose build --no-cache
 ```
 
-Luego exportarla a un archivo `.tar`:
+Luego exportar **ambas imágenes** (la app y PostgreSQL):
 
 ```bash
-docker save -o ~/Desktop/rrhh-biometrico.tar script_informe_asistencia-rrhh-app
+# Imagen de la app (construida localmente)
+docker save -o ~/Desktop/rrhh-app.tar script_informe_asistencia-biometrico-app
+
+# Imagen de PostgreSQL (descargada de Docker Hub)
+docker save -o ~/Desktop/rrhh-postgres.tar postgres:16-alpine
 ```
 
-> El nombre de la imagen (`script_informe_asistencia-rrhh-app`) se puede confirmar con `docker images`.
+> Los nombres de las imágenes se pueden confirmar con `docker images`.
 
 ---
 
 ## D2 — Archivos a transferir
 
-Copiar los siguientes tres archivos a la PC de destino (USB, Google Drive, etc.):
+Copiar los siguientes archivos a la PC de destino (USB, Google Drive, etc.):
 
 | Archivo | Descripción |
 |---|---|
-| `rrhh-biometrico.tar` | Imagen Docker exportada (contiene toda la aplicación) |
-| `docker-compose.yml` | Configuración del contenedor |
-| `.env` | Variables de entorno (IP del ZK, contraseña, etc.) |
+| `rrhh-app.tar` | Imagen Docker de la aplicación Flask |
+| `rrhh-postgres.tar` | Imagen Docker de PostgreSQL 16 |
+| `docker-compose.yml` | Configuración de ambos contenedores |
+| `.env` | Variables de entorno (credenciales ZK, PostgreSQL, etc.) |
 
 Colocarlos todos en la misma carpeta, por ejemplo `C:\rrhh\` en Windows o `/opt/rrhh/` en Linux.
 
-> **Atención con el `.env`:** contiene la contraseña del dispositivo y `FLASK_SECRET_KEY`. Transferirlo por un medio seguro y no subirlo a repositorios públicos.
+> **Atención con el `.env`:** contiene contraseñas de la BD y el dispositivo ZK. Transferirlo por un medio seguro y no subirlo a repositorios públicos.
 
 ---
 
 ## D3 — Preparar el `docker-compose.yml` en la PC de destino
 
-En la PC de destino, abrir el `docker-compose.yml` y reemplazar la línea:
+En la PC de destino, abrir el `docker-compose.yml` y reemplazar en el servicio `biometrico-app`:
 
 ```yaml
 build: .
@@ -454,17 +491,18 @@ build: .
 por:
 
 ```yaml
-image: script_informe_asistencia-rrhh-app
+image: script_informe_asistencia-biometrico-app
 ```
 
 Esto es necesario porque en la PC de destino no existe el código fuente — solo se usará la imagen ya compilada.
 
 ---
 
-## D4 — Cargar la imagen e iniciar (Linux)
+## D4 — Cargar las imágenes e iniciar (Linux)
 
 ```bash
-docker load -i rrhh-biometrico.tar
+docker load -i rrhh-postgres.tar
+docker load -i rrhh-app.tar
 docker compose up -d
 ```
 
@@ -478,12 +516,13 @@ Acceder en: `http://localhost:5000`
 
 ---
 
-## D5 — Cargar la imagen e iniciar (Windows)
+## D5 — Cargar las imágenes e iniciar (Windows)
 
 Abrir PowerShell en la carpeta donde están los archivos:
 
 ```powershell
-docker load -i rrhh-biometrico.tar
+docker load -i rrhh-postgres.tar
+docker load -i rrhh-app.tar
 docker compose up -d
 ```
 
@@ -505,24 +544,24 @@ Cuando salga una nueva versión, repetir desde la PC de desarrollo:
 # 1. Reconstruir con los últimos cambios
 docker compose build
 
-# 2. Exportar la nueva imagen
-docker save -o ~/Desktop/rrhh-biometrico-v2.tar script_informe_asistencia-rrhh-app
+# 2. Exportar la nueva imagen (solo la app, PostgreSQL no cambia)
+docker save -o ~/Desktop/rrhh-app-v2.tar script_informe_asistencia-biometrico-app
 ```
 
 En la PC de destino:
 
 ```bash
-# Detener el contenedor actual
-docker compose down
+# Detener el contenedor de la app (la BD puede seguir corriendo)
+docker compose stop biometrico-app
 
-# Cargar la nueva imagen (reemplaza la anterior)
-docker load -i rrhh-biometrico-v2.tar
+# Cargar la nueva imagen
+docker load -i rrhh-app-v2.tar
 
 # Volver a levantar
 docker compose up -d
 ```
 
-> La base de datos con los registros de asistencia **no se pierde** — el volumen `db_data` se mantiene entre actualizaciones.
+> Los datos de PostgreSQL están en el volumen `postgres_data` — **no se pierden** al actualizar la imagen de la app.
 
 ---
 
@@ -539,15 +578,24 @@ Una vez que el sistema esté corriendo, estos pasos son iguales sin importar el 
 
 Si `APP_PASSWORD_HASH` está configurado en el `.env`, el sistema pedirá contraseña. Si está vacío, no hay autenticación (modo desarrollo).
 
-## 2 — Cargar los horarios del personal
+## 2 — Verificar la base de datos
+
+Al iniciar por primera vez, la app crea automáticamente el schema de PostgreSQL y carga:
+- El tenant `istpet` con su sede principal y dispositivo ZK
+- Los tipos de persona: `Empleado` y `Practicante`
+- Los feriados nacionales de Ecuador 2025 y 2026
+
+Verificar en la UI que el estado de sincronización muestra la BD lista.
+
+## 3 — Cargar los horarios del personal
 
 1. En la card azul **Horarios Personalizados**, hacer clic en **Importar**
 2. Seleccionar el archivo `horarios_personal_ingreso.obd` (o `.ods` / `.csv`)
 3. Verificar que muestra el número de horarios cargados correctamente
 
-Los horarios quedan guardados en la base de datos y **no hay que volver a cargarlos** salvo que cambien. También se pueden agregar o editar personas individualmente con el botón **+ Agregar persona**.
+Los horarios quedan guardados en PostgreSQL y **no hay que volver a cargarlos** salvo que cambien. También se pueden agregar o editar personas individualmente con el botón **+ Agregar persona**.
 
-## 3 — Primera sincronización
+## 4 — Primera sincronización
 
 1. Seleccionar el rango de fechas del mes actual en la interfaz web
 2. Hacer clic en **Sincronizar**
@@ -596,8 +644,8 @@ No añadir comillas ni espacios alrededor del valor.
 ## Paso 3 — Aplicar el cambio
 
 ```bash
-# Basta con reiniciar, no hace falta reconstruir la imagen
-docker compose restart
+# Basta con reiniciar la app, no hace falta reconstruir ni reiniciar la BD
+docker compose restart biometrico-app
 ```
 
 Al acceder a `http://localhost:5000` (o `http://IP:5000`) el sistema mostrará la pantalla de login.
@@ -607,10 +655,8 @@ Al acceder a `http://localhost:5000` (o `http://IP:5000`) el sistema mostrará l
 Repetir el Paso 1 con la nueva contraseña, reemplazar el valor en `.env` y reiniciar:
 
 ```bash
-docker compose restart
+docker compose restart biometrico-app
 ```
-
-No hace falta reconstruir la imagen (`--build`) para este cambio.
 
 ## Deshabilitar la autenticación temporalmente
 
@@ -621,7 +667,7 @@ APP_PASSWORD_HASH=
 ```
 
 ```bash
-docker compose restart
+docker compose restart biometrico-app
 ```
 
 ---
@@ -670,7 +716,7 @@ git pull origin main
 docker compose up -d --build
 ```
 
-La base de datos, los horarios cargados y los registros sincronizados **se conservan** — el volumen `db_data` no se toca durante la reconstrucción.
+Los datos de PostgreSQL (en el volumen `postgres_data`) **se conservan** — el volumen no se toca durante la reconstrucción.
 
 ## Si no usas Git
 
@@ -716,7 +762,7 @@ Ver [sección D6](#d6--actualizar-la-aplicación-flujo-sin-código-fuente).
 | Solo archivos `.py`, `.html`, `.css` | menos de 30 segundos (Docker reutiliza capas cacheadas) |
 | El archivo `requirements.txt` | 3–5 minutos (reinstala dependencias) |
 
-Durante la reconstrucción el contenedor anterior se detiene brevemente.
+Durante la reconstrucción el contenedor de la app se detiene brevemente. PostgreSQL sigue corriendo y los datos no se tocan.
 
 ---
 
@@ -724,36 +770,115 @@ Durante la reconstrucción el contenedor anterior se detiene brevemente.
 
 # Comandos de mantenimiento frecuentes
 
-Estos comandos son los mismos en Linux y Windows (PowerShell):
+## Gestión de servicios
 
 ```bash
-# Ver si el contenedor está corriendo
+# Ver si ambos contenedores están corriendo
 docker compose ps
 
-# Ver logs en tiempo real
+# Ver logs en tiempo real (ambos servicios)
 docker compose logs -f
 
-# Reiniciar sin reconstruir (aplica cambios del .env)
+# Ver logs solo de la app
+docker compose logs -f biometrico-app
+
+# Ver logs solo de la base de datos
+docker compose logs -f biometrico-db
+
+# Reiniciar solo la app (aplica cambios del .env sin tocar la BD)
+docker compose restart biometrico-app
+
+# Reiniciar todo el stack
 docker compose restart
 
-# Detener el sistema (conserva los datos)
+# Detener el sistema (conserva los datos en los volúmenes)
 docker compose down
 
 # Ver todas las imágenes disponibles
 docker images
-
-# Hacer backup de la base de datos
-docker cp rrhh-biometrico:/data/asistencias.db ./backup_$(date +%Y%m%d).db
-
-# En Windows PowerShell el backup es:
-# docker cp rrhh-biometrico:/data/asistencias.db .\backup.db
-
-# Restaurar un backup
-docker compose down
-docker compose up -d
-docker cp ./backup_20260101.db rrhh-biometrico:/data/asistencias.db
-docker compose restart
 ```
+
+## Backup y restauración de la base de datos
+
+La base de datos ahora es PostgreSQL. Para hacer backup se usa `pg_dump`:
+
+```bash
+# Backup completo (SQL legible, comprimido)
+docker exec biometrico-db pg_dump \
+  -U asistencias_user \
+  -d asistencias_db \
+  --no-password \
+  | gzip > backup_$(date +%Y%m%d_%H%M).sql.gz
+
+# Backup en formato binario (más rápido para restaurar)
+docker exec biometrico-db pg_dump \
+  -U asistencias_user \
+  -d asistencias_db \
+  -Fc \
+  > backup_$(date +%Y%m%d_%H%M).dump
+```
+
+**Restaurar desde backup SQL:**
+
+```bash
+# Detener la app pero dejar la BD corriendo
+docker compose stop biometrico-app
+
+# Restaurar (el flag -c limpia antes de restaurar)
+gunzip -c backup_20260101_0030.sql.gz | \
+  docker exec -i biometrico-db psql \
+  -U asistencias_user \
+  -d asistencias_db
+
+# Volver a levantar la app
+docker compose start biometrico-app
+```
+
+**Restaurar desde backup binario:**
+
+```bash
+docker compose stop biometrico-app
+
+docker exec -i biometrico-db pg_restore \
+  -U asistencias_user \
+  -d asistencias_db \
+  --clean \
+  < backup_20260101_0030.dump
+
+docker compose start biometrico-app
+```
+
+## Acceso directo a PostgreSQL
+
+```bash
+# Consola interactiva psql
+docker exec -it biometrico-db psql -U asistencias_user -d asistencias_db
+
+# Consultas rápidas sin entrar a la consola
+docker exec biometrico-db psql -U asistencias_user -d asistencias_db \
+  -c "SELECT COUNT(*) FROM istpet.asistencias;"
+
+# Ver todas las tablas del tenant
+docker exec biometrico-db psql -U asistencias_user -d asistencias_db \
+  -c "\dt istpet.*"
+```
+
+## Migraciones de schema (Alembic)
+
+Cuando se actualice el código y haya cambios en el schema de la BD:
+
+```bash
+# Ver la versión actual de la migración
+docker compose exec biometrico-app alembic current
+
+# Aplicar migraciones pendientes
+docker compose exec biometrico-app alembic upgrade head
+
+# Ver el historial de migraciones
+docker compose exec biometrico-app alembic history
+```
+
+En la mayoría de actualizaciones de código **no es necesario correr Alembic manualmente** — `init_db()` al arrancar la app aplica los DDL faltantes con `IF NOT EXISTS`. Alembic es para migraciones destructivas o cambios de tipo de columna que no son automáticos.
 
 ---
 
@@ -762,6 +887,10 @@ docker compose restart
 # Referencia del `.env`
 
 ```ini
+# ── Información del sistema ────────────────────────────────────────────
+NOMBRE_SISTEMA=Informes Biométricos
+NOMBRE_INSTITUCION=ISTPET
+
 # ── Dispositivo biométrico ZK ──────────────────────────────────────────
 # IP del dispositivo (ver en pantalla del equipo: Menú → Opciones → Comunicación)
 ZK_IP=192.168.X.X
@@ -774,10 +903,13 @@ ZK_PORT=4370
 ZK_PASSWORD=0
 
 # Segundos de espera para conectar
-ZK_TIMEOUT=5
+ZK_TIMEOUT=120
 
 # Protocolo UDP en lugar de TCP (más rápido en red local, probar si TCP es lento)
 ZK_UDP=false
+
+# Capacidad máxima del dispositivo (para estimar % de uso)
+ZK_CAPACIDAD_MAX=80000
 
 # ── Sincronización automática ──────────────────────────────────────────
 # true = activa sync en background; false = solo manual desde la interfaz
@@ -787,12 +919,28 @@ SYNC_AUTO=false
 SYNC_HORA_NOCTURNA=00:30
 
 # Cada cuántos minutos hacer un sync parcial durante la jornada
-SYNC_INTERVALO_MIN=30
+SYNC_INTERVALO_MIN=480
 
 # ── Rutas de datos (internas del contenedor — NO cambiar) ──────────────
-DB_PATH=/data/asistencias.db
+DATA_DIR=/data
 UPLOAD_FOLDER=/data/uploads
 REPORTS_FOLDER=/data/reports
+
+# ── PostgreSQL ─────────────────────────────────────────────────────────
+# Usuario y contraseña de la base de datos — elegir una contraseña segura
+POSTGRES_USER=asistencias_user
+POSTGRES_PASSWORD=cambiar_esto_en_produccion
+POSTGRES_DB=asistencias_db
+
+# URL de conexión — en desarrollo local usar localhost; en Docker lo sobreescribe el compose
+DATABASE_URL=postgresql://asistencias_user:cambiar_esto_en_produccion@localhost:5432/asistencias_db
+
+# Slug del tenant activo (nombre del schema en PostgreSQL)
+TENANT_DEFAULT=istpet
+
+# Clave para cifrar contraseñas de dispositivos adicionales en la BD
+# Generar con: python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+DB_ENCRYPTION_KEY=generar_con_comando_de_arriba
 
 # ── Flask ──────────────────────────────────────────────────────────────
 # Clave secreta para sesiones Flask — generar con:
@@ -809,8 +957,18 @@ FLASK_DEBUG=false
 # Dejar vacío para deshabilitar la autenticación (modo desarrollo/interno)
 # Para generar el hash de tu contraseña:
 #   python3 -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('tu_clave'))"
-# Luego pegar el resultado aquí:
 APP_PASSWORD_HASH=
+
+# Contraseña separada para operaciones sensibles (limpiar el dispositivo ZK)
+APP_MAINTENANCE_PASSWORD_HASH=
+
+# ── Correo electrónico (SMTP) ──────────────────────────────────────────
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=notificaciones@tuinstituto.edu.ec
+SMTP_PASSWORD=tu_contraseña_o_app_password
+SMTP_FROM=notificaciones@tuinstituto.edu.ec
+SMTP_USE_TLS=true
 ```
 
 ---
@@ -819,27 +977,62 @@ APP_PASSWORD_HASH=
 
 # Solución de problemas
 
-### El contenedor aparece en estado "Exit"
+### Un contenedor aparece en estado "Exit" o "Restarting"
 
 ```bash
-docker compose logs rrhh-app
+# Ver qué servicio falló y por qué
+docker compose ps
+docker compose logs biometrico-app
+docker compose logs biometrico-db
 ```
 
-Causas frecuentes:
-- El archivo `.env` no existe o tiene valores mal formateados (espacios alrededor del `=`, comillas innecesarias).
-- El puerto 5000 ya está en uso. En Linux: `sudo ss -tlnp | grep 5000`. En Windows: `netstat -ano | findstr :5000`.
+Causas frecuentes para `biometrico-db`:
+- `POSTGRES_PASSWORD` no está configurado en el `.env`.
+- El volumen `postgres_data` está corrupto (muy raro). Verificar con `docker volume inspect`.
+
+Causas frecuentes para `biometrico-app`:
+- La app arrancó antes de que PostgreSQL estuviera listo. El healthcheck debería evitarlo, pero si falló, reiniciar con `docker compose restart biometrico-app`.
+- `DATABASE_URL` no apunta al host `db` dentro del compose. Verificar que el `docker-compose.yml` sobreescribe la variable con `@db:5432`.
+- El archivo `.env` tiene valores mal formateados (espacios alrededor del `=`, comillas innecesarias).
 
 ---
 
 ### "Port 5000 already in use"
 
-Cambiar el puerto en `.env`:
+Cambiar el puerto en `docker-compose.yml`:
 
-```ini
-FLASK_PORT=5001
+```yaml
+ports:
+  - "5001:5000"
 ```
 
-Y en `docker-compose.yml` cambiar `"5000:5000"` por `"5001:5001"`. Luego `docker compose up -d --build`.
+Luego `docker compose up -d --build`. Acceder en `http://localhost:5001`.
+
+---
+
+### "Port 5432 already in use"
+
+Hay otra instancia de PostgreSQL corriendo en el host. Opciones:
+
+**A) Cambiar el puerto de mapeo** (el Puerto interno del contenedor sigue siendo 5432):
+
+En `docker-compose.yml`, servicio `db`:
+```yaml
+ports:
+  - "127.0.0.1:5433:5432"   # mapear al 5433 en el host
+```
+
+La app dentro de Docker siempre usa el puerto interno 5432 — no es necesario cambiar `DATABASE_URL`.
+
+**B) No exponer el puerto** (si solo la app interna necesita la BD):
+
+```yaml
+# Comentar o eliminar el bloque ports del servicio db
+# ports:
+#   - "127.0.0.1:5432:5432"
+```
+
+La app sigue conectando porque ambos contenedores comparten la red interna de Docker.
 
 ---
 
@@ -886,7 +1079,7 @@ Si el puerto está abierto pero la app sigue sin conectar, el error interno suel
 - En el dispositivo: `Menú → Opciones → Comunicación → Contraseña del dispositivo`
 - Corregir el valor en `.env` y reiniciar:
   ```bash
-  docker compose restart
+  docker compose restart biometrico-app
   ```
 
 **4 — Si todo lo anterior está bien, probar con UDP:**
@@ -895,7 +1088,7 @@ Si el puerto está abierto pero la app sigue sin conectar, el error interno suel
 ZK_UDP=true
 ```
 ```bash
-docker compose restart
+docker compose restart biometrico-app
 ```
 
 **5 — El ZK admite una sola conexión simultánea.** Si el software del fabricante u otra instancia está conectada, cerrarla antes de sincronizar.
@@ -908,7 +1101,23 @@ Si configuraste `APP_PASSWORD_HASH` en el `.env` y el sistema no deja entrar:
 
 - Verificar que el hash fue generado correctamente con `werkzeug.security.generate_password_hash` y no copiado con espacios extra.
 - Verificar que `FLASK_SECRET_KEY` tiene un valor fijo y no cambia entre reinicios (si cambia, las sesiones existentes se invalidan).
-- Para deshabilitar temporalmente la autenticación: dejar `APP_PASSWORD_HASH=` vacío y reiniciar con `docker compose restart`.
+- Para deshabilitar temporalmente la autenticación: dejar `APP_PASSWORD_HASH=` vacío y reiniciar con `docker compose restart biometrico-app`.
+
+---
+
+### `alembic upgrade head` falla con "already exists"
+
+La migración `0001` usa `CREATE TABLE IF NOT EXISTS` — es idempotente. Si falla con otro error, verificar:
+
+```bash
+# Ver el estado actual de Alembic dentro del contenedor
+docker compose exec biometrico-app alembic current
+
+# Si no está en head, aplicar manualmente
+docker compose exec biometrico-app alembic upgrade head
+```
+
+Si la tabla `alembic_version` no existe aún en el schema del tenant, Alembic la creará automáticamente.
 
 ---
 
@@ -941,7 +1150,8 @@ git pull origin main
 Verificar que el archivo `.tar` y el `docker-compose.yml` están en la misma carpeta desde la que se ejecuta el comando. En Windows, usar la ruta completa si es necesario:
 
 ```powershell
-docker load -i C:\rrhh\rrhh-biometrico.tar
+docker load -i C:\rrhh\rrhh-app.tar
+docker load -i C:\rrhh\rrhh-postgres.tar
 ```
 
 ---
