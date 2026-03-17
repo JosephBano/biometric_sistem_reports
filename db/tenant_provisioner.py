@@ -6,6 +6,8 @@ Crea el schema, corre DDL y siembra datos iniciales.
 
 import logging
 from sqlalchemy import text
+from alembic.script import ScriptDirectory
+from alembic.config import Config
 
 from db.connection import get_engine, get_connection
 from db.schema import get_tenant_ddl
@@ -55,6 +57,27 @@ def provisionar_schema(slug: str, tipos_persona: list[str]) -> bool:
             # Cargar feriados nacionales de Ecuador
             log.info(f"Cargando feriados nacionales para '{slug}'...")
             _insertar_feriados_ecuador(conn)
+
+            # 3. Sincronizar Alembic Version
+            try:
+                # Cargar config de Alembic para obtener el head_revision
+                # Encontrar alembic.ini (asumiendo que está en el raíz)
+                import os
+                ini_path = "alembic.ini"
+                if os.path.exists(ini_path):
+                     alembic_cfg = Config(ini_path)
+                     script = ScriptDirectory.from_config(alembic_cfg)
+                     head_rev = script.get_current_head()
+                     
+                     if head_rev:
+                          log.info(f"Sincronizando Alembic en '{slug}' a revision '{head_rev}'...")
+                          conn.execute(text(f"CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
+                          conn.execute(text(f"DELETE FROM alembic_version"))
+                          conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head_rev})
+                else:
+                     log.warning("alembic.ini no encontrado para sincronizar version_num.")
+            except Exception as e_alembic:
+                log.warning(f"No se pudo sincronizar version de Alembic: {e_alembic}")
 
         log.info(f"Provisioning completado exitosamente para '{slug}'.")
         return True
