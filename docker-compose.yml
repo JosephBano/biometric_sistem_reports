@@ -1,29 +1,55 @@
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: biometrico-db
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - /etc/localtime:/etc/localtime:ro
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
   biometrico-app:
     build: .
     container_name: biometrico-app
     env_file:
       - .env
+    environment:
+      # En Docker, la app se conecta al servicio 'db' (no localhost)
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
-      # Volume nombrado: persiste la DB SQLite, uploads y reports
-      # entre reinicios, actualizaciones de imagen y docker compose down
-      - db_data:/data
-      # Montar la zona horaria del host para que los reportes tengan la hora correcta
+      # Uploads y reports como volumen nombrado
+      - app_data:/data
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
 
-    # Mapeo de puerto: funciona en Linux, Windows y macOS.
-    # El contenedor alcanza el dispositivo ZK en la red local a través del NAT de Docker.
+    # Mapeo de puerto estándar. En Linux con Docker Engine se puede usar
+    # network_mode: host para acceder al ZK sin NAT.
+    # NOTA: network_mode: host es incompatible con depends_on; si se necesita,
+    # levantar primero 'db' por separado: docker compose up -d db
     ports:
       - "5000:5000"
-    # ALTERNATIVA solo para Linux con Docker Engine (no Docker Desktop):
-    # network_mode: host da acceso directo a la red del host sin NAT.
-    # Útil si el ZK está en una subnet que no es accesible por NAT.
-    # Para usarla: comentar el bloque 'ports' y descomentar esta línea.
+    # Para usar network_mode: host, comentar el bloque 'ports' y 'depends_on' de arriba
+    # y descomentar la línea siguiente:
     # network_mode: host
 
 volumes:
-  db_data:
-    # Volume nombrado gestionado por Docker.
-    # Para hacer backup: docker cp rrhh-biometrico:/data/asistencias.db ./backup.db
-    # Para ver la ruta física: docker volume inspect rrhh-biometrico_db_data
+  postgres_data:
+    # Datos de PostgreSQL. Backup: docker exec biometrico-db pg_dump -U user db > backup.sql
+  app_data:
+    # Uploads y reports generados por la app

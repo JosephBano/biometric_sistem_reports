@@ -1,0 +1,105 @@
+"""
+Paquete db — capa de acceso a datos PostgreSQL.
+
+Re-exporta todas las funciones públicas con la misma firma que el sistema SQLite anterior.
+app.py, script.py y sync.py no requieren ningún cambio.
+"""
+
+# ── Inicialización ────────────────────────────────────────────────────────
+from db.init import init_db
+
+# ── Personas / Usuarios ZK ────────────────────────────────────────────────
+from db.queries.personas import (
+    upsert_usuarios,
+    get_ids_usuarios_zk,
+)
+
+# ── Asistencias ───────────────────────────────────────────────────────────
+from db.queries.asistencias import (
+    insertar_asistencias,
+    consultar_asistencias,
+    get_personas,
+    get_personas_con_id,
+    get_estado,
+)
+
+# ── Horarios ──────────────────────────────────────────────────────────────
+from db.queries.horarios import (
+    upsert_horarios,
+    upsert_horario,
+    get_horarios,
+    get_horario,
+    delete_horario,
+    get_estado_horarios,
+)
+
+# ── Sync log ──────────────────────────────────────────────────────────────
+from db.queries.sync_log import registrar_sync
+
+# ── Justificaciones ───────────────────────────────────────────────────────
+from db.queries.justificaciones import (
+    insertar_justificacion,
+    get_justificaciones,
+    get_justificaciones_dict,
+    get_justificaciones_pendientes,
+    actualizar_estado_justificacion,
+    eliminar_justificacion,
+    get_justificacion_by_id,
+    actualizar_justificacion_completa,
+)
+
+# ── Breaks categorizados ──────────────────────────────────────────────────
+from db.queries.breaks import (
+    get_breaks_categorizados_dict,
+    insertar_break_categorizado,
+)
+
+# ── Feriados ──────────────────────────────────────────────────────────────
+from db.queries.feriados import (
+    insertar_feriado,
+    get_feriados,
+    get_feriados_set,
+    eliminar_feriado,
+    importar_feriados_csv,
+)
+
+__all__ = [
+    # init
+    "init_db",
+    # personas
+    "upsert_usuarios",
+    "get_ids_usuarios_zk",
+    # asistencias
+    "insertar_asistencias",
+    "consultar_asistencias",
+    "get_personas",
+    "get_personas_con_id",
+    "get_estado",
+    # horarios
+    "upsert_horarios",
+    "upsert_horario",
+    "get_horarios",
+    "get_horario",
+    "delete_horario",
+    "get_estado_horarios",
+    # sync
+    "registrar_sync",
+    # justificaciones
+    "insertar_justificacion",
+    "get_justificaciones",
+    "get_justificaciones_dict",
+    "get_justificaciones_pendientes",
+    "actualizar_estado_justificacion",
+    "eliminar_justificacion",
+    "get_justificacion_by_id",
+    "actualizar_justificacion_completa",
+    # breaks
+    "get_breaks_categorizados_dict",
+    "insertar_break_categorizado",
+    # feriados
+    "insertar_feriado",
+    "get_feriados",
+    "get_feriados_set",
+    "eliminar_feriado",
+    "importar_feriados_csv",
+]

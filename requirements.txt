@@ -14,3 +14,13 @@ schedule
 
 # Lectura de archivos .ods/.obd (OpenDocument Spreadsheet)
 odfpy
+
+# Base de datos PostgreSQL
+sqlalchemy>=2.0
+psycopg2-binary>=2.9
+
+# Migraciones
+alembic>=1.13
+
+# Cifrado (contraseñas de dispositivos ZK en BD)
+cryptography>=42.0
