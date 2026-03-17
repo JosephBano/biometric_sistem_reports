@@ -61,10 +61,27 @@ def get_job_status(job_id: str) -> dict:
 # UTILIDADES
 # ══════════════════════════════════════════════════════════════════════════
 
+def _get_zk_password() -> int:
+    """
+    Lee la contraseña del dispositivo ZK.
+    Prioridad: password_enc en BD (descifrado) → ZK_PASSWORD en .env.
+    ZK_PASSWORD en .env queda deprecada a partir de Fase 2.
+    """
+    try:
+        import db as db_module
+        enc = db_module.get_device_password_enc()
+        if enc:
+            import auth as auth_module
+            return int(auth_module.decrypt_device_password(enc))
+    except Exception:
+        pass
+    return int(os.getenv("ZK_PASSWORD", "0"))
+
+
 def _make_zk() -> "ZK":
-    # Leer siempre desde env para que cambios en .env surtan efecto sin reiniciar
-    timeout  = int(os.getenv("ZK_TIMEOUT",  "120"))
-    password = int(os.getenv("ZK_PASSWORD", "0"))
+    # Leer siempre en runtime para reflejar cambios sin reiniciar
+    timeout  = int(os.getenv("ZK_TIMEOUT", "120"))
+    password = _get_zk_password()
     udp      = os.getenv("ZK_UDP", "false").lower() == "true"
     return ZK(
         ZK_IP,
@@ -104,7 +121,7 @@ def ping_dispositivo() -> bool:
     if not ZK_DISPONIBLE:
         return False
     try:
-        password = int(os.getenv("ZK_PASSWORD", "0"))
+        password = _get_zk_password()
         udp      = os.getenv("ZK_UDP", "false").lower() == "true"
         zk = ZK(
             ZK_IP, port=ZK_PORT, timeout=10,

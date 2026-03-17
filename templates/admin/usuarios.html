@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+.role-badge { font-size: 0.75rem; }
+.user-row-inactive { opacity: 0.55; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">Gestión de Usuarios</h5>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrear">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">person_add</span>
+        Nuevo Usuario
+    </button>
+</div>
+
+{% if mensaje %}
+<div class="alert alert-{{ mensaje_tipo or 'info' }} alert-dismissible fade show" role="alert">
+    {{ mensaje }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Tabla de usuarios -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Último acceso</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr class="{{ 'user-row-inactive' if not u.activo else '' }}">
+                        <td class="fw-medium">{{ u.nombre }}</td>
+                        <td class="text-muted small">{{ u.email }}</td>
+                        <td>
+                            {% for rol in u.roles %}
+                            <span class="badge role-badge
+                                {% if rol == 'superadmin' %}bg-danger
+                                {% elif rol == 'admin' %}bg-primary
+                                {% elif rol == 'gestor' %}bg-success
+                                {% elif rol in ('supervisor_grupo', 'supervisor_periodo') %}bg-warning text-dark
+                                {% else %}bg-secondary{% endif %}">
+                                {{ rol }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">Sin roles</span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-muted small">
+                            {% if u.ultimo_acceso %}
+                                {{ u.ultimo_acceso.strftime('%d/%m/%Y %H:%M') if u.ultimo_acceso else '—' }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if u.activo %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    onclick="abrirEditar('{{ u.id }}', {{ u | tojson }})">
+                                Editar
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No hay usuarios registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Crear usuario -->
+<div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin_crear_usuario') }}" id="formCrear">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalCrearLabel">Nuevo Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre completo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email <span class="text-danger">*</span></label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña temporal <span class="text-danger">*</span></label>
+                        <input type="password" class="form-control" name="password" required minlength="8"
+                               placeholder="Mínimo 8 caracteres">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Roles</label>
+                        <div id="crear-roles">
+                            {% for rol in roles_disponibles %}
+                            <div class="form-check">
+                                <input class="form-check-input rol-check" type="checkbox"
+                                       name="roles" value="{{ rol }}" id="crear_{{ rol }}"
+                                       onchange="toggleScopeFields('crear', this)">
+                                <label class="form-check-label" for="crear_{{ rol }}">{{ rol }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Scope: supervisor_grupo -->
+                    <div class="mb-3 scope-field" id="crear-scope-grupo" style="display:none;">
+                        <label class="form-label">Grupo asignado</label>
+                        <select class="form-select" name="supervisor_grupo_id">
+                            <option value="">— Seleccione un grupo —</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}">{{ g.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Scope: supervisor_periodo -->
+                    <div class="mb-3 scope-field" id="crear-scope-periodo" style="display:none;">
+                        <label class="form-label">Período de vigencia asignado</label>
+                        <select class="form-select" name="supervisor_periodo_id">
+                            <option value="">— Seleccione un período —</option>
+                            {% for p in periodos %}
+                            <option value="{{ p.id }}">{{ p.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear usuario</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Editar usuario -->
+<div class="modal fade" id="modalEditar" tabindex="-1" aria-labelledby="modalEditarLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" id="formEditar">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="_method" value="PUT">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarLabel">Editar Usuario</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-control" id="editar-nombre" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Roles</label>
+                        <div id="editar-roles">
+                            {% for rol in roles_disponibles %}
+                            <div class="form-check">
+                                <input class="form-check-input rol-check-editar" type="checkbox"
+                                       name="roles" value="{{ rol }}" id="editar_{{ rol }}"
+                                       onchange="toggleScopeFields('editar', this)">
+                                <label class="form-check-label" for="editar_{{ rol }}">{{ rol }}</label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Scope: supervisor_grupo -->
+                    <div class="mb-3" id="editar-scope-grupo" style="display:none;">
+                        <label class="form-label">Grupo asignado</label>
+                        <select class="form-select" name="supervisor_grupo_id" id="editar-grupo-select">
+                            <option value="">— Seleccione un grupo —</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}">{{ g.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Scope: supervisor_periodo -->
+                    <div class="mb-3" id="editar-scope-periodo" style="display:none;">
+                        <label class="form-label">Período de vigencia asignado</label>
+                        <select class="form-select" name="supervisor_periodo_id" id="editar-periodo-select">
+                            <option value="">— Seleccione un período —</option>
+                            {% for p in periodos %}
+                            <option value="{{ p.id }}">{{ p.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <hr>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" name="activo"
+                               id="editar-activo" value="1">
+                        <label class="form-check-label" for="editar-activo">Usuario activo</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function toggleScopeFields(prefix, checkbox) {
+    const rol = checkbox.value;
+    if (rol === 'supervisor_grupo') {
+        document.getElementById(prefix + '-scope-grupo').style.display =
+            checkbox.checked ? 'block' : 'none';
+    }
+    if (rol === 'supervisor_periodo') {
+        document.getElementById(prefix + '-scope-periodo').style.display =
+            checkbox.checked ? 'block' : 'none';
+    }
+}
+
+function abrirEditar(usuarioId, datos) {
+    // Configurar acción del form
+    document.getElementById('formEditar').action = '/admin/usuarios/' + usuarioId;
+
+    // Nombre (solo lectura)
+    document.getElementById('editar-nombre').value = datos.nombre || '';
+
+    // Limpiar checkboxes
+    document.querySelectorAll('.rol-check-editar').forEach(cb => {
+        cb.checked = (datos.roles || []).includes(cb.value);
+    });
+
+    // Scopes
+    const cfg = datos.configuracion || {};
+    const tieneGrupo = (datos.roles || []).includes('supervisor_grupo');
+    const tienePeriodo = (datos.roles || []).includes('supervisor_periodo');
+
+    document.getElementById('editar-scope-grupo').style.display = tieneGrupo ? 'block' : 'none';
+    document.getElementById('editar-scope-periodo').style.display = tienePeriodo ? 'block' : 'none';
+
+    if (cfg.supervisor_grupo_id) {
+        document.getElementById('editar-grupo-select').value = cfg.supervisor_grupo_id;
+    }
+    if (cfg.supervisor_periodo_id) {
+        document.getElementById('editar-periodo-select').value = cfg.supervisor_periodo_id;
+    }
+
+    // Activo
+    document.getElementById('editar-activo').checked = datos.activo !== false;
+
+    new bootstrap.Modal(document.getElementById('modalEditar')).show();
+}
+</script>
+{% endblock %}

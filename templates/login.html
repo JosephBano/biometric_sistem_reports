@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-
 <body>
 
     <div class="login-wrapper">
@@ -22,10 +20,18 @@
                 {% if error %}
                 <div class="alert alert-danger py-2 small mb-3">{{ error }}</div>
                 {% endif %}
-                <form method="POST" action="/login">
+                <form method="POST" action="{{ url_for('login') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="email">Correo electrónico</label>
+                        <input type="email" class="form-control" id="email" name="email"
+                            autofocus autocomplete="email" required
+                            placeholder="usuario@institucion.edu.ec"
+                            value="{{ email_previo or '' }}">
+                    </div>
                     <div class="mb-4">
-                        <label class="form-label" for="password">Contraseña de acceso</label>
-                        <input type="password" class="form-control" id="password" name="password" autofocus
+                        <label class="form-label" for="password">Contraseña</label>
+                        <input type="password" class="form-control" id="password" name="password"
                             autocomplete="current-password" required placeholder="Ingrese su contraseña">
                     </div>
                     <div class="d-grid">
@@ -37,5 +43,4 @@
     </div>
 
 </body>
-
 </html>

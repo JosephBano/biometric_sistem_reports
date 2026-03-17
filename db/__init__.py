@@ -5,6 +5,9 @@ Re-exporta todas las funciones públicas con la misma firma que el sistema SQLit
 app.py, script.py y sync.py no requieren ningún cambio.
 """
 
+# ── Conexión ──────────────────────────────────────────────────────────────
+from db.connection import get_connection
+
 # ── Inicialización ────────────────────────────────────────────────────────
 from db.init import init_db
 
@@ -63,7 +66,27 @@ from db.queries.feriados import (
     importar_feriados_csv,
 )
 
+# ── Auth / Usuarios de la app ─────────────────────────────────────────────
+from db.queries.auth import (
+    get_usuario_por_email,
+    get_usuario_por_id,
+    get_usuarios_tenant,
+    crear_usuario_db,
+    actualizar_roles_db,
+    desactivar_usuario_db,
+    activar_usuario_db,
+    actualizar_ultimo_acceso,
+    registrar_audit,
+    registrar_login_intento,
+    contar_intentos_fallidos,
+    get_tipos_persona,
+    get_device_password_enc,
+    set_device_password_enc,
+)
+
 __all__ = [
+    # conexión
+    "get_connection",
     # init
     "init_db",
     # personas
@@ -102,4 +125,19 @@ __all__ = [
     "get_feriados_set",
     "eliminar_feriado",
     "importar_feriados_csv",
+    # auth
+    "get_usuario_por_email",
+    "get_usuario_por_id",
+    "get_usuarios_tenant",
+    "crear_usuario_db",
+    "actualizar_roles_db",
+    "desactivar_usuario_db",
+    "activar_usuario_db",
+    "actualizar_ultimo_acceso",
+    "registrar_audit",
+    "registrar_login_intento",
+    "contar_intentos_fallidos",
+    "get_tipos_persona",
+    "get_device_password_enc",
+    "set_device_password_enc",
 ]

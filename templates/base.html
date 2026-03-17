@@ -45,21 +45,31 @@
                         <span class="material-symbols-outlined nav-icon">description</span> Reportes
                     </a>
                 </li>
+                {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'admin_usuarios' %}active{% endif %}" href="{{ url_for('admin_usuarios') }}">
+                        <span class="material-symbols-outlined nav-icon">manage_accounts</span> Usuarios
+                    </a>
+                </li>
+                {% endif %}
             </ul>
 
             <div class="sidebar-footer p-3 border-top mt-auto">
                 <div class="d-flex align-items-center mb-2">
-                    <span class="material-symbols-outlined nav-icon">person</span> 
-                    <small class="text-truncate">Admin</small>
+                    <span class="material-symbols-outlined nav-icon">person</span>
+                    <small class="text-truncate ms-1">{{ current_user_nombre or 'Invitado' }}</small>
                 </div>
-                {% if auth_enabled %}
-                <!-- Since logout uses standard form submit -->
+                {% if current_user_roles %}
+                <div class="mb-2">
+                    {% for rol in current_user_roles %}
+                    <span class="badge bg-secondary-subtle text-secondary" style="font-size:0.7rem;">{{ rol }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
                 <form method="POST" action="{{ url_for('logout') }}" class="m-0">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-sm btn-outline-danger w-100">Cerrar sesión</button>
                 </form>
-                {% else %}
-                <small class="text-muted d-block text-center mt-2" style="font-size: 0.75rem;">Sin autenticación</small>
-                {% endif %}
             </div>
         </nav>
 

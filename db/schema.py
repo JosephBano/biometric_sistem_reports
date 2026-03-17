@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
     roles         TEXT[]      NOT NULL DEFAULT '{}',
     activo        BOOLEAN     NOT NULL DEFAULT true,
     ultimo_acceso TIMESTAMPTZ,
+    configuracion JSONB       NOT NULL DEFAULT '{}',
     creado_por    UUID        REFERENCES public.usuarios(id) ON DELETE SET NULL,
     creado_en     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
