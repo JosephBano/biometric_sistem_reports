@@ -924,8 +924,10 @@ def analizar_por_persona(
             todos_los_dias.sort(key=lambda x: x["fecha"])
 
         if (verificar_horas or mostrar_tiempo_extra) and (horario_persona.get("horas_semana") or horario_persona.get("horas_mes")):
-            hs = horario_persona.get("horas_semana")
-            hm = horario_persona.get("horas_mes")
+            hs_val = horario_persona.get("horas_semana")
+            hm_val = horario_persona.get("horas_mes")
+            hs = float(hs_val) if hs_val is not None else None
+            hm = float(hm_val) if hm_val is not None else None
             total_neto_min = sum(d.get("tiempo_neto_min", 0) for d in todos_los_dias)
 
             if hs:
@@ -1716,7 +1718,7 @@ def _seccion_horas_contrato(st, resumen: dict) -> list:
         story.append(t)
     else: # mes
         total_trab = resumen.get("total_neto_min", 0)
-        esperado = int(valor * 60)
+        esperado = int(float(valor) * 60)
         diff = total_trab - esperado
         
         datos_mes = [
