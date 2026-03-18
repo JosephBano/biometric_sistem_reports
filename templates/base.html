@@ -82,15 +82,44 @@
             </header>
 
             <div class="content-wrapper p-4">
-                <!-- Zona de alertas globales (siempre útiles) -->
-                <div class="alert alert-danger alert-dismissible fade show" role="alert" id="global-error-alert" style="display:none;">
-                    <span id="global-error-msg"></span>
-                    <button type="button" class="btn-close" onclick="document.getElementById('global-error-alert').style.display='none';"></button>
+                <!-- Contenedor de Toasts Globales -->
+                <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 2000">
+                    <div id="globalToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                        <div class="d-flex">
+                            <div class="toast-body" id="globalToastMsg">Mensaje</div>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                        </div>
+                    </div>
                 </div>
-                <div class="alert alert-success alert-dismissible fade show" role="alert" id="global-success-alert" style="display:none;">
-                    <span id="global-success-msg"></span>
-                    <button type="button" class="btn-close" onclick="document.getElementById('global-success-alert').style.display='none';"></button>
-                </div>
+
+                <!-- Función Helper Global para Toasts -->
+                <script>
+                    function showToast(msg, type = 'success') {
+                        const toastEl = document.getElementById('globalToast');
+                        const msgEl = document.getElementById('globalToastMsg');
+                        if (msgEl) msgEl.textContent = msg;
+                        
+                        // Remover clases previas de color
+                        toastEl.classList.remove('text-bg-success', 'text-bg-danger', 'text-bg-warning', 'text-bg-info');
+                        const bgClass = type === 'danger' || type === 'error' ? 'text-bg-danger' : `text-bg-${type}`;
+                        toastEl.classList.add(bgClass);
+                        
+                        const toast = new bootstrap.Toast(toastEl, { delay: type === 'danger' ? 6000 : 4000 });
+                        toast.show();
+                    }
+                </script>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                  {% if messages %}
+                    <script>
+                       document.addEventListener("DOMContentLoaded", function() {
+                           {% for category, message in messages %}
+                               showToast("{{ message }}", "{{ 'danger' if category in ['danger', 'error'] else category }}");
+                           {% endfor %}
+                       });
+                    </script>
+                  {% endif %}
+                {% endwith %}
 
                 <!-- Definido por la vista hija -->
                 {% block content %}{% endblock %}

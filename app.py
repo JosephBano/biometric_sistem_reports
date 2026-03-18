@@ -56,6 +56,14 @@ limiter = Limiter(
     storage_uri="memory://",
 )
 
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    if request.path.startswith("/api/"):
+         return jsonify({"error": "Demasiadas solicitudes. Espere 15 minutos."}), 429
+    from flask import flash
+    flash("Demasiados intentos. Espere 15 minutos.", "danger")
+    return redirect(url_for('login'))
+
 UPLOAD_FOLDER  = os.getenv("UPLOAD_FOLDER",  "data/uploads")
 REPORTS_FOLDER = os.getenv("REPORTS_FOLDER", "data/reports")
 

@@ -58,23 +58,16 @@ function apiCall(url, options = {}) {
 }
 
 function showSuccess(msg) {
-    const alert = document.getElementById('global-success-alert');
-    if(alert) {
-        const msgEl = document.getElementById('global-success-msg');
-        if (msgEl) msgEl.textContent = msg;
-        alert.style.display = 'block';
-        setTimeout(() => alert.style.display = 'none', 5000);
+    if (typeof showToast === 'function') {
+        showToast(msg, 'success');
     } else {
         alert(msg);
     }
 }
 
 function showError(msg) {
-    const alert = document.getElementById('global-error-alert');
-    if(alert) {
-        const msgEl = document.getElementById('global-error-msg');
-        if (msgEl) msgEl.textContent = msg;
-        alert.style.display = 'block';
+    if (typeof showToast === 'function') {
+        showToast(msg, 'danger');
     } else {
         alert("ERROR: " + msg);
     }
