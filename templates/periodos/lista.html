@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Períodos de Vigencia</h3>
+        <p class="text-muted">Gestión de períodos de prácticas, contratistas y vigencias.</p>
+    </div>
+    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalCrearPeriodo">
+        <span class="material-symbols-outlined">add</span> Nuevo Período
+    </button>
+</div>
+
+<!-- Filtros -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label small text-muted">Tipo de Persona</label>
+                <select class="form-select" name="tipo_persona_id">
+                    <option value="">Todos los tipos</option>
+                    {% for t in tenant_tipos %}
+                    <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-light w-100">Filtrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="periodosTab" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" id="activos-tab" data-bs-toggle="tab" data-bs-target="#activos" type="button" role="tab">Activos</button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" id="historial-tab" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">Historial</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="periodosTabContent">
+    <!-- Activos -->
+    <div class="tab-pane fade show active" id="activos" role="tabpanel">
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            {% for p in periodos_activos %}
+            <div class="col">
+                <div class="card border-0 shadow-sm h-100 card-hover">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <span class="badge bg-success-subtle text-success">Activo</span>
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-icon" data-bs-toggle="dropdown">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li><a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('periodo_detalle', id=p.id) }}">
+                                        <span class="material-symbols-outlined fs-6">visibility</span> Ver Detalle</a>
+                                    </li>
+                                    <li><hr class="dropdown-menu-divider"></li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('cerrar_periodo_route', id=p.id) }}">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger">
+                                                <span class="material-symbols-outlined fs-6">lock</span> Cerrar Período
+                                            </button>
+                                        </form>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                        <h5 class="card-title fw-bold text-truncate">{{ p.nombre }}</h5>
+                        <p class="text-muted small mb-2 d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined fs-6">calendar_today</span>
+                            {{ p.fecha_inicio.strftime('%d/%m/%Y') }} — {{ p.fecha_fin.strftime('%d/%m/%Y') if p.fecha_fin else 'Indefinido' }}
+                        </p>
+                        <p class="text-muted small mb-3 d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined fs-6">group</span>
+                            {{ p.total_personas }} personas
+                        </p>
+                    </div>
+                    <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between">
+                        <a href="{{ url_for('periodo_detalle', id=p.id) }}" class="btn btn-sm btn-outline-primary w-100">Administrar</a>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-muted text-center py-4">No hay períodos activos.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Historial -->
+    <div class="tab-pane fade" id="historial" role="tabpanel">
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            {% for p in periodos_historial %}
+            <div class="col">
+                <div class="card border-0 shadow-sm h-100 opacity-75">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <span class="badge bg-secondary-subtle text-secondary">{{ p.estado | capitalize }}</span>
+                            <a href="{{ url_for('periodo_detalle', id=p.id) }}" class="btn btn-sm btn-icon"><span class="material-symbols-outlined">visibility</span></a>
+                        </div>
+                        <h5 class="card-title fw-bold text-truncate">{{ p.nombre }}</h5>
+                        <p class="text-muted small mb-2">
+                             {{ p.fecha_inicio.strftime('%d/%m/%Y') }} — {{ p.fecha_fin.strftime('%d/%m/%Y') if p.fecha_fin else 'Indefinido' }}
+                        </p>
+                        <p class="text-muted small mb-0">{{ p.total_personas }} personas</p>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-muted text-center py-4">No hay registros en el historial.</p>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Crear Periodo -->
+<div class="modal fade" id="modalCrearPeriodo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('crear_periodo_route') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Nuevo Período</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre del Período</label>
+                        <input type="text" class="form-control" name="nombre" placeholder="Ej: Prácticas Abril 2026" required>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label">Fecha Inicio</label>
+                            <input type="date" class="form-control" name="fecha_inicio" required>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Fecha Fin</label>
+                            <input type="date" class="form-control" name="fecha_fin">
+                            <small class="text-muted">Vacío para indefinido</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Descripción</label>
+                        <textarea class="form-control" name="descripcion" rows="2"></textarea>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label">Carga Masiva (Opcional)</label>
+                        <p class="small text-muted mb-2">Para crear el periodo y agregar personas con sus horarios de una sola vez.</p>
+                        <input type="file" class="form-control" name="archivo_csv" accept=".csv" disabled>
+                        <small class="text-warning">Cree el periodo primero para subir personas después.</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.card-hover { transition: transform 0.2s, box-shadow 0.2s; }
+.card-hover:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.08)!important; }
+.btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0; }
+</style>
+{% endblock %}

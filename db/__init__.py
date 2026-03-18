@@ -93,6 +93,37 @@ from db.queries.tenants import (
     eliminar_tenant_de_public,
 )
 
+from db.queries.periodos import (
+    crear_periodo,
+    get_periodo,
+    listar_periodos_activos,
+    listar_periodos_historial,
+    agregar_personas_a_periodo_bulk,
+    cerrar_periodo,
+    archivar_periodo,
+    cerrar_periodos_vencidos,
+    procesar_csv_personas_periodo,
+)
+
+from db.queries.asistencia_periodo import calcular_asistencia_periodo
+
+from db.queries.grupos import (
+    listar_grupos,
+    crear_grupo,
+    actualizar_grupo,
+    listar_categorias,
+    crear_categoria,
+    actualizar_categoria,
+)
+
+from db.queries.personas_crud import (
+    listar_personas,
+    get_persona,
+    crear_persona,
+    actualizar_persona,
+    get_historico_persona,
+)
+
 from db.tenant_provisioner import provisionar_schema
 
 __all__ = [
@@ -159,4 +190,28 @@ __all__ = [
     "insertar_tipo_persona",
     "eliminar_tenant_de_public",
     "provisionar_schema",
+    # periodos
+    "crear_periodo",
+    "get_periodo",
+    "listar_periodos_activos",
+    "listar_periodos_historial",
+    "agregar_personas_a_periodo_bulk",
+    "cerrar_periodo",
+    "archivar_periodo",
+    "cerrar_periodos_vencidos",
+    "procesar_csv_personas_periodo",
+    "calcular_asistencia_periodo",
+    # grupos y categorías
+    "listar_grupos",
+    "crear_grupo",
+    "actualizar_grupo",
+    "listar_categorias",
+    "crear_categoria",
+    "actualizar_categoria",
+    # personas CRUD
+    "listar_personas",
+    "get_persona",
+    "crear_persona",
+    "actualizar_persona",
+    "get_historico_persona",
 ]

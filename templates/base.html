@@ -41,11 +41,31 @@
                     </a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'periodos' %}active{% endif %}" href="{{ url_for('periodos_lista') }}">
+                        <span class="material-symbols-outlined nav-icon">event_repeat</span> Períodos
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}" href="{{ url_for('analytics_vista') }}">
+                        <span class="material-symbols-outlined nav-icon">monitoring</span> Analytics
+                    </a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link {% if active_page == 'reportes' %}active{% endif %}" href="{{ url_for('reportes_vista') }}">
                         <span class="material-symbols-outlined nav-icon">description</span> Reportes
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'personas' %}active{% endif %}" href="{{ url_for('personas_lista') }}">
+                        <span class="material-symbols-outlined nav-icon">group</span> Personas
+                    </a>
+                </li>
                 {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'admin_grupos' %}active{% endif %}" href="{{ url_for('admin_grupos') }}">
+                        <span class="material-symbols-outlined nav-icon">account_tree</span> Grupos
+                    </a>
+                </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'admin_usuarios' %}active{% endif %}" href="{{ url_for('admin_usuarios') }}">
                         <span class="material-symbols-outlined nav-icon">manage_accounts</span> Usuarios
@@ -107,6 +127,16 @@
                         const toast = new bootstrap.Toast(toastEl, { delay: type === 'danger' ? 6000 : 4000 });
                         toast.show();
                     }
+
+                    // Auto-render progress bars with data-width to avoid linter errors in inline CSS
+                    document.addEventListener("DOMContentLoaded", () => {
+                        document.querySelectorAll('[data-width], [data-bg-color]').forEach(el => {
+                            const w = el.getAttribute('data-width');
+                            if (w) el.style.width = w + '%';
+                            const bg = el.getAttribute('data-bg-color');
+                            if (bg) el.style.backgroundColor = bg;
+                        });
+                    });
                 </script>
 
                 {% with messages = get_flashed_messages(with_categories=true) %}

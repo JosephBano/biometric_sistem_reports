@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Gestión de Grupos</h3>
+        <p class="text-muted">Departamentos, facultades o agrupaciones de personas.</p>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearGrupo">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">group_add</span> Nuevo Grupo
+    </button>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th>Nombre</th>
+                    <th>Tipo</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for g in grupos %}
+                <tr>
+                    <td class="fw-bold">{{ g.nombre }}</td>
+                    <td>{{ g.tipo_grupo }}</td>
+                    <td>
+                        <span class="badge {% if g.activo %}bg-success{% else %}bg-secondary{% endif %}">
+                            {% if g.activo %}Activo{% else %}Inactivo{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEditarGrupo"
+                                data-id="{{ g.id }}"
+                                data-nombre="{{ g.nombre }}"
+                                data-tipo="{{ g.tipo_grupo }}"
+                                data-activo="{{ '1' if g.activo else '0' }}">
+                            Editar
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center py-5 text-muted">No hay grupos creados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Modal Crear Grupo -->
+<div class="modal fade" id="modalCrearGrupo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuevo Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin_crear_grupo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Grupo</label>
+                        <select class="form-select" name="tipo_grupo">
+                            <option value="general">General</option>
+                            <option value="departamento">Departamento</option>
+                            <option value="facultad">Facultad</option>
+                            <option value="area">Área</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Grupo</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Grupo -->
+<div class="modal fade" id="modalEditarGrupo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Grupo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="formEditarGrupo" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-control" name="nombre" id="edit_g_nombre">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Grupo</label>
+                        <select class="form-select" name="tipo_grupo" id="edit_g_tipo">
+                            <option value="general">General</option>
+                            <option value="departamento">Departamento</option>
+                            <option value="facultad">Facultad</option>
+                            <option value="area">Área</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" name="activo" id="edit_g_activo">
+                            <option value="1">Activo</option>
+                            <option value="0">Inactivo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('modalEditarGrupo').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    const form = document.getElementById('formEditarGrupo');
+    form.action = '/admin/grupos/' + btn.dataset.id;
+    document.getElementById('edit_g_nombre').value = btn.dataset.nombre || '';
+    document.getElementById('edit_g_tipo').value   = btn.dataset.tipo || 'general';
+    document.getElementById('edit_g_activo').value = btn.dataset.activo || '1';
+});
+</script>
+{% endblock %}

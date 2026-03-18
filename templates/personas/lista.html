@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Personas</h3>
+        <p class="text-muted">Gestión del catálogo de personas registradas.</p>
+    </div>
+    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">person_add</span> Nueva Persona
+    </button>
+    {% endif %}
+</div>
+
+<!-- Filtros -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form class="row g-3" method="GET">
+            <div class="col-md-4">
+                <input type="text" class="form-control" name="q" placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" name="tipo_persona_id">
+                    <option value="">Todos los tipos</option>
+                    {% for t in tenant_tipos %}
+                    <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" name="grupo_id">
+                    <option value="">Todos los grupos</option>
+                    {% for g in grupos %}
+                    <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">Filtrar</button>
+                <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary">✕</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0">{{ personas|length }} persona(s)</h5>
+        <a href="{{ url_for('personas_historico') }}" class="btn btn-sm btn-outline-secondary">
+            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">history</span> Historial por Cédula
+        </a>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th>Nombre</th>
+                    <th>Identificación</th>
+                    <th>Tipo</th>
+                    <th>Grupo</th>
+                    <th>Categoría</th>
+                    <th>Estado</th>
+                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                    <th></th>
+                    {% endif %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in personas %}
+                <tr>
+                    <td class="fw-bold">{{ p.nombre }}</td>
+                    <td>{{ p.identificacion or '—' }}</td>
+                    <td>{{ p.tipo_persona or '—' }}</td>
+                    <td>{{ p.grupo or '—' }}</td>
+                    <td>{{ p.categoria or '—' }}</td>
+                    <td>
+                        <span class="badge {% if p.activo %}bg-success{% else %}bg-secondary{% endif %}">
+                            {% if p.activo %}Activo{% else %}Inactivo{% endif %}
+                        </span>
+                    </td>
+                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEditarPersona"
+                                data-id="{{ p.id }}"
+                                data-nombre="{{ p.nombre }}"
+                                data-identificacion="{{ p.identificacion or '' }}"
+                                data-tipo="{{ p.tipo_persona_id or '' }}"
+                                data-grupo="{{ p.grupo_id or '' }}"
+                                data-categoria="{{ p.categoria_id or '' }}"
+                                data-email="{{ p.email or '' }}"
+                                data-telefono="{{ p.telefono or '' }}"
+                                data-notas="{{ p.notas or '' }}"
+                                data-activo="{{ '1' if p.activo else '0' }}">
+                            Editar
+                        </button>
+                    </td>
+                    {% endif %}
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">No se encontraron personas con los filtros actuales.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+{% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+<!-- Modal Crear Persona -->
+<div class="modal fade" id="modalCrearPersona" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nueva Persona</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('personas_crear') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Identificación (Cédula/Pasaporte)</label>
+                        <input type="text" class="form-control" name="identificacion">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label">Tipo de Persona</label>
+                            <select class="form-select" name="tipo_persona_id">
+                                <option value="">Sin tipo</option>
+                                {% for t in tenant_tipos %}
+                                <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Grupo</label>
+                            <select class="form-select" name="grupo_id">
+                                <option value="">Sin grupo</option>
+                                {% for g in grupos %}
+                                <option value="{{ g.id }}">{{ g.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Teléfono</label>
+                        <input type="text" class="form-control" name="telefono">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas</label>
+                        <textarea class="form-control" name="notas" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear Persona</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Persona -->
+<div class="modal fade" id="modalEditarPersona" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Persona</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="formEditarPersona" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-control" name="nombre" id="edit_nombre">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Identificación</label>
+                        <input type="text" class="form-control" name="identificacion" id="edit_identificacion">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col">
+                            <label class="form-label">Tipo de Persona</label>
+                            <select class="form-select" name="tipo_persona_id" id="edit_tipo">
+                                <option value="">Sin tipo</option>
+                                {% for t in tenant_tipos %}
+                                <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">Grupo</label>
+                            <select class="form-select" name="grupo_id" id="edit_grupo">
+                                <option value="">Sin grupo</option>
+                                {% for g in grupos %}
+                                <option value="{{ g.id }}">{{ g.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" id="edit_email">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" name="activo" id="edit_activo">
+                            <option value="1">Activo</option>
+                            <option value="0">Inactivo</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notas</label>
+                        <textarea class="form-control" name="notas" id="edit_notas" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('modalEditarPersona').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    const form = document.getElementById('formEditarPersona');
+    form.action = '/personas/' + btn.dataset.id;
+    document.getElementById('edit_nombre').value        = btn.dataset.nombre || '';
+    document.getElementById('edit_identificacion').value = btn.dataset.identificacion || '';
+    document.getElementById('edit_tipo').value          = btn.dataset.tipo || '';
+    document.getElementById('edit_grupo').value         = btn.dataset.grupo || '';
+    document.getElementById('edit_email').value         = btn.dataset.email || '';
+    document.getElementById('edit_activo').value        = btn.dataset.activo || '1';
+    document.getElementById('edit_notas').value         = btn.dataset.notas || '';
+});
+</script>
+{% endblock %}

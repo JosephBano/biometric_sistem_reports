@@ -194,6 +194,20 @@ CREATE TABLE IF NOT EXISTS personas_dispositivos (
 );
 
 -- ╔══════════════════════════════════════════════════╗
+-- ║  BLOQUE 3B: PERÍODOS GRUPALES                    ║
+-- ╚══════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS grupos_periodo (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    nombre       TEXT        NOT NULL,
+    fecha_inicio DATE        NOT NULL,
+    fecha_fin    DATE,
+    descripcion  TEXT,
+    estado       TEXT        NOT NULL DEFAULT 'activo',
+    creado_en    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ╔══════════════════════════════════════════════════╗
 -- ║  BLOQUE 4: VIGENCIA                              ║
 -- ╚══════════════════════════════════════════════════╝
 

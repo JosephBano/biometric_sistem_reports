@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Historial por Identificación</h3>
+        <p class="text-muted">Consulta todos los períodos de vigencia de una persona por su cédula o pasaporte.</p>
+    </div>
+    <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary btn-sm">← Volver</a>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form class="row g-3" method="GET">
+            <div class="col-md-6">
+                <label class="form-label">Número de Identificación</label>
+                <input type="text" class="form-control" name="identificacion"
+                       value="{{ identificacion }}" placeholder="Ej: 1712345678" required>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Buscar Historial</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if identificacion %}
+    {% if not historico %}
+    <div class="alert alert-warning border-0 shadow-sm">
+        No se encontró ninguna persona con la identificación <strong>{{ identificacion }}</strong>.
+    </div>
+    {% else %}
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="text-muted small">Nombre</div>
+                    <div class="fw-bold fs-5">{{ historico.nombre }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Identificación</div>
+                    <div class="fw-bold">{{ historico.identificacion }}</div>
+                </div>
+                <div class="col-md-3">
+                    <div class="text-muted small">Tipo de Persona</div>
+                    <div>{{ historico.tipo_persona or '—' }}</div>
+                </div>
+                <div class="col-md-2">
+                    <div class="text-muted small">Grupo</div>
+                    <div>{{ historico.grupo or '—' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent py-3">
+            <h5 class="fw-bold mb-0">{{ historico.periodos|length }} período(s) de vigencia</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th>Período</th>
+                        <th>Fecha Inicio</th>
+                        <th>Fecha Fin</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for pv in historico.periodos %}
+                    <tr>
+                        <td class="fw-bold">
+                            {{ pv.nombre }}
+                            {% if pv.grupo_periodo_id %}
+                            <a href="{{ url_for('periodo_detalle', id=pv.grupo_periodo_id) }}"
+                               class="btn btn-sm btn-outline-primary ms-2" style="font-size:0.7rem;">
+                                Ver período
+                            </a>
+                            {% endif %}
+                        </td>
+                        <td>{{ pv.fecha_inicio }}</td>
+                        <td>{{ pv.fecha_fin or 'Abierto' }}</td>
+                        <td>
+                            <span class="badge {% if pv.estado == 'activo' %}bg-success{% elif pv.estado == 'cerrado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
+                                {{ pv.estado|capitalize }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center py-4 text-muted">Sin períodos registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+{% endif %}
+{% endblock %}

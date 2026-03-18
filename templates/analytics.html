@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Analytics & Inteligencia de Asistencia</h3>
+        <p class="text-muted">Análisis estadístico, detección de anomalías y visualizaciones de comportamiento continuo.</p>
+    </div>
+</div>
+
+<!-- Filtros de Analytics -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form class="row g-3" id="analyticsForm">
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Rango de Fecha</label>
+                <div class="input-group">
+                    <input type="date" class="form-control" name="fecha_inicio" value="{{ fecha_inicio }}">
+                    <input type="date" class="form-control" name="fecha_fin" value="{{ fecha_fin }}">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Tipo de Persona</label>
+                <select class="form-select" name="tipo_persona_id">
+                    <option value="">Todos los tipos</option>
+                    {% for t in tenant_tipos %}
+                    <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small text-muted">Grupo</label>
+                <select class="form-select" name="grupo_id">
+                    <option value="">Todos los grupos</option>
+                    {% for g in grupos %}
+                    <option value="{{ g.id }}" {% if request.args.get('grupo_id') == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Analizar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if not hallazgos or not hallazgos.exito %}
+<div class="alert alert-info border-0 shadow-sm" role="alert">
+    No hay suficientes datos analíticos para el rango y filtros especificados. Intente con un rango más amplio.
+</div>
+{% else %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Asistencia Promedio</h6>
+                <h2 class="fw-bold text-success mb-1">{{ hallazgos.resumen_general.tasa_asistencia_promedio }}%</h2>
+                <div class="progress mt-2" style="height: 5px;">
+                     <div class="progress-bar bg-success" data-width="{{ hallazgos.resumen_general.tasa_asistencia_promedio }}"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Total Registros</h6>
+                <h2 class="fw-bold mb-1">{{ hallazgos.resumen_general.total_registros }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Ausencias</h6>
+                <h2 class="fw-bold text-danger mb-1">{{ hallazgos.resumen_general.ausentes }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <h6 class="text-muted small">Tardanzas</h6>
+                <h2 class="fw-bold text-warning mb-1">{{ hallazgos.resumen_general.tardanzas }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- IA Narrative Report -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent py-3 d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-purple">psychology</span>
+                <h5 class="fw-bold mb-0">Reporte Narrativo Ejecutivo</h5>
+            </div>
+            <div class="card-body bg-light-subtle">
+                <div id="narrativo-content" class="text-secondary" style="white-space: pre-wrap;">{{ narrativo }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anomalías -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent py-3 d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-danger">warning</span>
+                <h5 class="fw-bold mb-0">Anomalías Estadísticas</h5>
+            </div>
+            <div class="card-body p-0">
+                <ul class="list-group list-group-flush">
+                    {% for a in hallazgos.anomalias %}
+                    <li class="list-group-item d-flex justify-content-between align-items-start py-3">
+                        <div class="ms-2 me-auto">
+                            <div class="fw-bold">{{ a.nombre }}</div>
+                            <small class="text-muted">{{ a.tipo }}</small>
+                            <div class="small text-danger mt-1">{{ a.detalle }}</div>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-center text-muted py-4">No se detectaron anomalías severas en el rango.</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Risk Scores -->
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-transparent py-3 d-flex align-items-center gap-2">
+        <span class="material-symbols-outlined text-danger">monitor_heart</span>
+        <h5 class="fw-bold mb-0">Top Personas en Riesgo de Cumplimiento (Risk Score)</h5>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th>Persona</th>
+                    <th>Grupo</th>
+                    <th>Risk Score (0-100)</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in hallazgos.riesgos %}
+                <tr>
+                    <td>
+                        <div class="fw-bold">{{ r.nombre }}</div>
+                    </td>
+                    <td>{{ r.grupo }}</td>
+                    <td>
+                        <div class="d-flex align-items-center gap-2">
+                             <div class="progress w-100" style="height: 6px;">
+                                 <div class="progress-bar {% if r.score >= 70 %}bg-danger{% elif r.score >= 40 %}bg-warning{% else %}bg-success{% endif %}" data-width="{{ r.score }}"></div>
+                             </div>
+                             <span class="fw-bold">{{ r.score }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge {% if r.semaforo == 'Rojo' %}bg-danger{% elif r.semaforo == 'Amarillo' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                            {{ r.semaforo }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center py-4 text-muted">No hay puntuaciones de riesgo críticas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endif %}
+
+<style>
+.text-purple { color: #8a2be2; }
+</style>
+{% endblock %}

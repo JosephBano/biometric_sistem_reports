@@ -32,12 +32,28 @@ def insertar_asistencias(registros: list[dict]) -> int:
 
             persona_id, _ = resolver_persona_id(conn, id_usuario, nombre, dispositivo_id)
 
+            # Resolver periodo_vigencia_id activo para la fecha
+            fecha_solo = r["fecha_hora"][:10]  # Obtener YYYY-MM-DD
+            periodo_row = conn.execute(
+                text("""
+                    SELECT id FROM periodos_vigencia
+                    WHERE persona_id = CAST(:persona_id AS uuid)
+                      AND estado = 'activo'
+                      AND fecha_inicio <= CAST(:fecha AS date)
+                      AND (fecha_fin IS NULL OR fecha_fin >= CAST(:fecha AS date))
+                    LIMIT 1
+                """),
+                {"persona_id": persona_id, "fecha": fecha_solo},
+            ).fetchone()
+            periodo_id = str(periodo_row[0]) if periodo_row else None
+
             result = conn.execute(
                 text("""
                     INSERT INTO asistencias
-                        (persona_id, fecha_hora, punch_raw, tipo, fuente, dispositivo_id)
+                        (persona_id, periodo_vigencia_id, fecha_hora, punch_raw, tipo, fuente, dispositivo_id)
                     VALUES (
                         CAST(:persona_id AS uuid),
+                        CAST(:periodo_id AS uuid),
                         CAST(:fecha_hora AS timestamptz),
                         :punch_raw,
                         :tipo,
@@ -48,6 +64,7 @@ def insertar_asistencias(registros: list[dict]) -> int:
                 """),
                 {
                     "persona_id": persona_id,
+                    "periodo_id": periodo_id,
                     "fecha_hora": r["fecha_hora"],
                     "punch_raw": r.get("punch_raw"),
                     "tipo": r["tipo"],

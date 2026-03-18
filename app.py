@@ -1752,6 +1752,402 @@ def admin_editar_usuario(usuario_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# PERIODOS Y PERSONAS (FASE 4)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/periodos')
+@require_role('admin', 'superadmin', 'gestor')
+def periodos_lista():
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    # Listar periodos activos e historial desde db
+    activos = db_module.listar_periodos_activos()
+    historial = db_module.listar_periodos_historial()
+    return render_template('periodos/lista.html', 
+                             active_page='periodos',
+                             periodos_activos=activos,
+                             periodos_historial=historial)
+
+@app.route('/periodos/crear', methods=['POST'])
+@require_role('admin', 'superadmin')
+def crear_periodo_route():
+    nombre = request.form.get('nombre')
+    fecha_inicio_str = request.form.get('fecha_inicio')
+    fecha_fin_str = request.form.get('fecha_fin')
+    descripcion = request.form.get('descripcion')
+    
+    if not nombre or not fecha_inicio_str:
+        from flask import flash
+        flash("Nombre y Fecha Inicio requeridos", "danger")
+        return redirect(url_for('periodos_lista'))
+        
+    try:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date()
+        fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else None
+        
+        db_module.crear_periodo(nombre=nombre, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, descripcion=descripcion)
+        from flask import flash
+        flash("Período creado exitosamente", "success")
+    except Exception as e:
+        from flask import flash
+        flash(f"Error: {e}", "danger")
+        
+    return redirect(url_for('periodos_lista'))
+
+@app.route('/periodos/<id>')
+@require_role('admin', 'superadmin', 'gestor')
+def periodo_detalle(id):
+    periodo = db_module.get_periodo(id)
+    if not periodo:
+        return "Periodo no encontrado", 404
+        
+    # Calcular asistencias de las personas asociadas en tiempo real
+    personas = db_module.calcular_asistencia_periodo(id)
+    
+    # Calcular resumen agregado
+    total_asistencias = 0
+    t_suma = 0
+    for p in personas:
+        t_suma += p["resumen"]["porcentaje_asistencia"]
+    promedio = round(t_suma / len(personas), 2) if personas else 0
+    
+    resumen_general = {
+        "asistencia_promedio": promedio
+    }
+    
+    return render_template('periodos/detalle.html', 
+                             active_page='periodos',
+                             periodo=periodo,
+                             personas=personas,
+                             resumen_general=resumen_general)
+
+@app.route('/periodos/<id>/importar-personas', methods=['POST'])
+@require_role('admin', 'superadmin')
+def periodo_importar_personas_route(id):
+    tipo_persona_id = request.form.get('tipo_persona_id')
+    file = request.files.get('archivo_csv')
+    
+    if not file or not tipo_persona_id:
+        from flask import flash
+        flash("Archivo y Tipo Persona requeridos", "danger")
+        return redirect(url_for('periodo_detalle', id=id))
+        
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"periodo_{id}_{filename}")
+    file.save(filepath)
+    
+    try:
+        resultado = db_module.procesar_csv_personas_periodo(filepath, id, tipo_persona_id)
+        from flask import flash
+        if resultado.get("exito"):
+            msg = f"Cargado: {resultado['procesadas']} personas. Nuevas: {resultado['nuevas']}. Actualizadas: {resultado['actualizadas']}."
+            flash(msg, "success")
+            if resultado.get("errores"):
+                flash(f"Errores en {len(resultado['errores'])} registros.", "warning")
+        else:
+             flash(f"Error procesando CSV: {resultado.get('error')}", "danger")
+    except Exception as e:
+         from flask import flash
+         flash(f"Error: {e}", "danger")
+    finally:
+         try: os.remove(filepath) 
+         except: pass
+         
+    return redirect(url_for('periodo_detalle', id=id))
+
+@app.route('/periodos/<id>/cerrar', methods=['POST'])
+@require_role('admin', 'superadmin')
+def cerrar_periodo_route(id):
+    p = db_module.get_periodo(id)
+    if p:
+         db_module.cerrar_periodo(id)
+         from flask import flash
+         flash("Período cerrado exitosamente", "success")
+    return redirect(url_for('periodos_lista'))
+
+
+@app.route('/periodos/<id>/archivar', methods=['POST'])
+@require_role('admin', 'superadmin')
+def archivar_periodo_route(id):
+    p = db_module.get_periodo(id)
+    if p:
+        db_module.archivar_periodo(id)
+        from flask import flash
+        flash("Período archivado exitosamente", "success")
+    return redirect(url_for('periodos_lista'))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PERSONAS (FASE 4)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/personas')
+@require_role('admin', 'superadmin', 'gestor')
+def personas_lista():
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    grupo_id = request.args.get('grupo_id')
+    busqueda = request.args.get('q')
+    personas = db_module.listar_personas(tipo_persona_id=tipo_persona_id,
+                                         grupo_id=grupo_id,
+                                         busqueda=busqueda)
+    grupos = db_module.listar_grupos(activo=True)
+    return render_template('personas/lista.html',
+                           active_page='personas',
+                           personas=personas,
+                           grupos=grupos,
+                           tipo_persona_id=tipo_persona_id,
+                           grupo_id=grupo_id,
+                           busqueda=busqueda or '')
+
+
+@app.route('/personas/crear', methods=['POST'])
+@require_role('admin', 'superadmin')
+def personas_crear():
+    from flask import flash
+    nombre = request.form.get('nombre', '').strip()
+    if not nombre:
+        flash("El nombre es requerido", "danger")
+        return redirect(url_for('personas_lista'))
+    try:
+        db_module.crear_persona(
+            nombre=nombre,
+            identificacion=request.form.get('identificacion') or None,
+            tipo_persona_id=request.form.get('tipo_persona_id') or None,
+            grupo_id=request.form.get('grupo_id') or None,
+            categoria_id=request.form.get('categoria_id') or None,
+            email=request.form.get('email') or None,
+            telefono=request.form.get('telefono') or None,
+            notas=request.form.get('notas') or None,
+        )
+        flash("Persona creada exitosamente", "success")
+    except Exception as e:
+        flash(f"Error al crear persona: {e}", "danger")
+    return redirect(url_for('personas_lista'))
+
+
+@app.route('/personas/<id>', methods=['POST'])
+@require_role('admin', 'superadmin')
+def personas_editar(id):
+    from flask import flash
+    datos = {}
+    for campo in ('nombre', 'identificacion', 'email', 'telefono', 'notas',
+                  'tipo_persona_id', 'grupo_id', 'categoria_id'):
+        v = request.form.get(campo)
+        if v is not None:
+            datos[campo] = v or None
+    activo_val = request.form.get('activo')
+    if activo_val is not None:
+        datos['activo'] = activo_val == '1'
+    try:
+        db_module.actualizar_persona(id, datos)
+        flash("Persona actualizada", "success")
+    except Exception as e:
+        flash(f"Error al actualizar persona: {e}", "danger")
+    return redirect(url_for('personas_lista'))
+
+
+@app.route('/personas/historico')
+@require_role('admin', 'superadmin', 'gestor')
+def personas_historico():
+    identificacion = request.args.get('identificacion', '').strip()
+    historico = None
+    if identificacion:
+        historico = db_module.get_historico_persona(identificacion)
+    return render_template('personas/historico.html',
+                           active_page='personas',
+                           identificacion=identificacion,
+                           historico=historico)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# GRUPOS Y CATEGORÍAS (FASE 4)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/grupos', methods=['GET'])
+@require_role('admin', 'superadmin')
+def admin_grupos():
+    grupos = db_module.listar_grupos()
+    return render_template('admin/grupos.html',
+                           active_page='admin_grupos',
+                           grupos=grupos)
+
+
+@app.route('/admin/grupos', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_crear_grupo():
+    from flask import flash
+    nombre = request.form.get('nombre', '').strip()
+    tipo_grupo = request.form.get('tipo_grupo', 'general')
+    if not nombre:
+        flash("El nombre del grupo es requerido", "danger")
+        return redirect(url_for('admin_grupos'))
+    try:
+        db_module.crear_grupo(nombre=nombre, tipo_grupo=tipo_grupo)
+        flash("Grupo creado exitosamente", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_grupos'))
+
+
+@app.route('/admin/grupos/<id>', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_actualizar_grupo(id):
+    from flask import flash
+    datos = {}
+    if request.form.get('nombre'):
+        datos['nombre'] = request.form['nombre'].strip()
+    if request.form.get('tipo_grupo'):
+        datos['tipo_grupo'] = request.form['tipo_grupo']
+    activo_val = request.form.get('activo')
+    if activo_val is not None:
+        datos['activo'] = activo_val == '1'
+    try:
+        db_module.actualizar_grupo(id, datos)
+        flash("Grupo actualizado", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_grupos'))
+
+
+@app.route('/admin/categorias', methods=['GET'])
+@require_role('admin', 'superadmin')
+def admin_categorias():
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    categorias = db_module.listar_categorias(tipo_persona_id=tipo_persona_id)
+    return render_template('admin/categorias.html',
+                           active_page='admin_categorias',
+                           categorias=categorias,
+                           tipo_persona_id=tipo_persona_id)
+
+
+@app.route('/admin/categorias', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_crear_categoria():
+    from flask import flash
+    nombre = request.form.get('nombre', '').strip()
+    tipo_persona_id = request.form.get('tipo_persona_id') or None
+    if not nombre:
+        flash("El nombre de la categoría es requerido", "danger")
+        return redirect(url_for('admin_categorias'))
+    try:
+        db_module.crear_categoria(nombre=nombre, tipo_persona_id=tipo_persona_id)
+        flash("Categoría creada exitosamente", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_categorias'))
+
+
+@app.route('/admin/categorias/<id>', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_actualizar_categoria(id):
+    from flask import flash
+    datos = {}
+    if request.form.get('nombre'):
+        datos['nombre'] = request.form['nombre'].strip()
+    activo_val = request.form.get('activo')
+    if activo_val is not None:
+        datos['activo'] = activo_val == '1'
+    try:
+        db_module.actualizar_categoria(id, datos)
+        flash("Categoría actualizada", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_categorias'))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ANALYTICS E IA (FASE 5)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/analytics')
+@require_role('admin', 'superadmin', 'gestor')
+def analytics_vista():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    grupo_id = request.args.get('grupo_id')
+    
+    try:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date() if fecha_inicio_str else date.today() - timedelta(days=30)
+        fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else date.today()
+    except ValueError:
+        return "Formato de fecha inválido", 400
+        
+    import analytics
+    import ia_report
+    
+    hallazgos = analytics.analizar(
+        tipo_persona_id=tipo_persona_id, 
+        grupo_id=grupo_id, 
+        fecha_inicio=fecha_inicio, 
+        fecha_fin=fecha_fin
+    )
+    
+    narrativo = ia_report.generar_narrativo(hallazgos) if hallazgos.get("exito") else ""
+        
+    grupos = db_module.listar_grupos(activo=True)
+    return render_template('analytics.html',
+                             active_page='analytics',
+                             fecha_inicio=fecha_inicio.strftime('%Y-%m-%d'),
+                             fecha_fin=fecha_fin.strftime('%Y-%m-%d'),
+                             hallazgos=hallazgos,
+                             narrativo=narrativo,
+                             grupos=grupos)
+
+@app.route('/analytics/periodo/<periodo_id>')
+@require_role('admin', 'superadmin', 'gestor')
+def analytics_periodo(periodo_id):
+    import analytics as analytics_module
+    import ia_report
+    periodo = db_module.get_periodo(periodo_id)
+    if not periodo:
+        return "Período no encontrado", 404
+    resumen = analytics_module.resumen_periodo(periodo_id)
+    dist = analytics_module.distribucion_asistencia_periodo(periodo_id)
+    narrativo = ia_report.generar_narrativo(resumen) if resumen.get("exito") else ""
+    return render_template('periodos/detalle.html',
+                           active_page='periodos',
+                           periodo=periodo,
+                           personas=db_module.calcular_asistencia_periodo(periodo_id),
+                           resumen_general=resumen.get("resumen_general", {}),
+                           distribucion=dist,
+                           narrativo=narrativo)
+
+
+@app.route('/api/analytics/narrativo', methods=['POST'])
+@require_role('admin', 'superadmin', 'gestor')
+def api_narrativo():
+    """Genera narrativo IA on-demand a partir de hallazgos enviados como JSON."""
+    import ia_report
+    hallazgos = request.json or {}
+    if not hallazgos:
+        return jsonify({"error": "Se requiere payload de hallazgos"}), 400
+    try:
+        texto = ia_report.generar_narrativo(hallazgos)
+        return jsonify({"narrativo": texto})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/analytics')
+@require_role('admin', 'superadmin', 'gestor')
+def api_analytics():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    grupo_id = request.args.get('grupo_id')
+    
+    try:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date() if fecha_inicio_str else date.today() - timedelta(days=30)
+        fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else date.today()
+    except ValueError:
+         return jsonify({"error": "Formato de fecha inválido"}), 400
+         
+    import analytics
+    hallazgos = analytics.analizar(tipo_persona_id, grupo_id, None, fecha_inicio, fecha_fin)
+    return jsonify(hallazgos)
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # SEGURIDAD HTTP
 # ══════════════════════════════════════════════════════════════════════════
 

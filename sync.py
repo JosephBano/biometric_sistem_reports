@@ -336,10 +336,60 @@ def limpiar_log_dispositivo() -> int:
 # SYNC AUTOMÁTICO (scheduler)
 # ══════════════════════════════════════════════════════════════════════════
 
+def _enviar_alertas_riesgo():
+    """
+    Detecta personas con Risk Score >= 70 (Rojo) en los últimos 30 días
+    y registra una entrada de auditoría para cada una.
+    Las alertas por correo requieren configuración SMTP en .env.
+    """
+    try:
+        import analytics as analytics_module
+        from datetime import timedelta
+        fecha_fin   = date.today()
+        fecha_inicio = fecha_fin - timedelta(days=30)
+        hallazgos = analytics_module.analizar(
+            tipo_persona_id=None,
+            grupo_id=None,
+            persona_id=None,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+        )
+        riesgos_criticos = [r for r in hallazgos.get("riesgos", []) if r.get("score", 0) >= 70]
+        if not riesgos_criticos:
+            return
+        import db as db_module
+        for r in riesgos_criticos:
+            try:
+                db_module.registrar_audit(
+                    tenant_id=None,
+                    usuario_id=None,
+                    accion="alerta_riesgo_automatica",
+                    entidad="persona",
+                    entidad_id=r.get("id"),
+                    detalle={
+                        "nombre": r.get("nombre"),
+                        "score":  r.get("score"),
+                        "semaforo": r.get("semaforo"),
+                        "periodo": f"{fecha_inicio} / {fecha_fin}",
+                    },
+                    ip="scheduler",
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 def _sync_automatico():
     """Llamado por el scheduler. Sincroniza todo sin filtro de fechas."""
     try:
         sincronizar()
+        try:
+            from db.queries.periodos import cerrar_periodos_vencidos
+            cerrar_periodos_vencidos()
+        except Exception:
+            pass  # Ignorar fallos de cierre en el job de sync
+        _enviar_alertas_riesgo()
     except Exception:
         pass
 
