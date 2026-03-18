@@ -111,12 +111,21 @@
 
                 {% with messages = get_flashed_messages(with_categories=true) %}
                   {% if messages %}
+                    <!-- Render flashed messages safely to avoid breaking JS syntax linters -->
+                    <script id="flashed-messages" type="application/json">
+                        {{ messages | tojson }}
+                    </script>
                     <script>
-                       document.addEventListener("DOMContentLoaded", function() {
-                           {% for category, message in messages %}
-                               showToast("{{ message }}", "{{ 'danger' if category in ['danger', 'error'] else category }}");
-                           {% endfor %}
-                       });
+                        document.addEventListener("DOMContentLoaded", function() {
+                            const messagesEl = document.getElementById('flashed-messages');
+                            if (messagesEl) {
+                                const messages = JSON.parse(messagesEl.textContent);
+                                messages.forEach(([category, message]) => {
+                                    const type = ['danger', 'error'].includes(category) ? 'danger' : category;
+                                    showToast(message, type || 'info');
+                                });
+                            }
+                        });
                     </script>
                   {% endif %}
                 {% endwith %}
