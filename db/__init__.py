@@ -122,6 +122,7 @@ from db.queries.personas_crud import (
     crear_persona,
     actualizar_persona,
     get_historico_persona,
+    get_usuarios_zk_con_estado,
 )
 
 from db.queries.dispositivos import (
@@ -226,6 +227,7 @@ __all__ = [
     "crear_persona",
     "actualizar_persona",
     "get_historico_persona",
+    "get_usuarios_zk_con_estado",
     # dispositivos
     "get_dispositivos_activos",
     "get_dispositivo",

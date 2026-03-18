@@ -4,9 +4,11 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-0">Historial por Identificación</h3>
-        <p class="text-muted">Consulta todos los períodos de vigencia de una persona por su cédula o pasaporte.</p>
+        <p class="text-muted mb-0">Consulta todos los períodos de vigencia de una persona por su cédula o pasaporte.</p>
     </div>
-    <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary btn-sm">← Volver</a>
+    <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
+        <span class="material-symbols-outlined fs-6">arrow_back</span> Volver
+    </a>
 </div>
 
 <div class="card border-0 shadow-sm mb-4">

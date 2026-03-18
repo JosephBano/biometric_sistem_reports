@@ -25,7 +25,8 @@ function cargarHorarios() {
     apiCall('/api/horarios')
         .then(data => {
             _horariosCache = data.horarios || [];
-            document.getElementById('horarios-count').textContent = data.total || 0;
+            const countEl = document.getElementById('horarios-count');
+            if (countEl) countEl.textContent = data.total || 0;
             renderTablaHorarios(_horariosCache);
         })
         .catch(err => {
@@ -136,7 +137,7 @@ const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'do
 
 function abrirOffcanvasCrear() {
     document.getElementById('mh-modo').value = 'crear';
-    document.getElementById('offcanvasHorarioLabel').textContent = 'Crear Horario';
+    document.getElementById('offcanvasHorarioLabel').textContent = 'Nuevo horario de trabajo';
     document.getElementById('mh-id').value = '';
     document.getElementById('mh-id').readOnly = false;
     document.getElementById('mh-nombre').value = '';

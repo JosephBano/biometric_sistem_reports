@@ -4,9 +4,10 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">
-        <span class="material-symbols-outlined">router</span> Control de Dispositivos
-    </h2>
+    <div>
+        <h3 class="fw-bold mb-0">Control de Dispositivos</h3>
+        <p class="text-muted mb-0">Gestión de conexiones, sincronización y mantenimiento de biométricos.</p>
+    </div>
     <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#dispositivoModal" onclick="nuevoDispositivo()">
         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">add_circle</span> Añadir Dispositivo
     </button>
@@ -35,6 +36,99 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sección Usuarios ZK -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-3">
+                <div>
+                    <h5 class="fw-bold mb-0">
+                        <span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:-3px;">fingerprint</span>
+                        Usuarios del biométrico
+                    </h5>
+                    <small class="text-muted">Usuarios registrados en el reloj vs personas en el catálogo</small>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" onclick="abrirUsuariosZK()">
+                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">manage_search</span>
+                    Ver / vincular usuarios
+                </button>
+            </div>
+            <div class="card-body py-2 px-4">
+                <div id="zk-resumen-bar" class="d-flex gap-3 align-items-center flex-wrap" style="min-height:32px;">
+                    <span class="text-muted small">Cargando...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Offcanvas Usuarios ZK -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasUsuariosZK"
+     aria-labelledby="offcanvasUsuariosZKLabel" style="width:580px;">
+    <div class="offcanvas-header border-bottom">
+        <div>
+            <h5 class="offcanvas-title fw-bold" id="offcanvasUsuariosZKLabel">Usuarios del biométrico</h5>
+            <small class="text-muted" id="zk-offcanvas-sub">—</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+        <div class="p-3 border-bottom">
+            <input type="text" class="form-control form-control-sm" id="zk-search"
+                   placeholder="Buscar por ID o nombre..." oninput="filtrarUsuariosZK();">
+        </div>
+        <div style="overflow-y:auto; max-height:calc(100vh - 200px);">
+            <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
+                <thead class="table-light sticky-top">
+                    <tr>
+                        <th class="ps-3" style="width:60px;">ID ZK</th>
+                        <th>Nombre en el reloj</th>
+                        <th>Persona vinculada</th>
+                        <th class="text-end pe-3"></th>
+                    </tr>
+                </thead>
+                <tbody id="zk-tbody">
+                    <tr><td colspan="4" class="text-center py-4 text-muted">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal vincular usuario ZK a persona -->
+<div class="modal fade" id="modalVincularZK" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold">Vincular al catálogo</h5>
+                    <p class="text-muted small mb-0" id="vincular-sub">—</p>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border small mb-3 py-2">
+                    Selecciona la persona del catálogo que corresponde a este usuario del reloj.
+                    Si aún no existe, créala primero en <a href="/personas">Personas</a>.
+                </div>
+                <input type="text" class="form-control form-control-sm mb-2" id="vincular-search-persona"
+                       placeholder="Buscar por nombre o cédula..." oninput="filtrarPersonasVincular();">
+                <div id="vincular-personas-lista"
+                     style="max-height:220px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
+                </div>
+                <div id="vincular-persona-seleccionada" class="mt-2 small text-success fw-semibold" style="display:none;"></div>
+                <input type="hidden" id="vincular-persona-id-sel">
+                <input type="hidden" id="vincular-id-usuario-zk">
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary btn-sm px-4" onclick="confirmarVincular();"
+                        id="btn-confirmar-vincular" disabled>Vincular</button>
             </div>
         </div>
     </div>
@@ -260,6 +354,194 @@
     document.addEventListener('DOMContentLoaded', () => {
         cargarDispositivos();
         iniciarPollSync();
+        cargarResumenZK();
     });
+
+    // ── Usuarios ZK ───────────────────────────────────────────────────────────
+
+    let _zkUsuarios = [];
+    let _personasCatalogo = [];
+
+    function cargarResumenZK() {
+        fetch('/api/usuarios-zk')
+            .then(r => r.json())
+            .then(data => {
+                _zkUsuarios = data.usuarios || [];
+                renderResumenZK(data);
+            })
+            .catch(() => {});
+    }
+
+    function renderResumenZK(data) {
+        const bar = document.getElementById('zk-resumen-bar');
+        if (!bar) return;
+        const total = data.total || 0;
+        const vinc  = data.vinculados || 0;
+        const sinv  = data.sin_vincular || 0;
+        const pct   = total > 0 ? Math.round(vinc / total * 100) : 0;
+        bar.innerHTML = `
+            <span class="badge bg-secondary bg-opacity-10 text-secondary border">${total} usuarios en el reloj</span>
+            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                <span class="material-symbols-outlined" style="font-size:0.75rem;vertical-align:-1px;">link</span>
+                ${vinc} vinculados
+            </span>
+            ${sinv > 0 ? `<span class="badge bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25">
+                <span class="material-symbols-outlined" style="font-size:0.75rem;vertical-align:-1px;">link_off</span>
+                ${sinv} sin vincular
+            </span>` : ''}
+            <div class="progress flex-grow-1" style="height:6px; max-width:160px;">
+                <div class="progress-bar bg-success" style="width:${pct}%;" title="${pct}% vinculados"></div>
+            </div>
+            <small class="text-muted">${pct}% vinculado</small>
+        `;
+    }
+
+    function abrirUsuariosZK() {
+        cargarResumenZK();
+        renderTablaZK(_zkUsuarios);
+        new bootstrap.Offcanvas(document.getElementById('offcanvasUsuariosZK')).show();
+    }
+
+    function renderTablaZK(lista) {
+        const sub = document.getElementById('zk-offcanvas-sub');
+        const vinc = lista.filter(u => u.persona_id).length;
+        if (sub) sub.textContent = `${lista.length} usuarios · ${vinc} vinculados · ${lista.length - vinc} sin vincular`;
+
+        const tbody = document.getElementById('zk-tbody');
+        if (!lista.length) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted">No hay usuarios registrados en el reloj.<br><small>Realiza una sincronización primero.</small></td></tr>';
+            return;
+        }
+        tbody.innerHTML = lista.map(u => {
+            const vinculado = !!u.persona_id;
+            const personaCell = vinculado
+                ? `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fw-normal">
+                       ${escapeHtml(u.persona_nombre)}
+                       ${u.identificacion ? `<span class="opacity-75">· ${escapeHtml(u.identificacion)}</span>` : ''}
+                   </span>`
+                : `<span class="badge bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25 fw-normal">Sin vincular</span>`;
+            const accion = vinculado
+                ? `<span class="text-muted small">—</span>`
+                : `<button class="btn btn-sm btn-outline-primary py-0 px-2"
+                          onclick='abrirModalVincular(${JSON.stringify(u.id_usuario)}, ${JSON.stringify(u.nombre_zk)})'>
+                       <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:-2px;">link</span>
+                       Vincular
+                   </button>`;
+            return `<tr data-search-upper="${escapeHtml((u.id_usuario + ' ' + (u.nombre_zk || '')).toUpperCase())}">
+                <td class="ps-3 fw-bold text-primary">${escapeHtml(u.id_usuario)}</td>
+                <td>${escapeHtml(u.nombre_zk || '—')}</td>
+                <td>${personaCell}</td>
+                <td class="text-end pe-3">${accion}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filtrarUsuariosZK() {
+        const q = document.getElementById('zk-search').value.toUpperCase();
+        document.querySelectorAll('#zk-tbody tr[data-search-upper]').forEach(row => {
+            row.style.display = row.dataset.searchUpper.includes(q) ? '' : 'none';
+        });
+    }
+
+    // ── Modal vincular ─────────────────────────────────────────────────────────
+
+    function abrirModalVincular(idUsuario, nombreZk) {
+        document.getElementById('vincular-sub').textContent = `Usuario ZK #${idUsuario} — "${nombreZk}"`;
+        document.getElementById('vincular-id-usuario-zk').value = idUsuario;
+        document.getElementById('vincular-persona-id-sel').value = '';
+        document.getElementById('vincular-persona-seleccionada').style.display = 'none';
+        document.getElementById('btn-confirmar-vincular').disabled = true;
+        document.getElementById('vincular-search-persona').value = '';
+
+        // Cargar personas si no están en caché
+        if (!_personasCatalogo.length) {
+            fetch('/api/personas-lista').then(r => r.json()).then(data => {
+                _personasCatalogo = data.personas || [];
+                renderListaPersonasVincular(_personasCatalogo);
+            });
+        } else {
+            renderListaPersonasVincular(_personasCatalogo);
+        }
+
+        new bootstrap.Modal(document.getElementById('modalVincularZK')).show();
+    }
+
+    function renderListaPersonasVincular(lista) {
+        const div = document.getElementById('vincular-personas-lista');
+        if (!lista.length) {
+            div.innerHTML = '<p class="text-muted small p-3 mb-0">No hay personas en el catálogo.</p>';
+            return;
+        }
+        div.innerHTML = lista.map(p => `
+            <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom vincular-persona-item"
+                 style="cursor:pointer;" onclick="seleccionarPersonaVincular('${p.id}', '${escapeHtml(p.nombre)}', '${escapeHtml(p.identificacion || '')}')">
+                <div class="flex-grow-1">
+                    <div class="fw-semibold" style="font-size:0.85rem;">${escapeHtml(p.nombre)}</div>
+                    ${p.identificacion ? `<small class="text-muted">${escapeHtml(p.identificacion)}</small>` : ''}
+                </div>
+                ${p.id_usuario_zk ? `<span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.7rem;">ZK: ${p.id_usuario_zk}</span>` : ''}
+            </div>
+        `).join('');
+    }
+
+    function filtrarPersonasVincular() {
+        const q = document.getElementById('vincular-search-persona').value.toUpperCase();
+        document.querySelectorAll('.vincular-persona-item').forEach(el => {
+            el.style.display = el.textContent.toUpperCase().includes(q) ? '' : 'none';
+        });
+    }
+
+    function seleccionarPersonaVincular(id, nombre, identificacion) {
+        document.getElementById('vincular-persona-id-sel').value = id;
+        document.getElementById('btn-confirmar-vincular').disabled = false;
+        const label = document.getElementById('vincular-persona-seleccionada');
+        label.textContent = `Seleccionada: ${nombre}${identificacion ? ' · ' + identificacion : ''}`;
+        label.style.display = '';
+        document.querySelectorAll('.vincular-persona-item').forEach(el => el.classList.remove('bg-light'));
+    }
+
+    function confirmarVincular() {
+        const idUsuario = document.getElementById('vincular-id-usuario-zk').value;
+        const personaId = document.getElementById('vincular-persona-id-sel').value;
+        if (!personaId) return;
+
+        const btn = document.getElementById('btn-confirmar-vincular');
+        btn.disabled = true;
+        btn.textContent = 'Vinculando...';
+
+        fetch(`/api/usuarios-zk/${encodeURIComponent(idUsuario)}/vincular`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({persona_id: personaId}),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalVincularZK')).hide();
+                _personasCatalogo = [];  // invalidar caché
+                showToast('Usuario vinculado correctamente', 'success');
+                // Recargar lista ZK fresca
+                fetch('/api/usuarios-zk').then(r => r.json()).then(data => {
+                    _zkUsuarios = data.usuarios || [];
+                    renderResumenZK(data);
+                    renderTablaZK(_zkUsuarios);
+                });
+            } else {
+                showToast('Error: ' + (data.error || 'desconocido'), 'danger');
+                btn.disabled = false;
+                btn.textContent = 'Vincular';
+            }
+        })
+        .catch(() => {
+            showToast('Error de red', 'danger');
+            btn.disabled = false;
+            btn.textContent = 'Vincular';
+        });
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
 </script>
 {% endblock %}

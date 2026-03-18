@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,6 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
     <div class="app-wrapper">
         <!-- Sidebar Navigation -->
@@ -20,20 +22,17 @@
                 <h5 class="mb-0 fw-bold">{{ nombre_institucion }}</h5>
                 <small class="text-muted">Biométrico</small>
             </div>
-            
+
             <ul class="nav flex-column py-2 sidebar-nav">
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" href="{{ url_for('dashboard') }}">
+                    <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}"
+                        href="{{ url_for('dashboard') }}">
                         <span class="material-symbols-outlined nav-icon">dashboard</span> Panel
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'configuracion' %}active{% endif %}" href="{{ url_for('configuracion_vista') }}">
-                        <span class="material-symbols-outlined nav-icon">settings</span> Configuración
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'justificaciones' %}active{% endif %}" href="{{ url_for('justificaciones_vista') }}">
+                    <a class="nav-link {% if active_page == 'justificaciones' %}active{% endif %}"
+                        href="{{ url_for('justificaciones_vista') }}">
                         <span class="material-symbols-outlined nav-icon">fact_check</span> Justificaciones
                         {% if justificaciones_pendientes_count > 0 %}
                         <span class="badge bg-danger float-end ms-2">{{ justificaciones_pendientes_count }}</span>
@@ -41,36 +40,68 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'periodos' %}active{% endif %}" href="{{ url_for('periodos_lista') }}">
+                    <a class="nav-link {% if active_page == 'periodos' %}active{% endif %}"
+                        href="{{ url_for('periodos_lista') }}">
                         <span class="material-symbols-outlined nav-icon">event_repeat</span> Períodos
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}" href="{{ url_for('analytics_vista') }}">
+                    <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}"
+                        href="{{ url_for('analytics_vista') }}">
                         <span class="material-symbols-outlined nav-icon">monitoring</span> Analytics
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'reportes' %}active{% endif %}" href="{{ url_for('reportes_vista') }}">
+                    <a class="nav-link {% if active_page == 'reportes' %}active{% endif %}"
+                        href="{{ url_for('reportes_vista') }}">
                         <span class="material-symbols-outlined nav-icon">description</span> Reportes
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'personas' %}active{% endif %}" href="{{ url_for('personas_lista') }}">
+                    <a class="nav-link {% if active_page == 'personas' %}active{% endif %}"
+                        href="{{ url_for('personas_lista') }}">
                         <span class="material-symbols-outlined nav-icon">group</span> Personas
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'configuracion' %}active{% endif %}"
+                        href="{{ url_for('configuracion_vista') }}">
+                        <span class="material-symbols-outlined nav-icon">settings</span> Configuración
                     </a>
                 </li>
                 {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_dispositivos' %}active{% endif %}" href="{{ url_for('admin_dispositivos') }}">
+                    <a class="nav-link {% if active_page == 'admin_dispositivos' %}active{% endif %}"
+                        href="{{ url_for('admin_dispositivos') }}">
                         <span class="material-symbols-outlined nav-icon">router</span> Dispositivos
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_usuarios' %}active{% endif %}" href="{{ url_for('admin_usuarios') }}">
+                    <a class="nav-link {% if active_page == 'admin_usuarios' %}active{% endif %}"
+                        href="{{ url_for('admin_usuarios') }}">
                         <span class="material-symbols-outlined nav-icon">manage_accounts</span> Usuarios
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'admin_grupos' %}active{% endif %}"
+                        href="{{ url_for('admin_grupos') }}">
+                        <span class="material-symbols-outlined nav-icon">workspaces</span> Grupos
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'admin_categorias' %}active{% endif %}"
+                        href="{{ url_for('admin_categorias') }}">
+                        <span class="material-symbols-outlined nav-icon">label</span> Categorías
+                    </a>
+                </li>
+                {% if current_user_roles and 'superadmin' in current_user_roles %}
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'admin_tenants' %}active{% endif %}"
+                        href="{{ url_for('admin_tenants') }}">
+                        <span class="material-symbols-outlined nav-icon">domain</span> Tenants
+                    </a>
+                </li>
+                {% endif %}
                 {% endif %}
             </ul>
 
@@ -96,7 +127,8 @@
         <!-- Main Content Layout -->
         <main class="main-content">
             <!-- Topbar for mobile -->
-            <header class="topbar d-flex justify-content-between align-items-center p-3 border-bottom bg-white d-md-none">
+            <header
+                class="topbar d-flex justify-content-between align-items-center p-3 border-bottom bg-white d-md-none">
                 <h5 class="mb-0 fw-bold">{{ nombre_sistema }}</h5>
                 <button class="btn btn-sm btn-outline-secondary" id="btn-toggle-sidebar">☰</button>
             </header>
@@ -104,10 +136,12 @@
             <div class="content-wrapper p-4">
                 <!-- Contenedor de Toasts Globales -->
                 <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 2000">
-                    <div id="globalToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div id="globalToast" class="toast align-items-center text-bg-success border-0" role="alert"
+                        aria-live="assertive" aria-atomic="true">
                         <div class="d-flex">
                             <div class="toast-body" id="globalToastMsg">Mensaje</div>
-                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"
+                                aria-label="Close"></button>
                         </div>
                     </div>
                 </div>
@@ -118,12 +152,12 @@
                         const toastEl = document.getElementById('globalToast');
                         const msgEl = document.getElementById('globalToastMsg');
                         if (msgEl) msgEl.textContent = msg;
-                        
+
                         // Remover clases previas de color
                         toastEl.classList.remove('text-bg-success', 'text-bg-danger', 'text-bg-warning', 'text-bg-info');
                         const bgClass = type === 'danger' || type === 'error' ? 'text-bg-danger' : `text-bg-${type}`;
                         toastEl.classList.add(bgClass);
-                        
+
                         const toast = new bootstrap.Toast(toastEl, { delay: type === 'danger' ? 6000 : 4000 });
                         toast.show();
                     }
@@ -140,24 +174,24 @@
                 </script>
 
                 {% with messages = get_flashed_messages(with_categories=true) %}
-                  {% if messages %}
-                    <!-- Render flashed messages safely to avoid breaking JS syntax linters -->
-                    <script id="flashed-messages" type="application/json">
+                {% if messages %}
+                <!-- Render flashed messages safely to avoid breaking JS syntax linters -->
+                <script id="flashed-messages" type="application/json">
                         {{ messages | tojson }}
                     </script>
-                    <script>
-                        document.addEventListener("DOMContentLoaded", function() {
-                            const messagesEl = document.getElementById('flashed-messages');
-                            if (messagesEl) {
-                                const messages = JSON.parse(messagesEl.textContent);
-                                messages.forEach(([category, message]) => {
-                                    const type = ['danger', 'error'].includes(category) ? 'danger' : category;
-                                    showToast(message, type || 'info');
-                                });
-                            }
-                        });
-                    </script>
-                  {% endif %}
+                <script>
+                    document.addEventListener("DOMContentLoaded", function () {
+                        const messagesEl = document.getElementById('flashed-messages');
+                        if (messagesEl) {
+                            const messages = JSON.parse(messagesEl.textContent);
+                            messages.forEach(([category, message]) => {
+                                const type = ['danger', 'error'].includes(category) ? 'danger' : category;
+                                showToast(message, type || 'info');
+                            });
+                        }
+                    });
+                </script>
+                {% endif %}
                 {% endwith %}
 
                 <!-- Definido por la vista hija -->
@@ -176,17 +210,18 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const btnToggle = document.getElementById('btn-toggle-sidebar');
-            if(btnToggle) {
+            if (btnToggle) {
                 btnToggle.addEventListener('click', () => {
                     document.querySelector('.sidebar').classList.toggle('show');
                 });
             }
-            
-            if(typeof checkPendingJustifications === 'function') {
+
+            if (typeof checkPendingJustifications === 'function') {
                 checkPendingJustifications();
             }
         });
     </script>
     {% block extra_js %}{% endblock %}
 </body>
+
 </html>

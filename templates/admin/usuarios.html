@@ -9,7 +9,10 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="fw-bold mb-0">Gestión de Usuarios</h5>
+    <div>
+        <h3 class="fw-bold mb-0">Gestión de Usuarios</h3>
+        <p class="text-muted mb-0">Administración de cuentas de acceso, roles y permisos del sistema.</p>
+    </div>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrear">
         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">person_add</span>
         Nuevo Usuario
@@ -71,7 +74,7 @@
                         </td>
                         <td class="text-end">
                             <button class="btn btn-sm btn-outline-secondary"
-                                    onclick="abrirEditar('{{ u.id }}', {{ u | tojson }})">
+                                    onclick="abrirEditar('{{ u.id }}', JSON.parse('{{ u | tojson | forceescape }}'))">
                                 Editar
                             </button>
                         </td>

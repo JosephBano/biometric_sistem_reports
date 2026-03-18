@@ -466,7 +466,6 @@ def justificaciones_vista():
 def reportes_vista():
     return render_template('reportes.html', active_page='reportes')
 
-
 @app.route('/descargar/<filename>')
 def descargar(filename):
     file_path = os.path.join(app.config['REPORTS_FOLDER'], filename)
@@ -557,6 +556,54 @@ def api_sync_dispositivo(id):
     return jsonify({"status": "procesando"})
 
 
+@app.route('/api/usuarios-zk')
+@require_role('admin', 'superadmin')
+def api_usuarios_zk():
+    """Lista usuarios del biométrico con estado de vinculación a persona."""
+    try:
+        usuarios = db_module.get_usuarios_zk_con_estado()
+        vinculados = sum(1 for u in usuarios if u.get("persona_id"))
+        return jsonify({
+            "usuarios": usuarios,
+            "total": len(usuarios),
+            "vinculados": vinculados,
+            "sin_vincular": len(usuarios) - vinculados,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/usuarios-zk/<id_usuario>/vincular', methods=['POST'])
+@require_role('admin', 'superadmin')
+def api_vincular_usuario_zk(id_usuario):
+    """Vincula un ID de usuario ZK a una persona del catálogo."""
+    data = request.get_json() or {}
+    persona_id = (data.get('persona_id') or '').strip()
+    if not persona_id:
+        return jsonify({"error": "persona_id requerido"}), 400
+    try:
+        db_module.actualizar_persona(persona_id, {"id_usuario_zk": id_usuario})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/personas-lista')
+@require_role('admin', 'superadmin')
+def api_personas_lista():
+    """Lista simplificada de personas para selectores."""
+    try:
+        personas = db_module.listar_personas(activo=None)
+        return jsonify({"personas": [
+            {"id": p["id"], "nombre": p["nombre"],
+             "identificacion": p.get("identificacion"),
+             "id_usuario_zk": p.get("id_usuario_zk")}
+            for p in personas
+        ]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/sync/estado')
 @require_role('admin', 'superadmin')
 def api_sync_estado():
@@ -627,10 +674,26 @@ def personas_db():
 
 @app.route('/api/alertas/tardanzas-severas')
 def alertas_tardanzas_severas():
-    """Retorna personas con 3 o más tardanzas severas en el mes actual."""
+    """Retorna personas con 3 o más tardanzas severas en el rango definido."""
     hoy = date.today()
-    fecha_inicio = hoy.replace(day=1)
-    fecha_fin = hoy
+    fi_str = request.args.get('fecha_inicio')
+    ff_str = request.args.get('fecha_fin')
+    
+    if fi_str:
+        try:
+            fecha_inicio = datetime.strptime(fi_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_inicio = hoy.replace(day=1)
+    else:
+        fecha_inicio = hoy.replace(day=1)
+        
+    if ff_str:
+        try:
+            fecha_fin = datetime.strptime(ff_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_fin = hoy
+    else:
+        fecha_fin = hoy
 
     registros = db_module.consultar_asistencias(fecha_inicio, fecha_fin)
     if not registros:
@@ -1910,11 +1973,12 @@ def archivar_periodo_route(id):
 @app.route('/personas')
 @require_role('admin', 'superadmin', 'gestor')
 def personas_lista():
-    tipo_persona_id = request.args.get('tipo_persona_id')
-    grupo_id = request.args.get('grupo_id')
-    busqueda = request.args.get('q')
+    tipo_persona_id = request.args.get('tipo_persona_id', '').strip() or None
+    grupo_id = request.args.get('grupo_id', '').strip() or None
+    busqueda = request.args.get('q', '').strip() or None
     personas = db_module.listar_personas(tipo_persona_id=tipo_persona_id,
                                          grupo_id=grupo_id,
+                                         activo=None,
                                          busqueda=busqueda)
     grupos = db_module.listar_grupos(activo=True)
     return render_template('personas/lista.html',
@@ -1944,6 +2008,7 @@ def personas_crear():
             email=request.form.get('email') or None,
             telefono=request.form.get('telefono') or None,
             notas=request.form.get('notas') or None,
+            id_usuario_zk=request.form.get('id_usuario_zk') or None,
         )
         flash("Persona creada exitosamente", "success")
     except Exception as e:
@@ -1964,6 +2029,8 @@ def personas_editar(id):
     activo_val = request.form.get('activo')
     if activo_val is not None:
         datos['activo'] = activo_val == '1'
+    if 'id_usuario_zk' in request.form:
+        datos['id_usuario_zk'] = request.form.get('id_usuario_zk', '').strip() or ''
     try:
         db_module.actualizar_persona(id, datos)
         flash("Persona actualizada", "success")
@@ -2092,10 +2159,23 @@ def analytics_vista():
     fecha_fin_str = request.args.get('fecha_fin')
     tipo_persona_id = request.args.get('tipo_persona_id')
     grupo_id = request.args.get('grupo_id')
+    tab_activa = request.args.get('tab', 'resumen')
+    
+    hoy = date.today()
     
     try:
-        fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date() if fecha_inicio_str else date.today() - timedelta(days=30)
-        fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else date.today()
+        if fecha_inicio_str:
+            fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date()
+        else:
+            if tab_activa == 'alertas':
+                fecha_inicio = hoy.replace(day=1)
+            else:
+                fecha_inicio = hoy - timedelta(days=30)
+                
+        if fecha_fin_str:
+            fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date()
+        else:
+            fecha_fin = hoy
     except ValueError:
         return "Formato de fecha inválido", 400
         
@@ -2116,6 +2196,7 @@ def analytics_vista():
                              active_page='analytics',
                              fecha_inicio=fecha_inicio.strftime('%Y-%m-%d'),
                              fecha_fin=fecha_fin.strftime('%Y-%m-%d'),
+                             tab_activa=tab_activa,
                              hallazgos=hallazgos,
                              narrativo=narrativo,
                              grupos=grupos)

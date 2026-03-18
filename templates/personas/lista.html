@@ -4,136 +4,302 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-0">Personas</h3>
-        <p class="text-muted">Gestión del catálogo de personas registradas.</p>
+        <p class="text-muted mb-0">Gestión del personal y sus horarios de trabajo.</p>
     </div>
     {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
-        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">person_add</span> Nueva Persona
-    </button>
+    <div id="header-actions-personal">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
+            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">person_add</span> Nueva Persona
+        </button>
+    </div>
+    <div id="header-actions-horarios" style="display:none;">
+        <label class="btn btn-outline-secondary mb-0" for="horarios-input" title="Importar horarios masivamente (.csv, .obd, .ods)">
+            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">upload_file</span> Importar
+            <input type="file" id="horarios-input" style="display:none" accept=".obd,.ods,.csv">
+        </label>
+        <button class="btn btn-outline-secondary ms-2" onclick="exportarHorariosCsv();" title="Exportar todos los horarios en CSV">
+            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">download</span> Exportar CSV
+        </button>
+    </div>
     {% endif %}
 </div>
 
-<!-- Filtros -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form class="row g-3" method="GET">
-            <div class="col-md-4">
-                <input type="text" class="form-control" name="q" placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
-            </div>
-            <div class="col-md-3">
-                <select class="form-select" name="tipo_persona_id">
-                    <option value="">Todos los tipos</option>
-                    {% for t in tenant_tipos %}
-                    <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <select class="form-select" name="grupo_id">
-                    <option value="">Todos los grupos</option>
-                    {% for g in grupos %}
-                    <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-fill">Filtrar</button>
-                <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary">✕</a>
-            </div>
-        </form>
-    </div>
-</div>
+<!-- Tabs -->
+<ul class="nav nav-pills mb-4 gap-2" id="personasTabs" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active fw-bold px-4 py-2 custom-tab shadow-sm" id="tab-personal-btn" data-bs-toggle="tab"
+            data-bs-target="#tab-personal" type="button" onclick="cambiarTab('personal')">
+            <span class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined fs-5">group</span>
+                Personal
+                <span class="badge bg-secondary bg-opacity-50 ms-1 fw-normal text-dark" style="font-size:0.75rem;">{{ personas|length }}</span>
+            </span>
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="tab-horarios-btn" data-bs-toggle="tab"
+            data-bs-target="#tab-horarios" type="button" onclick="cambiarTab('horarios')">
+            <span class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined fs-5">schedule</span>
+                Horarios
+                <span id="horarios-count-badge" class="badge bg-secondary bg-opacity-50 ms-1 fw-normal text-dark" style="font-size:0.75rem;"></span>
+            </span>
+        </button>
+    </li>
+</ul>
 
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold mb-0">{{ personas|length }} persona(s)</h5>
-        <a href="{{ url_for('personas_historico') }}" class="btn btn-sm btn-outline-secondary">
-            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">history</span> Historial por Cédula
-        </a>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
-                <tr>
-                    <th>Nombre</th>
-                    <th>Identificación</th>
-                    <th>Tipo</th>
-                    <th>Grupo</th>
-                    <th>Categoría</th>
-                    <th>Estado</th>
-                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-                    <th></th>
-                    {% endif %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in personas %}
-                <tr>
-                    <td class="fw-bold">{{ p.nombre }}</td>
-                    <td>{{ p.identificacion or '—' }}</td>
-                    <td>{{ p.tipo_persona or '—' }}</td>
-                    <td>{{ p.grupo or '—' }}</td>
-                    <td>{{ p.categoria or '—' }}</td>
-                    <td>
-                        <span class="badge {% if p.activo %}bg-success{% else %}bg-secondary{% endif %}">
-                            {% if p.activo %}Activo{% else %}Inactivo{% endif %}
-                        </span>
-                    </td>
-                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-                    <td>
-                        <button class="btn btn-sm btn-outline-secondary"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modalEditarPersona"
-                                data-id="{{ p.id }}"
+<div class="tab-content">
+
+    <!-- ── TAB: PERSONAL ─────────────────────────────────────────────────── -->
+    <div class="tab-pane fade show active" id="tab-personal">
+
+        <!-- Filtros -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body p-4">
+                <form class="row g-3 align-items-end" method="GET">
+                    <div class="col-md-4">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Búsqueda</label>
+                        <input type="text" class="form-control bg-light border-0" name="q"
+                            placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo</label>
+                        <select class="form-select bg-light border-0" name="tipo_persona_id">
+                            <option value="">Todos los tipos</option>
+                            {% for t in tenant_tipos %}
+                            <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
+                        <select class="form-select bg-light border-0" name="grupo_id">
+                            <option value="">Todos los grupos</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary flex-fill fw-bold shadow-sm" style="height: 38px;">Filtrar</button>
+                        <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+                <h5 class="fw-bold mb-0">{{ personas|length }} persona(s)</h5>
+                <a href="{{ url_for('personas_historico') }}" class="btn btn-sm btn-outline-secondary">
+                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">history</span> Historial por Cédula
+                </a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Identificación</th>
+                            <th>ID Biométrico</th>
+                            <th>Tipo</th>
+                            <th>Grupo</th>
+                            <th>Estado</th>
+                            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                            <th></th>
+                            {% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in personas %}
+                        <tr>
+                            <td class="fw-bold">{{ p.nombre }}</td>
+                            <td class="text-muted">{{ p.identificacion or '—' }}</td>
+                            <td>
+                                {% if p.id_usuario_zk %}
+                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal">
+                                    {{ p.id_usuario_zk }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted small">Sin asignar</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted">{{ p.tipo_persona or '—' }}</td>
+                            <td class="text-muted">{{ p.grupo or '—' }}</td>
+                            <td>
+                                <span class="badge {% if p.activo %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {% if p.activo %}Activo{% else %}Inactivo{% endif %}
+                                </span>
+                            </td>
+                            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary"
+                                    data-bs-toggle="modal" data-bs-target="#modalEditarPersona"
+                                    data-id="{{ p.id }}"
+                                    data-nombre="{{ p.nombre }}"
+                                    data-identificacion="{{ p.identificacion or '' }}"
+                                    data-tipo="{{ p.tipo_persona_id or '' }}"
+                                    data-grupo="{{ p.grupo_id or '' }}"
+                                    data-categoria="{{ p.categoria_id or '' }}"
+                                    data-email="{{ p.email or '' }}"
+                                    data-telefono="{{ p.telefono or '' }}"
+                                    data-notas="{{ p.notas or '' }}"
+                                    data-activo="{{ '1' if p.activo else '0' }}"
+                                    data-idzk="{{ p.id_usuario_zk or '' }}">
+                                    Editar
+                                </button>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">No se encontraron personas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div><!-- /tab-personal -->
+
+    <!-- ── TAB: HORARIOS ─────────────────────────────────────────────────── -->
+    <div class="tab-pane fade" id="tab-horarios">
+
+        <div class="alert alert-light border d-flex align-items-start gap-2 mb-3 py-2" style="font-size:0.85rem;">
+            <span class="material-symbols-outlined text-primary flex-shrink-0" style="font-size:1.1rem;margin-top:2px;">info</span>
+            <span>
+                Los <strong>horarios</strong> definen la jornada de cada persona: días activos, hora de entrada y salida.
+                Para editar o asignar el horario de una persona, esta debe tener un <strong>ID del biométrico</strong> asignado —
+                configúralo desde el botón <em>Editar</em> en la pestaña Personal.
+            </span>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-0">
+                <div class="p-3 border-bottom">
+                    <div id="horarios-upload-progress" style="display:none" class="mb-2">
+                        <div class="d-flex align-items-center gap-2 small text-muted">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span>Importando horarios...</span>
+                        </div>
+                    </div>
+                    <input type="text" class="form-control form-control-sm" id="search-horarios-personas"
+                        placeholder="Buscar persona..." oninput="filtrarHorariosPersonas();">
+                </div>
+                <div class="table-responsive" style="max-height:520px;overflow-y:auto;">
+                    <table class="table table-hover align-middle mb-0" style="font-size:0.87rem;">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th>Persona</th>
+                                <th>ID Biométrico</th>
+                                <th>Horario configurado</th>
+                                <th class="text-end">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="horarios-personas-tbody">
+                            {% for p in personas %}
+                            <tr data-nombre-upper="{{ p.nombre|upper }}"
                                 data-nombre="{{ p.nombre }}"
-                                data-identificacion="{{ p.identificacion or '' }}"
-                                data-tipo="{{ p.tipo_persona_id or '' }}"
-                                data-grupo="{{ p.grupo_id or '' }}"
-                                data-categoria="{{ p.categoria_id or '' }}"
-                                data-email="{{ p.email or '' }}"
-                                data-telefono="{{ p.telefono or '' }}"
-                                data-notas="{{ p.notas or '' }}"
-                                data-activo="{{ '1' if p.activo else '0' }}">
-                            Editar
-                        </button>
-                    </td>
-                    {% endif %}
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7" class="text-center py-5 text-muted">No se encontraron personas con los filtros actuales.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+                                data-idzk="{{ p.id_usuario_zk or '' }}">
+                                <td class="fw-semibold">{{ p.nombre }}</td>
+                                <td>
+                                    {% if p.id_usuario_zk %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal">
+                                        {{ p.id_usuario_zk }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted small d-flex align-items-center gap-1">
+                                        <span class="material-symbols-outlined text-warning" style="font-size:0.9rem;">warning</span>
+                                        Sin asignar
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="horario-resumen-cell text-muted small">
+                                    <span class="spinner-border spinner-border-sm text-secondary" style="width:.65rem;height:.65rem;" role="status"></span>
+                                </td>
+                                <td class="text-end">
+                                    {% if p.id_usuario_zk %}
+                                    <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                        onclick="abrirHorarioDePersona('{{ p.nombre }}', '{{ p.id_usuario_zk }}')"
+                                        title="Ver / editar horario">
+                                        <span class="material-symbols-outlined" style="font-size:0.9rem;vertical-align:-2px;">edit</span>
+                                        Horario
+                                    </button>
+                                    {% else %}
+                                    <span class="text-muted small" title="Asigna primero el ID del biométrico en Editar persona">Sin ID</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="4" class="text-center py-5 text-muted">No hay personas en el catálogo.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-2 border-top text-muted small">
+                    <span id="horarios-count">0</span> horarios configurados de {{ personas|length }} personas
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /tab-horarios -->
+
+</div><!-- /tab-content -->
 {% endblock %}
 
 {% block modals %}
 {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-<!-- Modal Crear Persona -->
+
+<!-- ── Modal Nueva Persona ─────────────────────────────────────────────── -->
 <div class="modal fade" id="modalCrearPersona" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Nueva Persona</h5>
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold">Nueva Persona</h5>
+                    <p class="text-muted small mb-0">Datos de identidad y vínculo con el dispositivo biométrico.</p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="{{ url_for('personas_crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="nombre" required>
+                <div class="modal-body pt-3">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Nombre completo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nombre" required placeholder="Apellidos, Nombres">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Identificación</label>
+                            <input type="text" class="form-control" name="identificacion" placeholder="Cédula / Pasaporte">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Identificación (Cédula/Pasaporte)</label>
-                        <input type="text" class="form-control" name="identificacion">
+
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <label class="form-label fw-semibold d-flex align-items-center gap-1 mb-1">
+                            <span class="material-symbols-outlined text-primary" style="font-size:1.1rem;">fingerprint</span>
+                            ID en el biométrico
+                        </label>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <input type="number" class="form-control" name="id_usuario_zk" min="1" placeholder="Ej: 12">
+                            </div>
+                            <div class="col-md-8">
+                                <p class="text-muted small mb-0">
+                                    Número de usuario del dispositivo ZK. Se puede consultar en
+                                    <a href="{{ url_for('admin_dispositivos') }}" target="_blank">Dispositivos</a>
+                                    o en la pantalla del reloj.
+                                    <strong>Necesario para generar informes.</strong>
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col">
-                            <label class="form-label">Tipo de Persona</label>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Tipo de Persona</label>
                             <select class="form-select" name="tipo_persona_id">
                                 <option value="">Sin tipo</option>
                                 {% for t in tenant_tipos %}
@@ -141,8 +307,8 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Grupo</label>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Grupo</label>
                             <select class="form-select" name="grupo_id">
                                 <option value="">Sin grupo</option>
                                 {% for g in grupos %}
@@ -151,20 +317,20 @@
                             </select>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" class="form-control" name="email">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email</label>
+                            <input type="email" class="form-control" name="email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Teléfono</label>
+                            <input type="text" class="form-control" name="telefono">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Teléfono</label>
-                        <input type="text" class="form-control" name="telefono">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Notas</label>
-                        <textarea class="form-control" name="notas" rows="2"></textarea>
-                    </div>
+
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer border-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Crear Persona</button>
                 </div>
@@ -173,28 +339,54 @@
     </div>
 </div>
 
-<!-- Modal Editar Persona -->
+<!-- ── Modal Editar Persona ────────────────────────────────────────────── -->
 <div class="modal fade" id="modalEditarPersona" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Editar Persona</h5>
+            <div class="modal-header border-0 pb-0">
+                <div>
+                    <h5 class="modal-title fw-bold">Editar Persona</h5>
+                    <p class="text-muted small mb-0" id="edit_subtitulo">—</p>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="formEditarPersona" action="">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input type="text" class="form-control" name="nombre" id="edit_nombre">
+                <input type="hidden" name="id_usuario_zk" id="edit_idzk_hidden">
+                <div class="modal-body pt-3">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Nombre completo</label>
+                            <input type="text" class="form-control" name="nombre" id="edit_nombre">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Identificación</label>
+                            <input type="text" class="form-control" name="identificacion" id="edit_identificacion">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Identificación</label>
-                        <input type="text" class="form-control" name="identificacion" id="edit_identificacion">
+
+                    <div class="p-3 bg-light rounded-3 border mb-3">
+                        <label class="form-label fw-semibold d-flex align-items-center gap-1 mb-1">
+                            <span class="material-symbols-outlined text-primary" style="font-size:1.1rem;">fingerprint</span>
+                            ID en el biométrico
+                        </label>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <input type="number" class="form-control" id="edit_idzk" min="1" placeholder="Ej: 12"
+                                    oninput="document.getElementById('edit_idzk_hidden').value = this.value;">
+                            </div>
+                            <div class="col-md-8">
+                                <p class="text-muted small mb-0">
+                                    Número de usuario del dispositivo ZK. Dejar vacío para desvincular.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col">
-                            <label class="form-label">Tipo de Persona</label>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Tipo de Persona</label>
                             <select class="form-select" name="tipo_persona_id" id="edit_tipo">
                                 <option value="">Sin tipo</option>
                                 {% for t in tenant_tipos %}
@@ -202,8 +394,8 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Grupo</label>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Grupo</label>
                             <select class="form-select" name="grupo_id" id="edit_grupo">
                                 <option value="">Sin grupo</option>
                                 {% for g in grupos %}
@@ -212,23 +404,28 @@
                             </select>
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email</label>
-                        <input type="email" class="form-control" name="email" id="edit_email">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Email</label>
+                            <input type="email" class="form-control" name="email" id="edit_email">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Estado</label>
+                            <select class="form-select" name="activo" id="edit_activo">
+                                <option value="1">Activo</option>
+                                <option value="0">Inactivo</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" name="activo" id="edit_activo">
-                            <option value="1">Activo</option>
-                            <option value="0">Inactivo</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Notas</label>
+
+                    <div class="mb-1">
+                        <label class="form-label fw-semibold">Notas</label>
                         <textarea class="form-control" name="notas" id="edit_notas" rows="2"></textarea>
                     </div>
+
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer border-0">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                     <button type="submit" class="btn btn-primary">Guardar cambios</button>
                 </div>
@@ -237,21 +434,236 @@
     </div>
 </div>
 {% endif %}
+
+<!-- ── Offcanvas Horario (solo edición desde tab Horarios) ─────────────── -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvas-horario"
+    aria-labelledby="offcanvasHorarioLabel" style="width: 460px;">
+    <div class="offcanvas-header border-bottom">
+        <div>
+            <h5 class="offcanvas-title fw-bold" id="offcanvasHorarioLabel">Horario de trabajo</h5>
+            <small class="text-muted" id="offcanvas-horario-sub"></small>
+        </div>
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body">
+        <input type="hidden" id="mh-modo">
+        <div id="mh-error" class="alert alert-danger py-2 small mb-3" style="display:none"></div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-muted">ID ZK</label>
+                <input type="number" class="form-control form-control-sm fw-bold border-0 bg-light"
+                    id="mh-id" min="1" placeholder="Ej: 5">
+            </div>
+            <div class="col-md-8">
+                <label class="form-label small fw-semibold text-muted">Nombre</label>
+                <input type="text" class="form-control form-control-sm fw-bold border-0 bg-light"
+                    id="mh-nombre" placeholder="Apellidos, Nombres">
+            </div>
+        </div>
+
+        <h6 class="fw-bold mb-2">Jornada semanal</h6>
+        <div class="d-flex gap-1 mb-1" style="padding-left:48px;">
+            <small class="text-muted fw-semibold flex-grow-1 text-center" style="font-size:0.7rem;">Entrada</small>
+            <small class="text-muted fw-semibold flex-grow-1 text-center" style="font-size:0.7rem;">Salida</small>
+            <div style="width:72px"></div>
+        </div>
+        <div class="d-flex flex-column gap-2 mb-4">
+            {% for dia, label, libre in [('lunes','Lun',false),('martes','Mar',false),('miercoles','Mié',false),('jueves','Jue',false),('viernes','Vie',false),('sabado','Sáb',true),('domingo','Dom',true)] %}
+            <div class="d-flex align-items-center gap-2">
+                <div style="width:40px"><small class="fw-bold text-muted">{{ label }}</small></div>
+                <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-{{ dia }}">
+                <input type="time" class="form-control form-control-sm flex-grow-1" id="mh-{{ dia }}-salida">
+                <div class="form-check form-switch mb-0" style="min-width:72px">
+                    <input class="form-check-input" type="checkbox" id="mh-libre-{{ dia }}"
+                        onchange="toggleDia('{{ dia }}');" {% if libre %}checked{% endif %}>
+                    <label class="form-check-label small" for="mh-libre-{{ dia }}">Libre</label>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label small fw-semibold text-muted">Almuerzo</label>
+            <select class="form-select form-select-sm" id="mh-almuerzo">
+                <option value="0">Sin almuerzo</option>
+                <option value="30">30 minutos</option>
+                <option value="60">60 minutos</option>
+            </select>
+        </div>
+
+        <div class="mb-3 p-3 bg-light rounded-3 border">
+            <label class="form-label small fw-bold d-block mb-2">Horas de Contrato</label>
+            <div class="d-flex gap-3 mb-2">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasNone" value="none" checked onchange="toggleTipoHoras();">
+                    <label class="form-check-label small" for="tipoHorasNone">Ninguno</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasSemana" value="semana" onchange="toggleTipoHoras();">
+                    <label class="form-check-label small" for="tipoHorasSemana">Semanal</label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasMes" value="mes" onchange="toggleTipoHoras();">
+                    <label class="form-check-label small" for="tipoHorasMes">Mensual</label>
+                </div>
+            </div>
+            <div id="div-horas-semana" style="display:none">
+                <label class="form-label mb-1" style="font-size:0.75rem;">Horas por semana</label>
+                <input type="number" class="form-control form-control-sm" id="mh-horas-semana" min="1" step="0.5" placeholder="Ej: 40">
+            </div>
+            <div id="div-horas-mes" style="display:none">
+                <label class="form-label mb-1" style="font-size:0.75rem;">Horas por mes</label>
+                <input type="number" class="form-control form-control-sm" id="mh-horas-mes" min="1" step="0.5" placeholder="Ej: 160">
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label small fw-semibold text-muted">Notas</label>
+            <textarea class="form-control form-control-sm" id="mh-notas" rows="2" placeholder="Opcional"></textarea>
+        </div>
+    </div>
+    <div class="offcanvas-footer p-3 border-top d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="offcanvas">Cancelar</button>
+        <button type="button" class="btn btn-primary btn-sm px-4" onclick="guardarHorario();">Guardar horario</button>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
 <script>
-document.getElementById('modalEditarPersona').addEventListener('show.bs.modal', function(e) {
-    const btn = e.relatedTarget;
-    const form = document.getElementById('formEditarPersona');
-    form.action = '/personas/' + btn.dataset.id;
-    document.getElementById('edit_nombre').value        = btn.dataset.nombre || '';
-    document.getElementById('edit_identificacion').value = btn.dataset.identificacion || '';
-    document.getElementById('edit_tipo').value          = btn.dataset.tipo || '';
-    document.getElementById('edit_grupo').value         = btn.dataset.grupo || '';
-    document.getElementById('edit_email').value         = btn.dataset.email || '';
-    document.getElementById('edit_activo').value        = btn.dataset.activo || '1';
-    document.getElementById('edit_notas').value         = btn.dataset.notas || '';
+// ── Auto-activar tab por query param (?tab=horarios) ──────────────────────
+if (new URLSearchParams(window.location.search).get('tab') === 'horarios') {
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('tab-horarios-btn').click();
+    });
+}
+
+// ── Header actions toggle por tab ─────────────────────────────────────────
+function cambiarTab(tab) {
+    const aPersonal  = document.getElementById('header-actions-personal');
+    const aHorarios  = document.getElementById('header-actions-horarios');
+    if (!aPersonal || !aHorarios) return;
+    aPersonal.style.display = tab === 'personal' ? '' : 'none';
+    aHorarios.style.display = tab === 'horarios' ? '' : 'none';
+}
+
+// ── Modal Editar Persona ───────────────────────────────────────────────────
+const _modalEditar = document.getElementById('modalEditarPersona');
+if (_modalEditar) {
+    _modalEditar.addEventListener('show.bs.modal', function(e) {
+        const btn = e.relatedTarget;
+        document.getElementById('formEditarPersona').action = '/personas/' + btn.dataset.id;
+        document.getElementById('edit_subtitulo').textContent = btn.dataset.nombre || '';
+        document.getElementById('edit_nombre').value         = btn.dataset.nombre || '';
+        document.getElementById('edit_identificacion').value = btn.dataset.identificacion || '';
+        document.getElementById('edit_tipo').value           = btn.dataset.tipo || '';
+        document.getElementById('edit_grupo').value          = btn.dataset.grupo || '';
+        document.getElementById('edit_email').value          = btn.dataset.email || '';
+        document.getElementById('edit_activo').value         = btn.dataset.activo || '1';
+        document.getElementById('edit_notas').value          = btn.dataset.notas || '';
+        const zkVal = btn.dataset.idzk || '';
+        document.getElementById('edit_idzk').value         = zkVal;
+        document.getElementById('edit_idzk_hidden').value  = zkVal;
+    });
+}
+
+// ── Horarios tab: poblar resúmenes desde _horariosCache ───────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    // cargarHorarios() ya se llama en configuracion.js DOMContentLoaded.
+    // Esperamos a que termine para pintar los badges.
+    const orig = window.renderTablaHorarios;
+    window.renderTablaHorarios = function(lista) {
+        orig(lista);
+        actualizarResumenesHorarios(lista);
+    };
+    // Llamada inicial en caso de que ya haya datos
+    actualizarResumenesHorarios(_horariosCache || []);
+});
+
+function actualizarResumenesHorarios(lista) {
+    const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+    const byId = {};
+    (lista || []).forEach(h => { byId[String(h.id_usuario)] = h; });
+
+    let conHorario = 0;
+    document.querySelectorAll('#horarios-personas-tbody tr[data-idzk]').forEach(row => {
+        const idZk = row.getAttribute('data-idzk');
+        const cell = row.querySelector('.horario-resumen-cell');
+        if (!cell) return;
+        if (!idZk) {
+            cell.innerHTML = '<span class="text-muted">—</span>';
+            return;
+        }
+        const h = byId[idZk];
+        if (h) {
+            conHorario++;
+            const diasActivos = DIAS.filter(d => h[d]).map(d => d.substring(0,1).toUpperCase());
+            const entrada = h.lunes || h.martes || h.miercoles || h.jueves || h.viernes || '';
+            cell.innerHTML = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 fw-normal" style="font-size:0.72rem;">${diasActivos.join(' ')} · ${entrada}</span>`;
+        } else {
+            cell.innerHTML = '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 fw-normal" style="font-size:0.72rem;">Sin configurar</span>';
+        }
+    });
+
+    const countEl = document.getElementById('horarios-count');
+    if (countEl) countEl.textContent = conHorario;
+    const badge = document.getElementById('horarios-count-badge');
+    if (badge) badge.textContent = conHorario;
+}
+
+// ── Abrir horario desde una fila de persona ────────────────────────────────
+function abrirHorarioDePersona(nombre, idZk) {
+    const existente = (_horariosCache || []).find(h => String(h.id_usuario) === String(idZk));
+    if (existente) {
+        abrirOffcanvasEditar(existente);
+    } else {
+        // Sin horario previo: modo crear, con nombre e ID pre-rellenados y bloqueados
+        abrirOffcanvasCrear();
+        document.getElementById('mh-nombre').value = nombre;
+        document.getElementById('mh-id').value     = idZk;
+        document.getElementById('mh-id').readOnly  = true;
+    }
+    // Mostrar subtítulo con el nombre
+    document.getElementById('offcanvas-horario-sub').textContent = nombre;
+}
+
+// ── Filtro de búsqueda en tab Horarios ─────────────────────────────────────
+function filtrarHorariosPersonas() {
+    const q = document.getElementById('search-horarios-personas').value.toUpperCase();
+    document.querySelectorAll('#horarios-personas-tbody tr[data-nombre-upper]').forEach(row => {
+        row.style.display = row.getAttribute('data-nombre-upper').includes(q) ? '' : 'none';
+    });
+}
+
+// ── Al guardar horario, actualizar resúmenes ───────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    const origGuardar = window.guardarHorario;
+    window.guardarHorario = function() {
+        origGuardar();
+        // cargarHorarios() en configuracion.js llamará renderTablaHorarios -> actualizarResumenesHorarios
+    };
+    // Desbloquear mh-id al cerrar el offcanvas (por si se abrió bloqueado)
+    document.getElementById('offcanvas-horario').addEventListener('hidden.bs.offcanvas', () => {
+        document.getElementById('mh-id').readOnly = false;
+        document.getElementById('offcanvas-horario-sub').textContent = '';
+    });
 });
 </script>
+
+<style>
+.custom-tab {
+    background-color: transparent !important;
+    color: #6c757d !important;
+    border: none;
+    border-radius: 10px !important;
+    transition: all 0.2s ease-in-out;
+}
+.custom-tab.active {
+    background-color: #fff !important;
+    color: #0d6efd !important;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+}
+</style>
 {% endblock %}

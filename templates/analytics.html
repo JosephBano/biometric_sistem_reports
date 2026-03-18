@@ -4,286 +4,445 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-0">Analytics & Inteligencia de Asistencia</h3>
-        <p class="text-muted">Análisis estadístico, detección de anomalías y visualizaciones de comportamiento continuo.</p>
+        <p class="text-muted">Análisis estadístico, detección de anomalías y visualizaciones de comportamiento continuo.
+        </p>
     </div>
 </div>
 
-<!-- Filtros de Analytics -->
-<div class="card border-0 shadow-sm mb-5 analytics-card">
-    <div class="card-body p-4">
-        <form class="row g-4 align-items-end" id="analyticsForm">
-            <div class="col-md-3">
-                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Rango de Fecha</label>
-                <div class="input-group">
-                    <input type="date" class="form-control bg-light border-0" name="fecha_inicio" value="{{ fecha_inicio }}">
-                    <span class="input-group-text border-0 bg-light text-muted">a</span>
-                    <input type="date" class="form-control bg-light border-0" name="fecha_fin" value="{{ fecha_fin }}">
-                </div>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo de Persona</label>
-                <select class="form-select bg-light border-0" name="tipo_persona_id">
-                    <option value="">Todos los tipos</option>
-                    {% for t in tenant_tipos %}
-                    <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
-                <select class="form-select bg-light border-0" name="grupo_id">
-                    <option value="">Todos los grupos</option>
-                    {% for g in grupos %}
-                    <option value="{{ g.id }}" {% if request.args.get('grupo_id') == g.id %}selected{% endif %}>{{ g.nombre }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3 d-flex">
-                <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm">
-                    <span class="material-symbols-outlined pb-1">auto_graph</span>
-                    Analizar Datos
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
+<!-- Pestañas de Navegación -->
+<ul class="nav nav-pills mb-4 gap-2" id="analyticsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if tab_activa != 'alertas' %}active{% endif %} fw-bold px-4 py-2 custom-tab shadow-sm" id="resumen-tab" data-bs-toggle="tab"
+            data-bs-target="#resumen" type="button" role="tab" aria-controls="resumen" aria-selected="{% if tab_activa != 'alertas' %}true{% else %}false{% endif %}">
+            <span class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined fs-5">monitoring</span>
+                Resumen Analítico
+            </span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link {% if tab_activa == 'alertas' %}active{% endif %} fw-bold px-4 py-2 custom-tab shadow-sm" id="alertas-tab" data-bs-toggle="tab"
+            data-bs-target="#alertas" type="button" role="tab" aria-controls="alertas" aria-selected="{% if tab_activa == 'alertas' %}true{% else %}false{% endif %}">
+            <span class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined fs-5">warning</span>
+                Gestión de Alertas
+            </span>
+        </button>
+    </li>
+</ul>
 
-<!-- Alertas de Asistencia — carga dinámica, siempre visible -->
-<div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid #ffc107;">
-    <div class="card-body p-3">
-        <div class="d-flex align-items-center gap-2 mb-3">
-            <span class="material-symbols-outlined text-warning" style="font-size:1.3rem;">warning</span>
-            <h5 class="fw-bold mb-0">Alertas de Asistencia</h5>
-            <small class="text-muted fw-normal">(Mes actual)</small>
-        </div>
-        <div id="alertas-loading" class="text-center py-3 text-muted">
-            <div class="spinner-border spinner-border-sm text-warning" role="status"></div> Calculando alertas...
-        </div>
-        <div id="alertas-vacio" style="display:none;" class="alert alert-success py-2 mb-0 small">
-            No hay alertas críticas de tardanzas severas este mes. ¡Buen trabajo!
-        </div>
-        <div id="alertas-lista" style="display:none;" class="list-group list-group-flush mb-0"></div>
-    </div>
-</div>
-
-{% if not hallazgos or not hallazgos.exito %}
-<div class="alert alert-info border-0 shadow-sm" role="alert">
-    No hay suficientes datos analíticos para el rango y filtros especificados. Intente con un rango más amplio.
-</div>
-{% else %}
-
-<div class="row g-4 mb-5 mt-2">
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100 analytics-card">
-            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
-                <span class="material-symbols-outlined text-success mb-2" style="font-size: 2rem;">task_alt</span>
-                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Asistencia Promedio</h6>
-                <h2 class="fw-bold text-success mb-1 display-5">{{ hallazgos.resumen_general.tasa_asistencia_promedio }}%</h2>
-                <div class="progress mt-3" style="height: 6px; border-radius: 10px;">
-                     <div class="progress-bar bg-success" data-width="{{ hallazgos.resumen_general.tasa_asistencia_promedio }}"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100 analytics-card">
-            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
-                <span class="material-symbols-outlined text-primary mb-2" style="font-size: 2rem;">database</span>
-                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Total Registros</h6>
-                <h2 class="fw-bold text-primary mb-1 display-5">{{ hallazgos.resumen_general.total_registros }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100 analytics-card">
-            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
-                <span class="material-symbols-outlined text-danger mb-2" style="font-size: 2rem;">person_off</span>
-                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Ausencias</h6>
-                <h2 class="fw-bold text-danger mb-1 display-5">{{ hallazgos.resumen_general.ausentes }}</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100 analytics-card">
-            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
-                <span class="material-symbols-outlined text-warning mb-2" style="font-size: 2rem;">schedule</span>
-                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Tardanzas</h6>
-                <h2 class="fw-bold text-warning mb-1 display-5">{{ hallazgos.resumen_general.tardanzas }}</h2>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4 mb-5">
-    <!-- IA Narrative Report -->
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
-                <div class="icon-shape bg-purple-soft text-purple rounded-circle p-2 d-flex">
-                    <span class="material-symbols-outlined">psychology</span>
-                </div>
-                <h5 class="fw-bold mb-0">Reporte Narrativo Ejecutivo</h5>
-            </div>
-            <div class="card-body p-4 pt-2">
-                <div class="bg-light-subtle p-4 rounded-3 border h-100">
-                    <div id="narrativo-content" class="text-secondary" style="white-space: pre-wrap; line-height: 1.6;">{{ narrativo }}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Anomalías -->
-    <div class="col-md-6">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
-                <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
-                    <span class="material-symbols-outlined">warning</span>
-                </div>
-                <h5 class="fw-bold mb-0">Anomalías Estadísticas</h5>
-            </div>
-            <div class="card-body p-4 pt-2">
-                <ul class="list-group list-group-flush border rounded-3 overflow-hidden">
-                    {% for a in hallazgos.anomalias %}
-                    <li class="list-group-item d-flex justify-content-between align-items-start p-3 border-bottom-0 border-top">
-                        <div class="ms-2 me-auto">
-                            <div class="fw-bold text-dark">{{ a.nombre }}</div>
-                            <small class="text-muted d-block mb-1">{{ a.tipo }}</small>
-                            <div class="small fw-medium text-danger mt-1 bg-danger-soft px-2 py-1 rounded d-inline-block">{{ a.detalle }}</div>
+<div class="tab-content" id="analyticsTabsContent">
+    <!-- TABS RESUMEN -->
+    <div class="tab-pane fade {% if tab_activa != 'alertas' %}show active{% endif %}" id="resumen" role="tabpanel" aria-labelledby="resumen-tab">
+    
+        <!-- Filtros de Analytics (Solo en Resumen) -->
+        <div class="card border-0 shadow-sm mb-5 analytics-card">
+            <div class="card-body p-4">
+                <form class="row g-4 align-items-end" id="analyticsForm">
+                    <input type="hidden" name="tab" value="resumen">
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Rango de Fecha</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control bg-light border-0" name="fecha_inicio" value="{{ fecha_inicio }}">
+                            <span class="input-group-text border-0 bg-light text-muted">a</span>
+                            <input type="date" class="form-control bg-light border-0" name="fecha_fin" value="{{ fecha_fin }}">
                         </div>
-                    </li>
-                    {% else %}
-                    <li class="list-group-item text-center text-muted p-5 border-0 bg-light">
-                        <span class="material-symbols-outlined text-muted mb-2 shadow-sm p-3 rounded-circle bg-white" style="font-size: 2rem;">check_circle</span>
-                        <br>No se detectaron anomalías severas en el rango evaluado.
-                    </li>
-                    {% endfor %}
-                </ul>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo de Persona</label>
+                        <select class="form-select bg-light border-0" name="tipo_persona_id">
+                            <option value="">Todos los tipos</option>
+                            {% for t in tenant_tipos %}
+                            <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id')==t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
+                        <select class="form-select bg-light border-0" name="grupo_id">
+                            <option value="">Todos los grupos</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}" {% if request.args.get('grupo_id')==g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex">
+                        <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm">
+                            <span class="material-symbols-outlined pb-1">auto_graph</span>
+                            Analizar Datos
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>
-</div>
 
-<!-- Risk Scores -->
-<div class="card border-0 shadow-sm mb-5">
-    <div class="card-header bg-transparent p-4 border-0 pb-3 d-flex align-items-center gap-3">
-        <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
-            <span class="material-symbols-outlined">monitor_heart</span>
+
+        {% if not hallazgos or not hallazgos.exito %}
+        <div class="alert alert-info border-0 shadow-sm" role="alert">
+            No hay suficientes datos analíticos para el rango y filtros especificados. Intente con un rango más amplio.
         </div>
-        <h5 class="fw-bold mb-0">Top Personas en Riesgo de Cumplimiento (Risk Score)</h5>
-    </div>
-    <div class="card-body p-0 px-4 pb-4">
-        <div class="table-responsive border rounded-3">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
-                    <tr>
-                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">Persona</th>
-                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">Grupo</th>
-                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">Risk Score (0-100)</th>
-                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1 text-end">Estado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in hallazgos.riesgos %}
-                    <tr>
-                        <td class="px-4 py-3">
-                            <div class="fw-bold text-dark">{{ r.nombre }}</div>
-                        </td>
-                        <td class="px-4 py-3 text-secondary">{{ r.grupo }}</td>
-                        <td class="px-4 py-3" style="width: 30%;">
-                            <div class="d-flex align-items-center gap-3">
-                                 <span class="fw-bold {% if r.score >= 70 %}text-danger{% elif r.score >= 40 %}text-warning{% else %}text-success{% endif %}" style="min-width: 25px;">{{ r.score }}</span>
-                                 <div class="progress w-100" style="height: 8px; border-radius: 10px;">
-                                     <div class="progress-bar {% if r.score >= 70 %}bg-danger{% elif r.score >= 40 %}bg-warning{% else %}bg-success{% endif %}" data-width="{{ r.score }}"></div>
-                                 </div>
+        {% else %}
+
+        <div class="row g-4 mb-5 mt-2">
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 analytics-card">
+                    <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                        <span class="material-symbols-outlined text-success mb-2"
+                            style="font-size: 2rem;">task_alt</span>
+                        <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Asistencia Promedio</h6>
+                        <h2 class="fw-bold text-success mb-1 display-5">{{
+                            hallazgos.resumen_general.tasa_asistencia_promedio }}%</h2>
+                        <div class="progress mt-3" style="height: 6px; border-radius: 10px;">
+                            <div class="progress-bar bg-success"
+                                data-width="{{ hallazgos.resumen_general.tasa_asistencia_promedio }}"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 analytics-card">
+                    <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                        <span class="material-symbols-outlined text-primary mb-2"
+                            style="font-size: 2rem;">database</span>
+                        <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Total Registros</h6>
+                        <h2 class="fw-bold text-primary mb-1 display-5">{{ hallazgos.resumen_general.total_registros }}
+                        </h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 analytics-card">
+                    <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                        <span class="material-symbols-outlined text-danger mb-2"
+                            style="font-size: 2rem;">person_off</span>
+                        <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Ausencias</h6>
+                        <h2 class="fw-bold text-danger mb-1 display-5">{{ hallazgos.resumen_general.ausentes }}</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card border-0 shadow-sm h-100 analytics-card">
+                    <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                        <span class="material-symbols-outlined text-warning mb-2"
+                            style="font-size: 2rem;">schedule</span>
+                        <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Tardanzas</h6>
+                        <h2 class="fw-bold text-warning mb-1 display-5">{{ hallazgos.resumen_general.tardanzas }}</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+            <!-- IA Narrative Report -->
+            <div class="col-md-12">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                        <div class="icon-shape bg-purple-soft text-purple rounded-circle p-2 d-flex">
+                            <span class="material-symbols-outlined">psychology</span>
+                        </div>
+                        <h5 class="fw-bold mb-0">Reporte Narrativo Ejecutivo</h5>
+                    </div>
+                    <div class="card-body p-4 pt-2">
+                        <div class="bg-light-subtle p-4 rounded-3 border h-100">
+                            <div id="narrativo-content" class="text-secondary"
+                                style="white-space: pre-wrap; line-height: 1.6;">{{ narrativo }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div> <!-- End Tab Resumen -->
+
+    <!-- TABS ALERTAS -->
+    <div class="tab-pane fade {% if tab_activa == 'alertas' %}show active{% endif %}" id="alertas" role="tabpanel" aria-labelledby="alertas-tab">
+
+        <!-- Filtros de Alertas (Solo en Alertas) -->
+        <div class="card border-0 shadow-sm mb-5 analytics-card">
+            <div class="card-body p-4">
+                <form class="row g-4 align-items-end" id="alertasForm" action="{{ url_for('analytics_vista') }}">
+                    <input type="hidden" name="tab" value="alertas">
+                    <div class="col-md-4">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Evaluar Período</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control bg-light border-0" id="alertas_fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio }}">
+                            <span class="input-group-text border-0 bg-light text-muted">a</span>
+                            <input type="date" class="form-control bg-light border-0" id="alertas_fecha_fin" name="fecha_fin" value="{{ fecha_fin }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex">
+                        <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm">
+                            <span class="material-symbols-outlined pb-1">analytics</span>
+                            Evaluar Alertas
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-5">
+            <!-- Alertas de Asistencia — carga dinámica -->
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                        <div class="icon-shape bg-warning-soft text-warning rounded-circle p-2 d-flex">
+                            <span class="material-symbols-outlined">notification_important</span>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Alertas de Tardanzas Severas</h5>
+                            <small class="text-muted fw-normal">Histórico del mes actual</small>
+                        </div>
+                    </div>
+                    <div class="card-body p-4 pt-2">
+                        <div class="border rounded-3 p-3 overflow-hidden d-flex flex-column bg-light-subtle h-100">
+                            <div id="alertas-loading" class="text-center py-5 text-muted my-auto">
+                                <div class="spinner-border text-warning mb-2" role="status"></div>
+                                <br>Calculando alertas...
                             </div>
-                        </td>
-                        <td class="px-4 py-3 text-end">
-                            <span class="badge rounded-pill px-3 py-2 {% if r.semaforo == 'Rojo' %}bg-danger-soft text-danger{% elif r.semaforo == 'Amarillo' %}bg-warning-soft text-warning px-4{% else %}bg-success-soft text-success{% endif %}">
-                                <span class="d-flex align-items-center gap-1">
-                                    <span class="material-symbols-outlined" style="font-size: 14px;">
-                                        {% if r.semaforo == 'Rojo' %}error{% elif r.semaforo == 'Amarillo' %}warning{% else %}check_circle{% endif %}
-                                    </span>
-                                    {{ r.semaforo }}
-                                </span>
-                            </span>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr><td colspan="4" class="text-center py-5 text-muted bg-light border-0">
-                        <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">verified_user</span>
-                        <br>No hay puntuaciones de riesgo críticas.
-                    </td></tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            <div id="alertas-vacio" style="display:none;"
+                                class="alert alert-success border-0 shadow-sm py-3 mb-0 small text-center my-auto">
+                                <span
+                                    class="material-symbols-outlined mb-2 fs-2 d-block mx-auto text-success">check_circle</span>
+                                No hay alertas críticas de tardanzas severas este mes. ¡Buen trabajo!
+                            </div>
+                            <div id="alertas-lista" style="display:none;"
+                                class="list-group list-group-flush mb-0 w-100 flex-grow-1"
+                                style="max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Anomalías -->
+            <div class="col-md-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                        <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
+                            <span class="material-symbols-outlined">warning</span>
+                        </div>
+                        <div>
+                            <h5 class="fw-bold mb-0">Anomalías Estadísticas</h5>
+                            <small class="text-muted fw-normal">Desviación estándar de asistencia</small>
+                        </div>
+                    </div>
+                    <div class="card-body p-4 pt-2">
+                        <div class="border rounded-3 overflow-hidden d-flex flex-column" style="max-height: 400px;">
+                            <ul class="list-group list-group-flush w-100 flex-grow-1" style="overflow-y: auto;">
+                                {% for a in hallazgos.anomalias %}
+                                <li
+                                    class="list-group-item d-flex justify-content-between align-items-center p-3 border-bottom-0 border-top">
+                                    <div class="ms-2 me-auto">
+                                        <div class="fw-bold text-dark">{{ a.nombre }}</div>
+                                        <small class="text-muted d-block mb-1">{{ a.tipo }}</small>
+                                        <div
+                                            class="small fw-medium text-danger mt-1 bg-danger-soft px-2 py-1 rounded d-inline-block">
+                                            {{ a.detalle }}</div>
+                                    </div>
+                                    {% if a.cantidad %}
+                                    <div class="ms-3 text-center">
+                                        <span class="badge bg-danger rounded-pill fs-6 px-3 py-2 shadow-sm">{{
+                                            a.cantidad }}</span>
+                                        <small class="d-block text-muted mt-1"
+                                            style="font-size: 0.65rem; text-transform: uppercase;">
+                                            {% if 'Ausencias' in a.tipo %}Faltas{% else %}Tardanzas{% endif %}
+                                        </small>
+                                    </div>
+                                    {% endif %}
+                                </li>
+                                {% else %}
+                                <li class="list-group-item text-center text-muted p-5 border-0 bg-light my-auto">
+                                    <span
+                                        class="material-symbols-outlined text-muted mb-2 shadow-sm p-3 rounded-circle bg-white"
+                                        style="font-size: 2rem;">check_circle</span>
+                                    <br>No se detectaron anomalías severas en el rango evaluado.
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
+
+        <!-- Risk Scores -->
+        <div class="card border-0 shadow-sm mb-5">
+            <div class="card-header bg-transparent p-4 border-0 pb-3 d-flex align-items-center gap-3">
+                <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
+                    <span class="material-symbols-outlined">monitor_heart</span>
+                </div>
+                <h5 class="fw-bold mb-0">Top Personas en Riesgo de Cumplimiento (Risk Score)</h5>
+            </div>
+            <div class="card-body p-0 px-4 pb-4">
+                <div class="table-responsive border rounded-3">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th
+                                    class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">
+                                    Persona</th>
+                                <th
+                                    class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">
+                                    Grupo</th>
+                                <th
+                                    class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">
+                                    Risk Score (0-100)</th>
+                                <th
+                                    class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1 text-end">
+                                    Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in hallazgos.riesgos %}
+                            <tr>
+                                <td class="px-4 py-3">
+                                    <div class="fw-bold text-dark">{{ r.nombre }}</div>
+                                </td>
+                                <td class="px-4 py-3 text-secondary">{{ r.grupo }}</td>
+                                <td class="px-4 py-3" style="width: 30%;">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <span
+                                            class="fw-bold {% if r.score >= 70 %}text-danger{% elif r.score >= 40 %}text-warning{% else %}text-success{% endif %}"
+                                            style="min-width: 25px;">{{ r.score }}</span>
+                                        <div class="progress w-100" style="height: 8px; border-radius: 10px;">
+                                            <div class="progress-bar {% if r.score >= 70 %}bg-danger{% elif r.score >= 40 %}bg-warning{% else %}bg-success{% endif %}"
+                                                data-width="{{ r.score }}"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 text-end">
+                                    <span
+                                        class="badge rounded-pill px-3 py-2 {% if r.semaforo == 'Rojo' %}bg-danger-soft text-danger{% elif r.semaforo == 'Amarillo' %}bg-warning-soft text-warning px-4{% else %}bg-success-soft text-success{% endif %}">
+                                        <span class="d-flex align-items-center gap-1">
+                                            <span class="material-symbols-outlined" style="font-size: 14px;">
+                                                {% if r.semaforo == 'Rojo' %}error{% elif r.semaforo == 'Amarillo'
+                                                %}warning{% else %}check_circle{% endif %}
+                                            </span>
+                                            {{ r.semaforo }}
+                                        </span>
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted bg-light border-0">
+                                    <span class="material-symbols-outlined text-muted mb-2"
+                                        style="font-size: 2rem;">verified_user</span>
+                                    <br>No hay puntuaciones de riesgo críticas.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div> <!-- End Tab Alertas -->
+</div> <!-- End Tab content Wrapper -->
 
 {% endif %}
 
 <style>
-.text-purple { color: #8a2be2; }
-.bg-purple-soft { background-color: rgba(138, 43, 226, 0.1); }
-.bg-danger-soft { background-color: rgba(220, 53, 69, 0.1); }
-.bg-warning-soft { background-color: rgba(255, 193, 7, 0.15); }
-.text-warning { color: #d39e00 !important; }
-.bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }
+    .text-purple {
+        color: #8a2be2;
+    }
 
-.analytics-card {
-    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-}
-.analytics-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
-}
-.letter-spacing-1 {
-    letter-spacing: 1px;
-}
-.icon-shape {
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+    .bg-purple-soft {
+        background-color: rgba(138, 43, 226, 0.1);
+    }
+
+    .bg-danger-soft {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+
+    .bg-warning-soft {
+        background-color: rgba(255, 193, 7, 0.15);
+    }
+
+    .text-warning {
+        color: #d39e00 !important;
+    }
+
+    .bg-success-soft {
+        background-color: rgba(25, 135, 84, 0.1);
+    }
+
+    .custom-tab {
+        background-color: transparent !important;
+        color: #6c757d !important;
+        border: none;
+        border-radius: 10px !important;
+        transition: all 0.2s ease-in-out;
+    }
+
+    .custom-tab.active {
+        background-color: #fff !important;
+        color: #0d6efd !important;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+    }
+
+    .analytics-card {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+
+    .analytics-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15) !important;
+    }
+
+    .letter-spacing-1 {
+        letter-spacing: 1px;
+    }
+
+    .icon-shape {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 </style>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    // Animar barras de progreso
-    document.querySelectorAll('[data-width]').forEach(el => {
-        el.style.width = el.getAttribute('data-width') + '%';
+    document.addEventListener('DOMContentLoaded', () => {
+        // Animar barras de progreso
+        document.querySelectorAll('[data-width]').forEach(el => {
+            el.style.width = el.getAttribute('data-width') + '%';
+        });
+        fetchAlertasTardanzas();
     });
-    fetchAlertasTardanzas();
-});
 
-function fetchAlertasTardanzas() {
-    const loading = document.getElementById('alertas-loading');
-    const vacio = document.getElementById('alertas-vacio');
-    const lista = document.getElementById('alertas-lista');
-    if (!loading) return;
+    function fetchAlertasTardanzas() {
+        const loading = document.getElementById('alertas-loading');
+        const vacio = document.getElementById('alertas-vacio');
+        const lista = document.getElementById('alertas-lista');
+        if (!loading) return;
 
-    loading.style.display = 'block';
-    vacio.style.display = 'none';
-    lista.style.display = 'none';
+        loading.style.display = 'block';
+        vacio.style.display = 'none';
+        lista.style.display = 'none';
 
-    apiCall('/api/alertas/tardanzas-severas')
-        .then(data => {
-            loading.style.display = 'none';
-            if (data.warning) {
-                vacio.textContent = data.warning;
-                vacio.className = 'alert alert-warning py-2 mb-0 small';
-                vacio.style.display = 'block';
-                return;
-            }
-            if (!data.alertas || data.alertas.length === 0) {
-                vacio.style.display = 'block';
-                return;
-            }
-            lista.innerHTML = data.alertas.map(a => `
+        const fInicio = document.getElementById('alertas_fecha_inicio') ? document.getElementById('alertas_fecha_inicio').value : '';
+        const fFin = document.getElementById('alertas_fecha_fin') ? document.getElementById('alertas_fecha_fin').value : '';
+        let qs = '';
+        if (fInicio && fFin) {
+            qs = `?fecha_inicio=${fInicio}&fecha_fin=${fFin}`;
+        }
+
+        apiCall('/api/alertas/tardanzas-severas' + qs)
+            .then(data => {
+                loading.style.display = 'none';
+                if (data.warning) {
+                    vacio.textContent = data.warning;
+                    vacio.className = 'alert alert-warning py-2 mb-0 small';
+                    vacio.style.display = 'block';
+                    return;
+                }
+                if (!data.alertas || data.alertas.length === 0) {
+                    vacio.style.display = 'block';
+                    return;
+                }
+                lista.innerHTML = data.alertas.map(a => `
                 <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-1">
                     <div>
                         <span class="fw-bold text-dark">${a.persona}</span>
@@ -292,16 +451,16 @@ function fetchAlertasTardanzas() {
                     <span class="badge bg-danger text-white rounded-pill px-2 py-1">${a.conteo} tardanzas severas</span>
                 </div>
             `).join('');
-            lista.style.display = 'block';
-        })
-        .catch(err => {
-            if (loading) loading.style.display = 'none';
-            if (vacio) {
-                vacio.textContent = `Error cargando alertas: ${err.message}`;
-                vacio.className = 'alert alert-danger py-2 mb-0 small';
-                vacio.style.display = 'block';
-            }
-        });
-}
+                lista.style.display = 'block';
+            })
+            .catch(err => {
+                if (loading) loading.style.display = 'none';
+                if (vacio) {
+                    vacio.textContent = `Error cargando alertas: ${err.message}`;
+                    vacio.className = 'alert alert-danger py-2 mb-0 small';
+                    vacio.style.display = 'block';
+                }
+            });
+    }
 </script>
 {% endblock %}

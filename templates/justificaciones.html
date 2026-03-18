@@ -2,46 +2,53 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h2 class="h4 mb-0 fw-bold">Gestión de Justificaciones</h2>
+    <div>
+        <h3 class="fw-bold mb-0">Gestión de Tiempos y Justificaciones</h3>
+        <p class="text-muted mb-0">Control, revisión y aprobación de tiempos, faltas y eventos de asistencia.</p>
+    </div>
     <button class="btn btn-primary" onclick="abrirOffcanvasJustificacion();">+ Nueva Justificación</button>
 </div>
 
-<div class="card shadow-sm border-0" style="border-radius: 12px;">
+<!-- Filtros -->
+<div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-4">
-        
-        <div class="row g-3 mb-4 align-items-end p-3 bg-light rounded border">
-            <div class="col-md-4">
-                <label class="form-label small text-muted fw-bold">Filtro Rango Fechas</label>
-                <div class="input-group input-group-sm">
-                    <input type="date" class="form-control" id="filtro-fecha-inicio">
-                    <span class="input-group-text bg-white border-0 text-muted">A</span>
-                    <input type="date" class="form-control" id="filtro-fecha-fin">
+        <form class="row g-3 align-items-end" onsubmit="event.preventDefault(); cargarJustificaciones();">
+            <div class="col-md-5">
+                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Rango de Fechas</label>
+                <div class="input-group">
+                    <input type="date" class="form-control bg-light border-0" id="filtro-fecha-inicio">
+                    <span class="input-group-text bg-light border-0 text-muted">A</span>
+                    <input type="date" class="form-control bg-light border-0" id="filtro-fecha-fin">
                 </div>
             </div>
             <div class="col-md-2">
-                <button class="btn btn-sm btn-outline-secondary w-100 h-100" onclick="cargarJustificaciones();">Filtrar</button>
+                <button type="submit" class="btn btn-warning w-100 fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm" style="height: 38px;">
+                    <span class="material-symbols-outlined">filter_alt</span> Filtrar
+                </button>
             </div>
-        </div>
+        </form>
+    </div>
+</div>
 
-        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-            <table class="table table-hover align-middle mb-0" id="tabla-justificaciones">
-                <thead class="table-light sticky-top">
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Persona</th>
-                        <th>Tipo</th>
-                        <th>Motivo</th>
-                        <th>Resp. Autorización</th>
-                        <th>Estado</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="just-lista">
-                    <tr><td colspan="7" class="text-center text-muted py-4">Cargando...</td></tr>
-                </tbody>
-            </table>
-        </div>
-        
+<!-- Tabla -->
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive" style="max-height: 540px; overflow-y: auto;">
+        <table class="table table-hover align-middle mb-0" id="tabla-justificaciones">
+            <thead class="table-light sticky-top">
+                <tr>
+                    <th>Fecha</th>
+                    <th>Persona</th>
+                    <th>Tipo</th>
+                    <th>Motivo</th>
+                    <th>Resp. Autorización</th>
+                    <th>Estado</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="just-lista">
+                <tr><td colspan="7" class="text-center text-muted py-4">Cargando...</td></tr>
+            </tbody>
+        </table>
     </div>
 </div>
 {% endblock %}

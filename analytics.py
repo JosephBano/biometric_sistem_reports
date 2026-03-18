@@ -114,22 +114,48 @@ def analizar(tipo_persona_id: str = None, grupo_id: str = None, periodo_vigencia
              "semaforo": "Rojo" if score >= 70 else ("Amarillo" if score >= 40 else "Verde")
          })
          
-    # 3. Anomalías Estadísticas (Personas que exceden la desviación estándar promedio de tardanzas)
+    # 3. Anomalías Estadísticas (Personas que exceden la desviación estándar)
+    anomalias = []
+    
+    # 3.1 Exceso de Tardanzas
     conteo_tardanzas = df.groupby('persona_id')['tardanza'].sum().reset_index()
     promedio_tardanzas = conteo_tardanzas['tardanza'].mean()
     std_tardanzas = conteo_tardanzas['tardanza'].std()
     
-    anomalias = []
     if std_tardanzas > 0:
          limite = promedio_tardanzas + (1.5 * std_tardanzas)
          for _, row in conteo_tardanzas[conteo_tardanzas['tardanza'] > limite].iterrows():
               p_name = df[df['persona_id'] == row['persona_id']]['nombre'].iloc[0]
+              c_tardanzas = int(row['tardanza'])
               anomalias.append({
                   "persona_id": row['persona_id'],
                   "nombre": p_name,
                   "tipo": "Exceso de Tardanzas",
-                  "detalle": f"Tiene {int(row['tardanza'])} tardanzas (Promedio del grupo: {round(promedio_tardanzas, 1)})"
+                  "detalle": f"Tiene {c_tardanzas} tardanzas (Promedio del grupo: {round(promedio_tardanzas, 1)})",
+                  "cantidad": c_tardanzas
               })
+              
+    # 3.2 Exceso de Ausencias (Faltas)
+    df['es_ausente'] = (df['estado'] == 'ausente')
+    conteo_ausencias = df.groupby('persona_id')['es_ausente'].sum().reset_index()
+    promedio_ausencias = conteo_ausencias['es_ausente'].mean()
+    std_ausencias = conteo_ausencias['es_ausente'].std()
+    
+    if std_ausencias > 0:
+         limite_aus = promedio_ausencias + (1.5 * std_ausencias)
+         for _, row in conteo_ausencias[conteo_ausencias['es_ausente'] > limite_aus].iterrows():
+              p_name = df[df['persona_id'] == row['persona_id']]['nombre'].iloc[0]
+              c_faltas = int(row['es_ausente'])
+              anomalias.append({
+                  "persona_id": row['persona_id'],
+                  "nombre": p_name,
+                  "tipo": "Exceso de Ausencias",
+                  "detalle": f"Tiene {c_faltas} faltas injustificadas (Promedio del grupo: {round(promedio_ausencias, 1)})",
+                  "cantidad": c_faltas
+              })
+              
+    # Ordenar de mayor cantidad a menor cantidad
+    anomalias.sort(key=lambda x: x['cantidad'], reverse=True)
               
     # 4. Dimensiones: Agregación por Grupo
     grupo_stats = []

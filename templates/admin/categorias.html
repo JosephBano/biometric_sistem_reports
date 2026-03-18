@@ -4,7 +4,7 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h3 class="fw-bold mb-0">Gestión de Categorías</h3>
-        <p class="text-muted">Subcategorías o niveles de personas (ej: Docente TC, Docente MT, Personal Administrativo).</p>
+        <p class="text-muted mb-0">Subcategorías o niveles de personas (ej: Docente TC, Docente MT, Personal Administrativo).</p>
     </div>
     <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearCategoria">
         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">label</span> Nueva Categoría
@@ -13,20 +13,20 @@
 
 <!-- Filtro por tipo -->
 <div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form class="row g-3" method="GET">
-            <div class="col-md-4">
-                <label class="form-label small text-muted">Filtrar por Tipo de Persona</label>
-                <select class="form-select" name="tipo_persona_id">
+    <div class="card-body p-4">
+        <form class="row g-3 align-items-end" method="GET">
+            <div class="col-md-5">
+                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Filtrar por Tipo de Persona</label>
+                <select class="form-select bg-light border-0" name="tipo_persona_id">
                     <option value="">Todos los tipos</option>
                     {% for t in tenant_tipos %}
                     <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-primary">Filtrar</button>
-                <a href="{{ url_for('admin_categorias') }}" class="btn btn-outline-secondary">✕</a>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary fw-bold shadow-sm flex-fill" style="height: 38px;">Filtrar</button>
+                <a href="{{ url_for('admin_categorias') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
             </div>
         </form>
     </div>
