@@ -34,7 +34,9 @@ def insertar_asistencias(registros: list[dict], dispositivo_id: str = None) -> i
             persona_id, _ = resolver_persona_id(conn, id_usuario, nombre, dispositivo_id)
 
             # Resolver periodo_vigencia_id activo para la fecha
-            fecha_solo = r["fecha_hora"][:10]  # Obtener YYYY-MM-DD
+            fecha_dt = r["fecha_hora"]
+            fecha_solo = fecha_dt.strftime("%Y-%m-%d") if hasattr(fecha_dt, "strftime") else str(fecha_dt)[:10]
+
             periodo_row = conn.execute(
                 text("""
                     SELECT id FROM periodos_vigencia

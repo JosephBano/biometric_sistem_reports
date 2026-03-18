@@ -40,12 +40,6 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'periodos' %}active{% endif %}"
-                        href="{{ url_for('periodos_lista') }}">
-                        <span class="material-symbols-outlined nav-icon">event_repeat</span> Períodos
-                    </a>
-                </li>
-                <li class="nav-item">
                     <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}"
                         href="{{ url_for('analytics_vista') }}">
                         <span class="material-symbols-outlined nav-icon">monitoring</span> Analytics
@@ -55,6 +49,12 @@
                     <a class="nav-link {% if active_page == 'reportes' %}active{% endif %}"
                         href="{{ url_for('reportes_vista') }}">
                         <span class="material-symbols-outlined nav-icon">description</span> Reportes
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'periodos' %}active{% endif %}"
+                        href="{{ url_for('periodos_lista') }}">
+                        <span class="material-symbols-outlined nav-icon">event_repeat</span> Períodos
                     </a>
                 </li>
                 <li class="nav-item">

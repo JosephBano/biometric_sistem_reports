@@ -2181,16 +2181,20 @@ def analytics_vista():
         
     import analytics
     import ia_report
-    
-    hallazgos = analytics.analizar(
-        tipo_persona_id=tipo_persona_id, 
-        grupo_id=grupo_id, 
-        fecha_inicio=fecha_inicio, 
-        fecha_fin=fecha_fin
-    )
-    
+
+    try:
+        hallazgos = analytics.analizar(
+            tipo_persona_id=tipo_persona_id,
+            grupo_id=grupo_id,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin
+        )
+    except Exception as e:
+        app.logger.error(f"Error en analytics.analizar: {e}", exc_info=True)
+        hallazgos = {"exito": False, "error": f"Error interno al calcular analytics: {e}"}
+
     narrativo = ia_report.generar_narrativo(hallazgos) if hallazgos.get("exito") else ""
-        
+
     grupos = db_module.listar_grupos(activo=True)
     return render_template('analytics.html',
                              active_page='analytics',

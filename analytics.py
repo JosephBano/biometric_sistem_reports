@@ -9,54 +9,121 @@ import numpy as np
 from datetime import date, timedelta
 from sqlalchemy import text
 from db.connection import get_connection
-from db.queries.asistencia_periodo import calcular_asistencia_periodo
+from db.queries.asistencia_periodo import calcular_asistencia_periodo  # usado en resumen_periodo y otras funciones avanzadas
 
 def load_data_asistencia_dataframe(fecha_inicio: date, fecha_fin: date, grupo_id: str = None, tipo_persona_id: str = None) -> pd.DataFrame:
     """
     Carga el detalle diario de asistencia en un DataFrame de Pandas para análisis.
-    Cruza personas, grupos, categorías y sus estados diarios.
+    Consulta personas activas directamente y hace batch-fetch de asistencias para el rango.
     """
+    from db.queries.feriados import get_feriados_set
+    from db.queries.horarios import get_horario_en_fecha
+
+    WEEKDAYS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
+
     with get_connection() as conn:
-        # Recuperar periodo ID de referencia o crear una vista virtual
-        query = """
-            SELECT pv.id
-            FROM periodos_vigencia pv
-            JOIN personas p ON pv.persona_id = p.id
-            WHERE pv.fecha_inicio <= :fin AND (pv.fecha_fin IS NULL OR pv.fecha_fin >= :inicio)
-              AND pv.estado = 'activo'
+        # 1. Obtener personas activas con filtros opcionales
+        q = """
+            SELECT p.id::text AS persona_id, p.nombre, p.identificacion,
+                   COALESCE(g.nombre, 'Sin Grupo') AS grupo,
+                   COALESCE(c.nombre, 'Sin Categoría') AS categoria
+            FROM personas p
+            LEFT JOIN grupos g ON p.grupo_id = g.id
+            LEFT JOIN categorias c ON p.categoria_id = c.id
+            WHERE p.activo = TRUE
         """
-        params = {"inicio": fecha_inicio, "fin": fecha_fin}
-        
+        params = {}
         if grupo_id:
-            query += " AND p.grupo_id = CAST(:grupo_id AS uuid)"
+            q += " AND p.grupo_id = CAST(:grupo_id AS uuid)"
             params["grupo_id"] = grupo_id
         if tipo_persona_id:
-            query += " AND p.tipo_persona_id = CAST(:tipo_id AS uuid)"
+            q += " AND p.tipo_persona_id = CAST(:tipo_id AS uuid)"
             params["tipo_id"] = tipo_persona_id
-            
-        periodos = conn.execute(text(query), params).fetchall()
-        periodos_ids = [str(r[0]) for r in periodos]
-        
-    all_rows = []
-    # Usar el algoritmo de asistencia diaria por periodo
-    for pid in periodos_ids:
-        for p_asist in calcular_asistencia_periodo(pid):
-            for d in p_asist.get("detalle_asistencia", []):
+
+        personas = conn.execute(text(q), params).fetchall()
+        if not personas:
+            return pd.DataFrame()
+
+        persona_ids = [str(p._mapping["persona_id"]) for p in personas]
+
+        # 2. Batch: traer todas las asistencias del rango en una sola query
+        marc_rows = conn.execute(
+            text("""
+                SELECT persona_id::text, fecha_hora, tipo
+                FROM asistencias
+                WHERE persona_id = ANY(CAST(:ids AS uuid[]))
+                  AND fecha_hora >= CAST(:inicio AS timestamp)
+                  AND fecha_hora <= CAST(:fin AS timestamp) + interval '1 day'
+                ORDER BY persona_id, fecha_hora
+            """),
+            {"ids": "{" + ",".join(persona_ids) + "}", "inicio": fecha_inicio, "fin": fecha_fin}
+        ).fetchall()
+
+        # Indexar por (persona_id, fecha) → lista de marcaciones
+        asist_map: dict = {}
+        for r in marc_rows:
+            pid = str(r._mapping["persona_id"])
+            fecha_hora = r._mapping["fecha_hora"]
+            d = fecha_hora.date()
+            asist_map.setdefault(pid, {}).setdefault(d, []).append({
+                "fecha_hora": fecha_hora,
+                "tipo": str(r._mapping["tipo"]),
+            })
+
+        # 3. Feriados del rango
+        feriados = get_feriados_set(fecha_inicio, fecha_fin)
+
+        # 4. Construir filas diarias por persona
+        all_rows = []
+        for p in personas:
+            p_dict = dict(p._mapping)
+            persona_id = p_dict["persona_id"]
+
+            # ciclo_semanas=1 → horario fijo; una sola query por persona es suficiente
+            horario = get_horario_en_fecha(conn, persona_id, fecha_inicio)
+            p_asist = asist_map.get(persona_id, {})
+
+            current_date = fecha_inicio
+            while current_date <= fecha_fin:
+                estado = "no_programado"
+                tardanza = False
+                entrada_marcada = None
+
+                if current_date in feriados:
+                    estado = "feriado"
+                else:
+                    weekday_col = WEEKDAYS[current_date.weekday()]
+                    if horario and horario.get(weekday_col):
+                        entrada_esperada = horario[weekday_col]
+                        marcs = p_asist.get(current_date, [])
+                        if marcs:
+                            estado = "presente"
+                            entries = [m for m in marcs if m["tipo"] in ("entrada", "0")]
+                            if entries:
+                                t = entries[0]["fecha_hora"].time()
+                                entrada_marcada = t.strftime("%H:%M")
+                                if entrada_esperada and entrada_marcada > entrada_esperada:
+                                    estado = "presente_tarde"
+                                    tardanza = True
+                        else:
+                            estado = "ausente"
+
                 all_rows.append({
-                    "persona_id": p_asist["persona_id"],
-                    "nombre": p_asist["nombre"],
-                    "identificacion": p_asist.get("identificacion"),
-                    "grupo": p_asist.get("grupo") or "Sin Grupo",
-                    "categoria": p_asist.get("categoria") or "Sin Categoría",
-                    "fecha": d["fecha"],
-                    "estado": d["estado"],
-                    "tardanza": d["tardanza"],
-                    "entrada_marcada": d.get("entrada_marcada"),
+                    "persona_id": persona_id,
+                    "nombre": p_dict["nombre"],
+                    "identificacion": p_dict.get("identificacion"),
+                    "grupo": p_dict["grupo"],
+                    "categoria": p_dict["categoria"],
+                    "fecha": current_date,
+                    "estado": estado,
+                    "tardanza": tardanza,
+                    "entrada_marcada": entrada_marcada,
                 })
-                
+                current_date += timedelta(days=1)
+
     if not all_rows:
         return pd.DataFrame()
-        
+
     df = pd.DataFrame(all_rows)
     df['fecha'] = pd.to_datetime(df['fecha'])
     return df

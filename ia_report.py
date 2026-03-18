@@ -4,7 +4,10 @@ Genera explicaciones textuales legibles sobre los hallazgos de analytics.py.
 """
 
 import os
+import logging
 import requests
+
+logger = logging.getLogger(__name__)
 
 def generar_narrativo(hallazgos: dict, contexto: str = "") -> str:
     """
@@ -64,9 +67,11 @@ def generar_narrativo(hallazgos: dict, contexto: str = "") -> str:
               
               if response.status_code == 200:
                    return response.json()['choices'][0]['message']['content']
-                   
-         except Exception:
-              pass # Fallback a regla-base si falla la API
+              else:
+                   logger.warning(f"DeepSeek API error {response.status_code}: {response.text[:200]}")
+
+         except Exception as e:
+              logger.warning(f"DeepSeek API falló, usando fallback: {e}")
               
     # --- FALLBACK REGLA-BASE ---
     text = f"💡 **Reporte de Desempeño Ejecutivo ({hallazgos['rango']['inicio']} — {hallazgos['rango']['fin']})**\n\n"

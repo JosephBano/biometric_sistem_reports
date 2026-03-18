@@ -78,8 +78,12 @@
 
 
         {% if not hallazgos or not hallazgos.exito %}
-        <div class="alert alert-info border-0 shadow-sm" role="alert">
-            No hay suficientes datos analíticos para el rango y filtros especificados. Intente con un rango más amplio.
+        <div class="alert {% if hallazgos and hallazgos.error and 'Error interno' in hallazgos.error %}alert-danger{% else %}alert-info{% endif %} border-0 shadow-sm" role="alert">
+            {% if hallazgos and hallazgos.error %}
+                {{ hallazgos.error }}
+            {% else %}
+                No hay suficientes datos analíticos para el rango y filtros especificados. Intente con un rango más amplio o verifique que haya horarios cargados.
+            {% endif %}
         </div>
         {% else %}
 
