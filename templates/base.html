@@ -62,8 +62,8 @@
                 </li>
                 {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_grupos' %}active{% endif %}" href="{{ url_for('admin_grupos') }}">
-                        <span class="material-symbols-outlined nav-icon">account_tree</span> Grupos
+                    <a class="nav-link {% if active_page == 'admin_dispositivos' %}active{% endif %}" href="{{ url_for('admin_dispositivos') }}">
+                        <span class="material-symbols-outlined nav-icon">router</span> Dispositivos
                     </a>
                 </li>
                 <li class="nav-item">

@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+
+{% block title %}Gestión de Dispositivos - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0">
+        <span class="material-symbols-outlined">router</span> Control de Dispositivos
+    </h2>
+    <button class="btn btn-primary shadow-sm" data-bs-toggle="modal" data-bs-target="#dispositivoModal" onclick="nuevoDispositivo()">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">add_circle</span> Añadir Dispositivo
+    </button>
+</div>
+
+<div class="row">
+    <!-- Lista de Dispositivos -->
+    <div class="col-12">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="tablaDispositivos">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4">Nombre</th>
+                                <th>Conexión</th>
+                                <th>Driver</th>
+                                <th>Prioridad / Timeout</th>
+                                <th>Última Sync</th>
+                                <th>Estado Sync</th>
+                                <th class="text-end pe-4">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Llenado via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Formulario -->
+<div class="modal fade" id="dispositivoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="dispositivoModalTitle">Nuevo Dispositivo</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="dispositivoForm">
+                    <input type="hidden" id="disp_id" name="id">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Nombre del Dispositivo</label>
+                            <input type="text" class="form-control" id="disp_nombre" name="nombre" required placeholder="Ej: Portería Principal">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Clase de Driver</label>
+                            <select class="form-select" id="disp_driver" name="tipo_driver">
+                                <option value="zk">ZKTeco (TCP/UDP)</option>
+                                <option value="hikvision">Hikvision ISAPI</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Dirección IP o Host</label>
+                            <input type="text" class="form-control" id="disp_ip" name="ip" required placeholder="Ej: 192.168.1.100 o 100.x.x.x (Tailscale)">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Puerto</label>
+                            <input type="number" class="form-control" id="disp_puerto" name="puerto" required value="4370">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Protocolo</label>
+                            <select class="form-select" id="disp_protocolo" name="protocolo">
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="http">HTTP (Hik)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Contraseña del Sistema (Opcional)</label>
+                            <input type="password" class="form-control" id="disp_pwd" name="password_enc" placeholder="* * * * *">
+                            <small class="text-muted">Desencriptada en caliente. Vacío = no usar.</small>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Timeout (Seg)</label>
+                            <input type="number" class="form-control" id="disp_timeout" name="timeout_seg" value="120">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Prioridad (1-10)</label>
+                            <input type="number" class="form-control" id="disp_prioridad" name="prioridad" value="5" min="1" max="10">
+                            <small class="text-muted">>7: Rápido</small>
+                        </div>
+                        
+                        <div class="col-12 mt-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="disp_activo" name="activo" checked>
+                                <label class="form-check-label" for="disp_activo">Dispositivo Habilitado</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="guardarDispositivo()">Guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let timerSync = null;
+
+    function renderDispositivos(data) {
+        const tbody = document.querySelector('#tablaDispositivos tbody');
+        tbody.innerHTML = '';
+        
+        if (!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No hay dispositivos configurados.</td></tr>';
+            return;
+        }
+
+        data.forEach(d => {
+            const row = document.createElement('tr');
+            if(!d.activo) row.classList.add('table-light', 'text-muted');
+            
+            // Logica de sync progress
+            let statusBadge = '<span class="badge bg-secondary">Idle</span>';
+            let syncEstado = d.sync_estado || { estado: 'idle', progreso_pct: 0, mensaje: '' };
+            if (syncEstado.estado === 'sincronizando' || syncEstado.estado === 'procesando' || syncEstado.estado === 'descargando_marcaciones' || syncEstado.estado === 'obteniendo_usuarios') {
+                statusBadge = `<div class="progress" style="height: 15px;">
+                                 <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: ${syncEstado.progreso_pct}%;">${syncEstado.progreso_pct}%</div>
+                               </div><small>${syncEstado.estado}</small>`;
+            } else if (syncEstado.estado === 'error') {
+                statusBadge = `<span class="badge bg-danger">Error</span> <small>${syncEstado.mensaje || ''}</small>`;
+            } else if (syncEstado.estado === 'completado') {
+                statusBadge = `<span class="badge bg-success">Completado</span>`;
+            }
+
+            row.innerHTML = `
+                <td class="ps-4 fw-bold">
+                    ${d.nombre}
+                    ${!d.activo ? ' <span class="badge bg-danger ms-2">Inactivo</span>' : ''}
+                </td>
+                <td>
+                    <code>${d.ip}:${d.puerto}</code><br>
+                    <small class="text-muted text-uppercase">${d.protocolo}</small>
+                </td>
+                <td><span class="badge bg-primary">${d.tipo_driver}</span></td>
+                <td>
+                    Pri: <strong>${d.prioridad}</strong> / To: ${d.timeout_seg}s
+                </td>
+                <td>
+                    ${d.watermark_ultima_fecha ? new Date(d.watermark_ultima_fecha).toLocaleString() : '<span class="text-muted">Nunca</span>'}
+                </td>
+                <td style="width: 200px;">
+                    ${statusBadge}
+                </td>
+                <td class="text-end pe-4">
+                    <button class="btn btn-sm btn-outline-info me-1" onclick="testDispositivo('${d.id}')" title="Probar Conexión">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">wifi_tethering</span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-success me-1" onclick="syncDispositivo('${d.id}')" title="Sincronizar">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">sync</span>
+                    </button>
+                    <!-- <button class="btn btn-sm btn-outline-primary" onclick="editarDispositivo('${d.id}')"><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">edit</span></button> -->
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    function cargarDispositivos() {
+        fetch('/api/dispositivos')
+            .then(res => res.json())
+            .then(data => {
+                if(data.dispositivos) {
+                    renderDispositivos(data.dispositivos);
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    function nuevoDispositivo() {
+        document.getElementById('dispositivoForm').reset();
+        document.getElementById('disp_id').value = '';
+    }
+
+    function guardarDispositivo() {
+        const form = document.getElementById('dispositivoForm');
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const data = {
+            id: document.getElementById('disp_id').value,
+            nombre: document.getElementById('disp_nombre').value,
+            ip: document.getElementById('disp_ip').value,
+            puerto: document.getElementById('disp_puerto').value,
+            tipo_driver: document.getElementById('disp_driver').value,
+            protocolo: document.getElementById('disp_protocolo').value,
+            timeout_seg: document.getElementById('disp_timeout').value,
+            prioridad: document.getElementById('disp_prioridad').value,
+            activo: document.getElementById('disp_activo').checked,
+        };
+        const pwd = document.getElementById('disp_pwd').value;
+        if(pwd) data.password_enc = pwd; // El backend se encargará de encriptarla
+
+        fetch('/api/dispositivos', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        })
+        .then(res => {
+            if(!res.ok) throw new Error("Error interno");
+            return res.json();
+        })
+        .then(res => {
+            // Cierra el modal y recarga visuales
+            bootstrap.Modal.getInstance(document.getElementById('dispositivoModal')).hide();
+            cargarDispositivos();
+        })
+        .catch(err => alert("Error: " + err.message));
+    }
+
+    function testDispositivo(id) {
+        fetch(`/api/dispositivos/${id}/test`)
+            .then(res => res.json())
+            .then(data => {
+                if(data.ok) alert("✅ Conexión Exitosa con: " + data.ip);
+                else alert("❌ Fallo en la conexión");
+            });
+    }
+
+    function syncDispositivo(id) {
+        if(!confirm("¿Forzar sincronización de este dispositivo ahora?")) return;
+        fetch(`/api/dispositivos/${id}/sync`, {method: 'POST'})
+            .then(() => {
+                cargarDispositivos();
+                iniciarPollSync();
+            });
+    }
+
+    function iniciarPollSync() {
+        if(timerSync) clearInterval(timerSync);
+        timerSync = setInterval(() => {
+            // Poll simple updateing solo donde importa
+            cargarDispositivos();
+        }, 2000);
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        cargarDispositivos();
+        iniciarPollSync();
+    });
+</script>
+{% endblock %}

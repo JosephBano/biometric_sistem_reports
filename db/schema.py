@@ -100,9 +100,19 @@ CREATE TABLE IF NOT EXISTS dispositivos (
     sede_id                  UUID        REFERENCES sedes(id) ON DELETE SET NULL,
     activo                   BOOLEAN     NOT NULL DEFAULT true,
     timeout_seg              INTEGER     NOT NULL DEFAULT 120,
+    prioridad                INTEGER     NOT NULL DEFAULT 5,
     watermark_ultimo_id      TEXT,
     watermark_ultima_fecha   TIMESTAMPTZ,
     creado_en                TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sync_estado (
+    dispositivo_id            UUID        PRIMARY KEY REFERENCES dispositivos(id) ON DELETE CASCADE,
+    estado                    TEXT        NOT NULL DEFAULT 'idle',
+    progreso_pct              INTEGER     NOT NULL DEFAULT 0,
+    registros_proc            INTEGER     NOT NULL DEFAULT 0,
+    mensaje                   TEXT,
+    actualizado_en            TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS sync_log (

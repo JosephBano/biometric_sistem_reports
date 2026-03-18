@@ -12,7 +12,7 @@ from db.connection import get_connection
 from db.queries.personas import resolver_persona_id, _get_dispositivo_id
 
 
-def insertar_asistencias(registros: list[dict]) -> int:
+def insertar_asistencias(registros: list[dict], dispositivo_id: str = None) -> int:
     """
     Inserta registros ignorando duplicados (UNIQUE persona_id + fecha_hora).
     Retorna la cantidad de filas realmente insertadas.
@@ -25,7 +25,8 @@ def insertar_asistencias(registros: list[dict]) -> int:
 
     count = 0
     with get_connection() as conn:
-        dispositivo_id = _get_dispositivo_id(conn)
+        if not dispositivo_id:
+            dispositivo_id = _get_dispositivo_id(conn)
         for r in registros:
             id_usuario = str(r["id_usuario"])
             nombre = r.get("nombre", id_usuario)
@@ -73,6 +74,7 @@ def insertar_asistencias(registros: list[dict]) -> int:
                 },
             )
             count += result.rowcount
+        conn.commit()
 
     return count
 

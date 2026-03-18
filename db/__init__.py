@@ -124,6 +124,18 @@ from db.queries.personas_crud import (
     get_historico_persona,
 )
 
+from db.queries.dispositivos import (
+    get_dispositivos_activos,
+    get_dispositivo,
+    actualizar_watermark,
+    get_estado_sync_ui,
+    actualizar_estado_sync_ui,
+    upsert_dispositivo,
+    get_dispositivos_con_fallas_consecutivas,
+    has_alerta_hoy,
+    marcar_alerta_enviada,
+)
+
 from db.tenant_provisioner import provisionar_schema
 
 __all__ = [
@@ -214,4 +226,14 @@ __all__ = [
     "crear_persona",
     "actualizar_persona",
     "get_historico_persona",
+    # dispositivos
+    "get_dispositivos_activos",
+    "get_dispositivo",
+    "actualizar_watermark",
+    "get_estado_sync_ui",
+    "actualizar_estado_sync_ui",
+    "upsert_dispositivo",
+    "get_dispositivos_con_fallas_consecutivas",
+    "has_alerta_hoy",
+    "marcar_alerta_enviada",
 ]

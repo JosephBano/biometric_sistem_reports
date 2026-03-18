@@ -20,10 +20,7 @@ import csv
 import io
 import sys
 import secrets
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
+from email_utils import enviar_correo
 import threading
 import time
 from datetime import datetime, date
@@ -325,44 +322,7 @@ def utility_processor():
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════
 
-def enviar_correo(destinatario: str, asunto: str, cuerpo: str, adjunto_path: str = None) -> bool:
-    """
-    Envia un correo usando SMTP configurado en el entorno.
-    """
-    host = os.getenv("SMTP_HOST")
-    port = os.getenv("SMTP_PORT")
-    user = os.getenv("SMTP_USER")
-    pwd  = os.getenv("SMTP_PASSWORD")
-    use_tls = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
-    sender = os.getenv("SMTP_FROM", user)
-
-    if not all([host, port, user, pwd]):
-         return False
-
-    try:
-         msg = MIMEMultipart()
-         msg['From'] = sender
-         msg['To'] = destinatario
-         msg['Subject'] = asunto
-         msg.attach(MIMEText(cuerpo, 'html'))
-
-         if adjunto_path and os.path.exists(adjunto_path):
-              filename = os.path.basename(adjunto_path)
-              with open(adjunto_path, "rb") as f:
-                   part = MIMEApplication(f.read(), Name=filename)
-                   part['Content-Disposition'] = f'attachment; filename="{filename}"'
-                   msg.attach(part)
-
-         server = smtplib.SMTP(host, int(port), timeout=10)
-         if use_tls:
-              server.starttls()
-         server.login(user, pwd)
-         server.send_message(msg)
-         server.quit()
-         return True
-    except Exception as e:
-         print(f"Error enviando correo: {e}", file=sys.stderr)
-         return False
+# enviar_correo importada desde email_utils
 
 
 def _parse_config(data: dict) -> dict:
@@ -522,7 +482,9 @@ def descargar(filename):
 @app.route('/api/estado-sync')
 def estado_sync():
     estado = db_module.get_estado()
-    estado['dispositivo_accesible'] = sync_module.ping_dispositivo()
+    # Ahora tenemos múltiples dispositivos, simplificamos el ping global asumiendo True si hay al menos uno
+    activos = db_module.get_dispositivos_activos()
+    estado['dispositivo_accesible'] = sync_module.ping_dispositivo() if activos else False
     estado['justificaciones_pendientes'] = len(db_module.get_justificaciones_pendientes())
     
     # --- Monitoreo de Capacidad (Fase 1) ---
@@ -539,12 +501,71 @@ def estado_sync():
         estado["registros_en_dispositivo"] = 0
         estado["porcentaje_ocupado"] = 0.0
         
-    # Proyección (por defecto 680 registros/día según análisis de ISTPET)
-    tasa_diaria = 680 
-    registros_restantes = max(0, capacidad_max - estado["registros_en_dispositivo"])
-    estado["dias_para_llenado"] = int(registros_restantes / tasa_diaria)
+    estado["dias_para_llenado"] = int(max(0, capacidad_max - estado["registros_en_dispositivo"]) / 680)
     
     return jsonify(estado)
+
+
+@app.route('/api/dispositivos', methods=['GET'])
+@require_role('admin', 'superadmin')
+def api_get_dispositivos():
+    try:
+        dispositivos = db_module.get_dispositivos_activos()
+        estados = db_module.get_estado_sync_ui()
+        for d in dispositivos:
+            # Quitamos la pass por seguridad
+            d.pop("password", None)
+            d.pop("password_enc", None)
+            sid = str(d["id"])
+            if sid in estados:
+                d["sync_estado"] = estados[sid]
+        return jsonify({"dispositivos": dispositivos})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/dispositivos', methods=['POST'])
+@require_role('admin', 'superadmin')
+def api_upsert_dispositivo():
+    data = request.json or {}
+    try:
+        if "password_enc" in data and data["password_enc"]:
+            from auth import encrypt_device_password
+            data["password_enc"] = encrypt_device_password(data["password_enc"])
+            
+        did = db_module.upsert_dispositivo(data)
+        return jsonify({"status": "ok", "id": did})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/dispositivos/<id>/test', methods=['GET'])
+@require_role('admin', 'superadmin')
+def api_test_dispositivo(id):
+    ok = sync_module.ping_dispositivo(id)
+    return jsonify({"ok": ok})
+
+@app.route('/api/dispositivos/<id>/sync', methods=['POST'])
+@require_role('admin', 'superadmin')
+def api_sync_dispositivo(id):
+    def _run():
+        try:
+            sync_module.sincronizar_con_reintento(id, force_historico=False)
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"status": "procesando"})
+
+
+@app.route('/api/sync/estado')
+@require_role('admin', 'superadmin')
+def api_sync_estado():
+    """Estado de sync granular por dispositivo para polling."""
+    try:
+        estados = db_module.get_estado_sync_ui()
+        return jsonify(estados)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/sincronizar', methods=['POST'])
@@ -1617,6 +1638,12 @@ def _get_grupos_periodos():
     except Exception:
         pass
     return grupos, periodos
+
+
+@app.route('/admin/dispositivos', methods=['GET'])
+@require_role('superadmin', 'admin')
+def admin_dispositivos():
+    return render_template("admin/dispositivos.html", active_page="admin_dispositivos")
 
 
 @app.route('/admin/usuarios', methods=['GET'])

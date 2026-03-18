@@ -122,13 +122,14 @@ def id_usuario_from_persona(
     return row[0] if row else persona_id
 
 
-def upsert_usuarios(usuarios: list[dict]):
+def upsert_usuarios(usuarios: list[dict], dispositivo_id: str = None):
     """
     Inserta o actualiza usuarios del dispositivo ZK en usuarios_zk y personas_dispositivos.
     Crea personas mínimas si no existen.
     """
     with get_connection() as conn:
-        dispositivo_id = _get_dispositivo_id(conn)
+        if not dispositivo_id:
+            dispositivo_id = _get_dispositivo_id(conn)
         for u in usuarios:
             id_usuario = str(u["id_usuario"])
             nombre = str(u["nombre"]).strip()

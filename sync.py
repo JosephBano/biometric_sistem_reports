@@ -1,20 +1,21 @@
 """
-Módulo de sincronización con el dispositivo biométrico ZK.
+Módulo de sincronización con dispositivos biométricos.
 Gestiona la conexión, descarga de marcaciones, transformación de datos
-y sincronización incremental hacia la base de datos local.
+y sincronización incremental hacia la base de datos local usando drivers.
 """
 
 import os
 import threading
 import time as time_module
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from datetime import time as dt_time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-try:
-    from zk import ZK
-    ZK_DISPONIBLE = True
-except ImportError:
-    ZK_DISPONIBLE = False
+# Para enviar reportes de fallo
+from smtplib import SMTPException
+from email_utils import enviar_correo
+import db as db_module
+from drivers import get_driver
 
 try:
     import schedule
@@ -22,35 +23,20 @@ try:
 except ImportError:
     SCHEDULE_DISPONIBLE = False
 
-
-# ══════════════════════════════════════════════════════════════════════════
-# CONFIGURACIÓN DESDE VARIABLES DE ENTORNO
-# ══════════════════════════════════════════════════════════════════════════
-
-ZK_IP       = os.getenv("ZK_IP",       "192.168.7.129")
-ZK_PORT     = int(os.getenv("ZK_PORT",     "4370"))
-ZK_PASSWORD = int(os.getenv("ZK_PASSWORD", "0"))
-ZK_TIMEOUT  = int(os.getenv("ZK_TIMEOUT",  "120"))
-ZK_UDP      = os.getenv("ZK_UDP", "false").lower() == "true"
-
 SYNC_AUTO          = os.getenv("SYNC_AUTO",          "false").lower() == "true"
-SYNC_HORA_NOCTURNA = os.getenv("SYNC_HORA_NOCTURNA", "00:30")
-SYNC_INTERVALO_MIN = int(os.getenv("SYNC_INTERVALO_MIN", "480"))
-
+SYNC_HORA_NOCTURNA = os.getenv("SYNC_HORA_NOCTURNA", "02:00")
+SYNC_INTERVALO_HORAS = int(os.getenv("SYNC_INTERVALO_HORAS", "2"))
 
 # ══════════════════════════════════════════════════════════════════════════
-# TRACKING DE JOBS EN MEMORIA
+# COMPATIBILIDAD JOBS (Para la UI antigua, aunque Fase 7 usa sync_estado)
 # ══════════════════════════════════════════════════════════════════════════
-
 _jobs: dict       = {}
 _jobs_lock        = threading.Lock()
-
 
 def _set_job(job_id: str | None, data: dict):
     if job_id:
         with _jobs_lock:
             _jobs[job_id] = data
-
 
 def get_job_status(job_id: str) -> dict:
     with _jobs_lock:
@@ -58,354 +44,224 @@ def get_job_status(job_id: str) -> dict:
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# UTILIDADES
+# UTILIDADES Y PING
 # ══════════════════════════════════════════════════════════════════════════
-
-def _get_zk_password() -> int:
+def ping_dispositivo(dispositivo_id: str = None) -> bool:
     """
-    Lee la contraseña del dispositivo ZK.
-    Prioridad: password_enc en BD (descifrado) → ZK_PASSWORD en .env.
-    ZK_PASSWORD en .env queda deprecada a partir de Fase 2.
+    Verifica si el dispositivo (o el primero activo) responde.
     """
-    try:
-        import db as db_module
-        enc = db_module.get_device_password_enc()
-        if enc:
-            import auth as auth_module
-            return int(auth_module.decrypt_device_password(enc))
-    except Exception:
-        pass
-    return int(os.getenv("ZK_PASSWORD", "0"))
-
-
-def _make_zk() -> "ZK":
-    # Leer siempre en runtime para reflejar cambios sin reiniciar
-    timeout  = int(os.getenv("ZK_TIMEOUT", "120"))
-    password = _get_zk_password()
-    udp      = os.getenv("ZK_UDP", "false").lower() == "true"
-    return ZK(
-        ZK_IP,
-        port=ZK_PORT,
-        timeout=timeout,
-        password=password,
-        force_udp=udp,
-        ommit_ping=True,
-    )
-
-
-def _punch_to_tipo(punch) -> str | None:
-    """
-    Convierte att.punch al tipo de marcación según estándar ZK:
-      0 = Check-In        → Entrada
-      1 = Check-Out       → Salida
-      2 = Break-Out       → Salida  (salida de pausa/almuerzo)
-      3 = Break-In        → Entrada (regreso de pausa/almuerzo)
-      4 = Overtime-In     → Entrada (inicio de horas extra)
-      5 = Overtime-Out    → Salida  (fin de horas extra)
-    Cualquier otro valor se descarta (retorna None).
-    """
-    _MAPA = {0: "Entrada", 1: "Salida", 2: "Salida",
-             3: "Entrada", 4: "Entrada", 5: "Salida"}
-    return _MAPA.get(punch)
+    # Si no se provee ID, agarramos el primero como fallback
+    if not dispositivo_id:
+        activos = db_module.get_dispositivos_activos()
+        if not activos: return False
+        disp = activos[0]
+    else:
+        disp = db_module.get_dispositivo(dispositivo_id)
+        if not disp: return False
+        
+    driver = get_driver(disp)
+    return driver.test_conexion()
 
 
 # ══════════════════════════════════════════════════════════════════════════
-# PING
+# SINCRONIZACIÓN
 # ══════════════════════════════════════════════════════════════════════════
 
-def ping_dispositivo() -> bool:
+def sincronizar_dispositivo(dispositivo_id: str, desde: datetime = None, force_historico: bool = False) -> tuple[int, int]:
     """
-    Verifica si el dispositivo responde.
-    Usa timeout corto (2 s) para no bloquear la UI.
+    Sincroniza un dispositivo específico.
+    Retorna (descargados, insertados_nuevos).
     """
-    if not ZK_DISPONIBLE:
-        return False
-    try:
-        password = _get_zk_password()
-        udp      = os.getenv("ZK_UDP", "false").lower() == "true"
-        zk = ZK(
-            ZK_IP, port=ZK_PORT, timeout=10,
-            password=password, force_udp=udp, ommit_ping=True,
-        )
-        conn = zk.connect()
-        conn.disconnect()
-        return True
-    except Exception:
-        return False
-
-
-# ══════════════════════════════════════════════════════════════════════════
-# SINCRONIZACIÓN PRINCIPAL
-# ══════════════════════════════════════════════════════════════════════════
-
-def sincronizar(
-    fecha_inicio: date | None = None,
-    fecha_fin:    date | None = None,
-    job_id:       str  | None = None,
-) -> tuple[int, int]:
-    """
-    Descarga todas las marcaciones del dispositivo, filtra por rango de fechas
-    en Python (el protocolo ZK no filtra en el dispositivo), y guarda los
-    registros nuevos en la base de datos local.
-
-    Actualiza _jobs[job_id] para que el cliente pueda hacer polling.
-    Retorna (registros_en_rango, registros_nuevos_en_db).
-    """
-    import db as db_module
-
-    if not ZK_DISPONIBLE:
-        raise RuntimeError(
-            "La librería pyzk no está instalada. "
-            "Ejecuta: pip install pyzk"
-        )
-
-    if fecha_inicio is None:
-        fecha_inicio = date(2000, 1, 1)
-    if fecha_fin is None:
-        fecha_fin = date.today()
-
-    _set_job(job_id, {
-        "estado": "conectando",
-        "registros_procesados": 0,
-        "registros_nuevos": 0,
-    })
-
-    zk   = _make_zk()
-    conn = None
-    try:
-        conn = zk.connect()
-
-        # ── Sincronizar usuarios ───────────────────────────────────────
-        _set_job(job_id, {
-            "estado": "obteniendo_usuarios",
-            "registros_procesados": 0,
-            "registros_nuevos": 0,
-        })
-        usuarios   = conn.get_users()
-        user_dict  = {str(u.user_id): str(u.name).strip() for u in usuarios}
-        db_module.upsert_usuarios([
-            {
-                "id_usuario": str(u.user_id),
-                "nombre":     str(u.name).strip(),
-                "privilegio": u.privilege,
-            }
-            for u in usuarios
-        ])
-
-        # ── Descargar todas las marcaciones ────────────────────────────
-        _set_job(job_id, {
-            "estado": "descargando_marcaciones",
-            "registros_procesados": 0,
-            "registros_nuevos": 0,
-        })
-        attendances      = conn.get_attendance()
-        total_dispositivo = len(attendances)
-
-        # ── Transformar y filtrar ──────────────────────────────────────
-        _set_job(job_id, {
-            "estado": "procesando",
-            "registros_procesados": 0,
-            "total_dispositivo": total_dispositivo,
-            "registros_nuevos": 0,
-        })
-
-        registros = []
-        for i, att in enumerate(attendances):
-            ts = att.timestamp
-            if not isinstance(ts, datetime):
-                try:
-                    ts = datetime.combine(ts, dt_time.min)
-                except Exception:
-                    continue
-            if ts.tzinfo is not None:
-                ts = ts.replace(tzinfo=None)
-
-            # Filtro de rango (el dispositivo devuelve todo)
-            if ts.date() < fecha_inicio or ts.date() > fecha_fin:
-                continue
-
-            tipo = _punch_to_tipo(att.punch)
-            if tipo is None:
-                continue
-
-            nombre = user_dict.get(str(att.user_id), f"Usuario {att.user_id}")
-            registros.append({
-                "id_usuario": str(att.user_id),
-                "nombre":     nombre,
-                "fecha_hora": ts.isoformat(),
-                "punch_raw":  att.punch,
-                "tipo":       tipo,
-                "fuente":     "zk",
-            })
-
-            # Actualizar progreso cada 500 registros
-            if job_id and i % 500 == 0:
-                _set_job(job_id, {
-                    "estado": "procesando",
-                    "registros_procesados": i,
-                    "total_dispositivo": total_dispositivo,
-                    "registros_nuevos": 0,
-                })
-
-        # ── Insertar en DB ─────────────────────────────────────────────
-        nuevos = db_module.insertar_asistencias(registros)
+    disp = db_module.get_dispositivo(dispositivo_id)
+    if not disp:
+        raise ValueError(f"Dispositivo {dispositivo_id} no encontrado")
+        
+    driver = get_driver(disp)
+    
+    db_module.actualizar_estado_sync_ui(dispositivo_id, "conectando", 10)
+    
+    if not driver.test_conexion():
+        db_module.actualizar_estado_sync_ui(dispositivo_id, "error", 0, 0, "No se pudo conectar al dispositivo")
         db_module.registrar_sync(
-            datetime.combine(fecha_inicio, dt_time.min),
-            datetime.combine(fecha_fin,    dt_time(23, 59, 59)),
-            len(registros),
-            nuevos,
-            True,
-            registros_en_dispositivo=total_dispositivo
+            datetime.min, datetime.max, 0, 0, False, 
+            "Tiempo de espera agotado al comunicar con el dispositivo", 0, dispositivo_id=dispositivo_id
         )
+        raise ConnectionError(f"No se pudo conectar al dispositivo {disp['nombre']}")
 
-        _set_job(job_id, {
-            "estado": "completado",
-            "registros_procesados": len(registros),
-            "total_dispositivo": total_dispositivo,
-            "registros_nuevos": nuevos,
-        })
+    # 1. Traer usuarios
+    db_module.actualizar_estado_sync_ui(dispositivo_id, "obteniendo_usuarios", 30)
+    usuarios = driver.get_usuarios()
+    if usuarios:
+        db_module.upsert_usuarios(usuarios, dispositivo_id)
 
-        return len(registros), nuevos
+    # 2. Determinar fecha de partición 
+    # Usar incremental si no se fuerza y hay watermark
+    if not force_historico and disp.get("watermark_ultima_fecha"):
+        # Agregarle 1 segundo para no repetir el último registro
+        # O dejar que el DO NOTHING del insert se encargue, pero optimizamos
+        rango_desde = disp["watermark_ultima_fecha"]
+    else:
+        # Descarga total o desde fecha_inicio provista
+        rango_desde = desde
 
-    except Exception as e:
-        tipo_error = type(e).__name__
-        msg = str(e).strip() or "Error desconocido"
-        # Mensajes más legibles para errores comunes de red/ZK
-        if "timed out" in msg.lower() or "timeout" in msg.lower():
-            detalle = (
-                f"Tiempo de espera agotado al comunicar con el dispositivo ({ZK_IP}:{ZK_PORT}). "
-                f"El dispositivo tardó más de {ZK_TIMEOUT}s en responder. "
-                "Verifica que el dispositivo esté encendido y en red, o aumenta ZK_TIMEOUT en .env."
-            )
-        elif "connection refused" in msg.lower():
-            detalle = f"Conexión rechazada por {ZK_IP}:{ZK_PORT}. Verifica IP y puerto en .env."
-        elif "network" in msg.lower() or "unreachable" in msg.lower():
-            detalle = f"Error de red al conectar con {ZK_IP}:{ZK_PORT}: {msg}"
-        else:
-            detalle = f"[{tipo_error}] {msg}"
+    # 3. Descargar marcaciones
+    db_module.actualizar_estado_sync_ui(dispositivo_id, "descargando_marcaciones", 50)
+    asistencias_raw = driver.get_asistencias(desde=rango_desde)
+    
+    capacidad = driver.get_capacidad()
+    total_dispositivo = capacidad.get("total_registros", 0)
 
-        _set_job(job_id, {"estado": "error", "detalle": detalle})
+    # 4. Procesar e insertar
+    if asistencias_raw:
+        db_module.actualizar_estado_sync_ui(dispositivo_id, "procesando", 70)
+        # La BD hará resolve del id_usuario a persona_id en insertar_asistencias
+        insertados = db_module.insertar_asistencias(asistencias_raw, dispositivo_id)
+        
+        # Actualizar watermark con el registro más reciente
+        ultimo_reg = max(asistencias_raw, key=lambda x: x["fecha_hora"])
+        # Asumiendo que punch_raw o algo no es único, PostgreSQL se banca la idempotencia
+        db_module.actualizar_watermark(
+            dispositivo_id,
+            ultimo_id="0", # Hikvision no tiene ID auto-incremental único, usamos fecha
+            ultima_fecha=ultimo_reg["fecha_hora"]
+        )
+    else:
+        insertados = 0
+        
+    asistencias_count = len(asistencias_raw) if asistencias_raw else 0
+
+    # 5. Guardar Log y Estado
+    db_module.registrar_sync(
+        rango_desde or datetime.min, 
+        datetime.max, 
+        asistencias_count, 
+        insertados, 
+        True, 
+        None, 
+        total_dispositivo,
+        dispositivo_id=dispositivo_id
+    )
+    db_module.actualizar_estado_sync_ui(dispositivo_id, "completado", 100, insertados)
+    
+    return asistencias_count, insertados
+
+def sincronizar_con_reintento(dispositivo_id: str, desde: datetime = None, force_historico: bool = False, max_intentos: int = 3):
+    """Intenta sincronizar con un backoff exponencial si falla la conexión."""
+    for intento in range(max_intentos):
         try:
+            return sincronizar_dispositivo(dispositivo_id, desde=desde, force_historico=force_historico)
+        except ConnectionError as e:
+            if intento == max_intentos - 1:
+                # Ya registró el error el hijo
+                return 0, 0
+            espera = 2 ** intento * 5
+            db_module.actualizar_estado_sync_ui(dispositivo_id, "error", mensaje=f"Reintentando en {espera}s")
+            time_module.sleep(espera)
+        except Exception as e:
+            db_module.actualizar_estado_sync_ui(dispositivo_id, "error", 0, 0, str(e))
             db_module.registrar_sync(
-                datetime.combine(fecha_inicio, dt_time.min),
-                datetime.combine(fecha_fin,    dt_time(23, 59, 59)),
-                0, 0, False, detalle,
+                datetime.min, datetime.max, 0, 0, False, str(e), 0, dispositivo_id=dispositivo_id
             )
-        except Exception:
-            pass
-        raise
+            return 0, 0
 
-    finally:
-        if conn:
+def sincronizar(fecha_inicio: date | None = None, fecha_fin: date | None = None, job_id: str | None = None, force_historico: bool = False):
+    """
+    Sincroniza todos los dispositivos usando ThreadPoolExecutor.
+    Mantiene compatibilidad con la estructura `job_id` del frontend.
+    """
+    dispositivos = db_module.get_dispositivos_activos()
+    
+    if not dispositivos:
+        _set_job(job_id, {"estado": "error", "detalle": "No hay dispositivos activos"})
+        return 0, 0
+        
+    _set_job(job_id, {"estado": "procesando", "registros_procesados": 0, "registros_nuevos": 0})
+    
+    # Conversión a datetime para el rango_desde
+    desde_dt = datetime.combine(fecha_inicio, dt_time.min) if fecha_inicio else None
+    
+    tot_descargados = 0
+    tot_insertados = 0
+    
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(sincronizar_con_reintento, d['id'], desde_dt, force_historico): d
+            for d in dispositivos
+        }
+        for future in as_completed(futures):
+            d = futures[future]
             try:
-                conn.disconnect()
-            except Exception:
+                descargados, insertados = future.result()
+                tot_descargados += descargados
+                tot_insertados += insertados
+            except Exception as e:
+                # Los errores ya los manejó sincronizar_con_reintento, pero atajamos por si acaso
                 pass
 
-
-# ══════════════════════════════════════════════════════════════════════════
-# LIMPIEZA DEL DISPOSITIVO
-# ══════════════════════════════════════════════════════════════════════════
-
-def limpiar_log_dispositivo() -> int:
-    """
-    Borra TODOS los registros de asistencia del dispositivo ZK.
-    Retorna cuántos registros había antes de borrar.
-
-    IRREVERSIBLE. Solo llamar después de confirmar que la DB tiene todos los datos.
-    """
-    if not ZK_DISPONIBLE:
-        raise RuntimeError("La librería pyzk no está instalada.")
-
-    zk   = _make_zk()
-    conn = None
-    try:
-        conn = zk.connect()
-        total_antes = len(conn.get_attendance())
-        conn.clear_attendance()
-        return total_antes
-    finally:
-        if conn:
-            try:
-                conn.disconnect()
-            except Exception:
-                pass
+            # Informar progreso para compatibilidad Legacy
+            _set_job(job_id, {
+                "estado": "procesando", 
+                "registros_procesados": tot_descargados, 
+                "registros_nuevos": tot_insertados
+            })
+            
+    _set_job(job_id, {
+        "estado": "completado",
+        "registros_procesados": tot_descargados,
+        "registros_nuevos": tot_insertados
+    })
+    
+    # Después de todo proceso enviamos alertas (Fase 7)
+    verificar_dispositivos_desconectados()
+            
+    return tot_descargados, tot_insertados
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# SYNC AUTOMÁTICO (scheduler)
-# ══════════════════════════════════════════════════════════════════════════
-
-def _enviar_alertas_riesgo():
-    """
-    Detecta personas con Risk Score >= 70 (Rojo) en los últimos 30 días
-    y registra una entrada de auditoría para cada una.
-    Las alertas por correo requieren configuración SMTP en .env.
-    """
-    try:
-        import analytics as analytics_module
-        from datetime import timedelta
-        fecha_fin   = date.today()
-        fecha_inicio = fecha_fin - timedelta(days=30)
-        hallazgos = analytics_module.analizar(
-            tipo_persona_id=None,
-            grupo_id=None,
-            persona_id=None,
-            fecha_inicio=fecha_inicio,
-            fecha_fin=fecha_fin,
-        )
-        riesgos_criticos = [r for r in hallazgos.get("riesgos", []) if r.get("score", 0) >= 70]
-        if not riesgos_criticos:
-            return
-        import db as db_module
-        for r in riesgos_criticos:
-            try:
-                db_module.registrar_audit(
-                    tenant_id=None,
-                    usuario_id=None,
-                    accion="alerta_riesgo_automatica",
-                    entidad="persona",
-                    entidad_id=r.get("id"),
-                    detalle={
-                        "nombre": r.get("nombre"),
-                        "score":  r.get("score"),
-                        "semaforo": r.get("semaforo"),
-                        "periodo": f"{fecha_inicio} / {fecha_fin}",
-                    },
-                    ip="scheduler",
-                )
-            except Exception:
-                pass
-    except Exception:
-        pass
+def verificar_dispositivos_desconectados():
+    """Busca si hay dispositivos con 3+ fallas consecutivas y notifica."""
+    fallos = db_module.get_dispositivos_con_fallas_consecutivas(n=3)
+    for d in fallos:
+        if not db_module.has_alerta_hoy(d['id']):
+            cuerpo = (f"Alerta Crítica: El dispositivo '{d['nombre']}' ha fallado "
+                     f"en sus últimos 3 intentos de sincronización.")
+            # Correo al admin (obtenido de env)
+            admin_email = os.getenv("ADMIN_EMAIL", "admin@localhost")
+            enviar_correo(admin_email, "Fallos de Sincronización en Dispositivo", cuerpo)
+            db_module.marcar_alerta_enviada(d['id'])
 
 
 def _sync_automatico():
-    """Llamado por el scheduler. Sincroniza todo sin filtro de fechas."""
+    """Ejecutado por schedule (incremental)"""
     try:
-        sincronizar()
-        try:
-            from db.queries.periodos import cerrar_periodos_vencidos
-            cerrar_periodos_vencidos()
-        except Exception:
-            pass  # Ignorar fallos de cierre en el job de sync
-        _enviar_alertas_riesgo()
+        sincronizar(force_historico=False)
+        from db.queries.periodos import cerrar_periodos_vencidos
+        cerrar_periodos_vencidos()
+    except Exception:
+        pass
+
+
+def _sync_nocturna_completa():
+    """Ejecutado a las 2 AM (descarga el historial si no es gigante, o force true)."""
+    try:
+        # Idealmente bajamos todo, pero podemos rellenar huecos bajando ultimos 30 días
+        treinta_dias_atras = date.today() - timedelta(days=30)
+        sincronizar(fecha_inicio=treinta_dias_atras, force_historico=True)
     except Exception:
         pass
 
 
 def iniciar_scheduler():
-    """
-    Inicia el scheduler en un hilo daemon si SYNC_AUTO=true.
-    Programa:
-      - Un sync completo diario a SYNC_HORA_NOCTURNA
-      - Un sync parcial cada SYNC_INTERVALO_MIN minutos
-    """
+    """Inicia el scheduler en un hilo daemon si SYNC_AUTO=true."""
     if not SYNC_AUTO or not SCHEDULE_DISPONIBLE:
         return
 
-    schedule.every().day.at(SYNC_HORA_NOCTURNA).do(_sync_automatico)
-    schedule.every(SYNC_INTERVALO_MIN).minutes.do(_sync_automatico)
+    # Sync nocturna
+    schedule.every().day.at(SYNC_HORA_NOCTURNA).do(_sync_nocturna_completa)
+    
+    # Sync incremental diaria (cada N minutos / horas)
+    # Por defecto está configurado a N minutos en dotenv, 
+    # pero el plan hablaba de prioridades cada 15m. Aquí para facilidad:
+    schedule.every(SYNC_INTERVALO_HORAS).hours.do(_sync_automatico)
 
     def _run():
         while True:
