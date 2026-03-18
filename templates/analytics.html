@@ -9,19 +9,20 @@
 </div>
 
 <!-- Filtros de Analytics -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form class="row g-3" id="analyticsForm">
+<div class="card border-0 shadow-sm mb-5 analytics-card">
+    <div class="card-body p-4">
+        <form class="row g-4 align-items-end" id="analyticsForm">
             <div class="col-md-3">
-                <label class="form-label small text-muted">Rango de Fecha</label>
+                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Rango de Fecha</label>
                 <div class="input-group">
-                    <input type="date" class="form-control" name="fecha_inicio" value="{{ fecha_inicio }}">
-                    <input type="date" class="form-control" name="fecha_fin" value="{{ fecha_fin }}">
+                    <input type="date" class="form-control bg-light border-0" name="fecha_inicio" value="{{ fecha_inicio }}">
+                    <span class="input-group-text border-0 bg-light text-muted">a</span>
+                    <input type="date" class="form-control bg-light border-0" name="fecha_fin" value="{{ fecha_fin }}">
                 </div>
             </div>
             <div class="col-md-3">
-                <label class="form-label small text-muted">Tipo de Persona</label>
-                <select class="form-select" name="tipo_persona_id">
+                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo de Persona</label>
+                <select class="form-select bg-light border-0" name="tipo_persona_id">
                     <option value="">Todos los tipos</option>
                     {% for t in tenant_tipos %}
                     <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
@@ -29,16 +30,19 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label small text-muted">Grupo</label>
-                <select class="form-select" name="grupo_id">
+                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
+                <select class="form-select bg-light border-0" name="grupo_id">
                     <option value="">Todos los grupos</option>
                     {% for g in grupos %}
                     <option value="{{ g.id }}" {% if request.args.get('grupo_id') == g.id %}selected{% endif %}>{{ g.nombre }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-1 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">Analizar</button>
+            <div class="col-md-3 d-flex">
+                <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm">
+                    <span class="material-symbols-outlined pb-1">auto_graph</span>
+                    Analizar Datos
+                </button>
             </div>
         </form>
     </div>
@@ -50,54 +54,62 @@
 </div>
 {% else %}
 
-<div class="row g-3 mb-4">
+<div class="row g-4 mb-5 mt-2">
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <h6 class="text-muted small">Asistencia Promedio</h6>
-                <h2 class="fw-bold text-success mb-1">{{ hallazgos.resumen_general.tasa_asistencia_promedio }}%</h2>
-                <div class="progress mt-2" style="height: 5px;">
+        <div class="card border-0 shadow-sm h-100 analytics-card">
+            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                <span class="material-symbols-outlined text-success mb-2" style="font-size: 2rem;">task_alt</span>
+                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Asistencia Promedio</h6>
+                <h2 class="fw-bold text-success mb-1 display-5">{{ hallazgos.resumen_general.tasa_asistencia_promedio }}%</h2>
+                <div class="progress mt-3" style="height: 6px; border-radius: 10px;">
                      <div class="progress-bar bg-success" data-width="{{ hallazgos.resumen_general.tasa_asistencia_promedio }}"></div>
                 </div>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <h6 class="text-muted small">Total Registros</h6>
-                <h2 class="fw-bold mb-1">{{ hallazgos.resumen_general.total_registros }}</h2>
+        <div class="card border-0 shadow-sm h-100 analytics-card">
+            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                <span class="material-symbols-outlined text-primary mb-2" style="font-size: 2rem;">database</span>
+                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Total Registros</h6>
+                <h2 class="fw-bold text-primary mb-1 display-5">{{ hallazgos.resumen_general.total_registros }}</h2>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <h6 class="text-muted small">Ausencias</h6>
-                <h2 class="fw-bold text-danger mb-1">{{ hallazgos.resumen_general.ausentes }}</h2>
+        <div class="card border-0 shadow-sm h-100 analytics-card">
+            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                <span class="material-symbols-outlined text-danger mb-2" style="font-size: 2rem;">person_off</span>
+                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Ausencias</h6>
+                <h2 class="fw-bold text-danger mb-1 display-5">{{ hallazgos.resumen_general.ausentes }}</h2>
             </div>
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body text-center">
-                <h6 class="text-muted small">Tardanzas</h6>
-                <h2 class="fw-bold text-warning mb-1">{{ hallazgos.resumen_general.tardanzas }}</h2>
+        <div class="card border-0 shadow-sm h-100 analytics-card">
+            <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                <span class="material-symbols-outlined text-warning mb-2" style="font-size: 2rem;">schedule</span>
+                <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Tardanzas</h6>
+                <h2 class="fw-bold text-warning mb-1 display-5">{{ hallazgos.resumen_general.tardanzas }}</h2>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-4 mb-4">
+<div class="row g-4 mb-5">
     <!-- IA Narrative Report -->
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent py-3 d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined text-purple">psychology</span>
+            <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                <div class="icon-shape bg-purple-soft text-purple rounded-circle p-2 d-flex">
+                    <span class="material-symbols-outlined">psychology</span>
+                </div>
                 <h5 class="fw-bold mb-0">Reporte Narrativo Ejecutivo</h5>
             </div>
-            <div class="card-body bg-light-subtle">
-                <div id="narrativo-content" class="text-secondary" style="white-space: pre-wrap;">{{ narrativo }}</div>
+            <div class="card-body p-4 pt-2">
+                <div class="bg-light-subtle p-4 rounded-3 border h-100">
+                    <div id="narrativo-content" class="text-secondary" style="white-space: pre-wrap; line-height: 1.6;">{{ narrativo }}</div>
+                </div>
             </div>
         </div>
     </div>
@@ -105,22 +117,27 @@
     <!-- Anomalías -->
     <div class="col-md-6">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent py-3 d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined text-danger">warning</span>
+            <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
+                    <span class="material-symbols-outlined">warning</span>
+                </div>
                 <h5 class="fw-bold mb-0">Anomalías Estadísticas</h5>
             </div>
-            <div class="card-body p-0">
-                <ul class="list-group list-group-flush">
+            <div class="card-body p-4 pt-2">
+                <ul class="list-group list-group-flush border rounded-3 overflow-hidden">
                     {% for a in hallazgos.anomalias %}
-                    <li class="list-group-item d-flex justify-content-between align-items-start py-3">
+                    <li class="list-group-item d-flex justify-content-between align-items-start p-3 border-bottom-0 border-top">
                         <div class="ms-2 me-auto">
-                            <div class="fw-bold">{{ a.nombre }}</div>
-                            <small class="text-muted">{{ a.tipo }}</small>
-                            <div class="small text-danger mt-1">{{ a.detalle }}</div>
+                            <div class="fw-bold text-dark">{{ a.nombre }}</div>
+                            <small class="text-muted d-block mb-1">{{ a.tipo }}</small>
+                            <div class="small fw-medium text-danger mt-1 bg-danger-soft px-2 py-1 rounded d-inline-block">{{ a.detalle }}</div>
                         </div>
                     </li>
                     {% else %}
-                    <li class="list-group-item text-center text-muted py-4">No se detectaron anomalías severas en el rango.</li>
+                    <li class="list-group-item text-center text-muted p-5 border-0 bg-light">
+                        <span class="material-symbols-outlined text-muted mb-2 shadow-sm p-3 rounded-circle bg-white" style="font-size: 2rem;">check_circle</span>
+                        <br>No se detectaron anomalías severas en el rango evaluado.
+                    </li>
                     {% endfor %}
                 </ul>
             </div>
@@ -129,47 +146,59 @@
 </div>
 
 <!-- Risk Scores -->
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-transparent py-3 d-flex align-items-center gap-2">
-        <span class="material-symbols-outlined text-danger">monitor_heart</span>
+<div class="card border-0 shadow-sm mb-5">
+    <div class="card-header bg-transparent p-4 border-0 pb-3 d-flex align-items-center gap-3">
+        <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
+            <span class="material-symbols-outlined">monitor_heart</span>
+        </div>
         <h5 class="fw-bold mb-0">Top Personas en Riesgo de Cumplimiento (Risk Score)</h5>
     </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
-                <tr>
-                    <th>Persona</th>
-                    <th>Grupo</th>
-                    <th>Risk Score (0-100)</th>
-                    <th>Estado</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for r in hallazgos.riesgos %}
-                <tr>
-                    <td>
-                        <div class="fw-bold">{{ r.nombre }}</div>
-                    </td>
-                    <td>{{ r.grupo }}</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                             <div class="progress w-100" style="height: 6px;">
-                                 <div class="progress-bar {% if r.score >= 70 %}bg-danger{% elif r.score >= 40 %}bg-warning{% else %}bg-success{% endif %}" data-width="{{ r.score }}"></div>
-                             </div>
-                             <span class="fw-bold">{{ r.score }}</span>
-                        </div>
-                    </td>
-                    <td>
-                        <span class="badge {% if r.semaforo == 'Rojo' %}bg-danger{% elif r.semaforo == 'Amarillo' %}bg-warning text-dark{% else %}bg-success{% endif %}">
-                            {{ r.semaforo }}
-                        </span>
-                    </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="4" class="text-center py-4 text-muted">No hay puntuaciones de riesgo críticas.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="card-body p-0 px-4 pb-4">
+        <div class="table-responsive border rounded-3">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">Persona</th>
+                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">Grupo</th>
+                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1">Risk Score (0-100)</th>
+                        <th class="py-3 px-4 outline-none border-bottom-0 text-muted small text-uppercase letter-spacing-1 text-end">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in hallazgos.riesgos %}
+                    <tr>
+                        <td class="px-4 py-3">
+                            <div class="fw-bold text-dark">{{ r.nombre }}</div>
+                        </td>
+                        <td class="px-4 py-3 text-secondary">{{ r.grupo }}</td>
+                        <td class="px-4 py-3" style="width: 30%;">
+                            <div class="d-flex align-items-center gap-3">
+                                 <span class="fw-bold {% if r.score >= 70 %}text-danger{% elif r.score >= 40 %}text-warning{% else %}text-success{% endif %}" style="min-width: 25px;">{{ r.score }}</span>
+                                 <div class="progress w-100" style="height: 8px; border-radius: 10px;">
+                                     <div class="progress-bar {% if r.score >= 70 %}bg-danger{% elif r.score >= 40 %}bg-warning{% else %}bg-success{% endif %}" data-width="{{ r.score }}"></div>
+                                 </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-end">
+                            <span class="badge rounded-pill px-3 py-2 {% if r.semaforo == 'Rojo' %}bg-danger-soft text-danger{% elif r.semaforo == 'Amarillo' %}bg-warning-soft text-warning px-4{% else %}bg-success-soft text-success{% endif %}">
+                                <span class="d-flex align-items-center gap-1">
+                                    <span class="material-symbols-outlined" style="font-size: 14px;">
+                                        {% if r.semaforo == 'Rojo' %}error{% elif r.semaforo == 'Amarillo' %}warning{% else %}check_circle{% endif %}
+                                    </span>
+                                    {{ r.semaforo }}
+                                </span>
+                            </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4" class="text-center py-5 text-muted bg-light border-0">
+                        <span class="material-symbols-outlined text-muted mb-2" style="font-size: 2rem;">verified_user</span>
+                        <br>No hay puntuaciones de riesgo críticas.
+                    </td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -177,5 +206,28 @@
 
 <style>
 .text-purple { color: #8a2be2; }
+.bg-purple-soft { background-color: rgba(138, 43, 226, 0.1); }
+.bg-danger-soft { background-color: rgba(220, 53, 69, 0.1); }
+.bg-warning-soft { background-color: rgba(255, 193, 7, 0.15); }
+.text-warning { color: #d39e00 !important; }
+.bg-success-soft { background-color: rgba(25, 135, 84, 0.1); }
+
+.analytics-card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.analytics-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
+}
+.letter-spacing-1 {
+    letter-spacing: 1px;
+}
+.icon-shape {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 </style>
 {% endblock %}
