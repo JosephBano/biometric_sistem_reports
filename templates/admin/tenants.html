@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+.tenant-row-inactive { opacity: 0.55; }
+.slug-badge { font-family: monospace; font-size: 0.8rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h5 class="fw-bold mb-0">Gestión de Instituciones (Tenants)</h5>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrear">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add_business</span>
+        Nueva Institución
+    </button>
+</div>
+
+{% set msg = request.args.get('msg') %}
+{% if msg %}
+<div class="alert alert-success alert-dismissible fade show" role="alert">
+    {{ msg }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<!-- Tabla de tenants -->
+<div class="card border-0 shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Institución</th>
+                        <th>Slug</th>
+                        <th>Zona horaria</th>
+                        <th>Creado</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in tenants %}
+                    <tr class="{{ 'tenant-row-inactive' if not t.activo else '' }}">
+                        <td>
+                            <div class="fw-medium">{{ t.nombre }}</div>
+                            {% if t.nombre_corto %}<small class="text-muted">{{ t.nombre_corto }}</small>{% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary slug-badge">{{ t.slug }}</span></td>
+                        <td class="text-muted small">{{ t.zona_horaria }}</td>
+                        <td class="text-muted small">{{ t.creado_en.strftime('%d/%m/%Y') if t.creado_en else '—' }}</td>
+                        <td>
+                            {% if t.activo %}
+                            <span class="badge bg-success-subtle text-success">Activo</span>
+                            {% else %}
+                            <span class="badge bg-danger-subtle text-danger">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    data-bs-toggle="modal"
+                                    data-bs-target="#modalEstado"
+                                    data-tenant-id="{{ t.id }}"
+                                    data-tenant-nombre="{{ t.nombre }}"
+                                    data-tenant-activo="{{ '1' if t.activo else '0' }}">
+                                {{ 'Desactivar' if t.activo else 'Activar' }}
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">No hay instituciones registradas.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+<!-- Modal: Crear tenant -->
+<div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('admin_crear_tenant') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h6 class="modal-title fw-bold" id="modalCrearLabel">Nueva Institución</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Nombre completo <span class="text-danger">*</span></label>
+                        <input type="text" name="nombre" class="form-control" placeholder="Ej: Instituto Superior Tecnológico" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Nombre corto</label>
+                        <input type="text" name="nombre_corto" class="form-control" placeholder="Ej: ISTPET">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Slug <span class="text-danger">*</span></label>
+                        <input type="text" name="slug" class="form-control font-monospace"
+                               placeholder="ej: istpet" pattern="[a-z][a-z0-9_]{2,29}"
+                               title="Solo minúsculas, números y guiones bajos. Mínimo 3 caracteres." required>
+                        <div class="form-text">Solo letras minúsculas, números y guiones bajos. Se usará como nombre del schema PostgreSQL.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-medium">Zona horaria</label>
+                        <select name="zona_horaria" class="form-select">
+                            <option value="America/Guayaquil" selected>America/Guayaquil (Ecuador)</option>
+                            <option value="America/Bogota">America/Bogota (Colombia)</option>
+                            <option value="America/Lima">America/Lima (Perú)</option>
+                            <option value="America/New_York">America/New_York (EST)</option>
+                            <option value="UTC">UTC</option>
+                        </select>
+                    </div>
+                    <div class="alert alert-info small mb-0">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">info</span>
+                        Se crearán los tipos de persona <strong>Empleado</strong> y <strong>Practicante</strong> por defecto,
+                        junto con los feriados nacionales de Ecuador.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Crear institución</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+<!-- Modal: Cambiar estado (activar/desactivar) -->
+<div class="modal fade" id="modalEstado" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <form method="POST" id="formEstado" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="activo" id="inputActivo" value="">
+                <div class="modal-header">
+                    <h6 class="modal-title fw-bold">Cambiar estado</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0" id="modalEstadoTexto"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-warning btn-sm" id="btnConfirmarEstado">Confirmar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('modalEstado').addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    const tenantId = btn.dataset.tenantId;
+    const tenantNombre = btn.dataset.tenantNombre;
+    const activo = btn.dataset.tenantActivo === '1';
+
+    // Si está activo, vamos a desactivar (activo=0); si no, activar (activo=1)
+    const nuevoActivo = activo ? '0' : '1';
+    const accion = activo ? 'desactivar' : 'activar';
+
+    document.getElementById('formEstado').action = '/admin/tenants/' + tenantId;
+    document.getElementById('inputActivo').value = nuevoActivo;
+    document.getElementById('modalEstadoTexto').textContent =
+        '¿Deseas ' + accion + ' la institución "' + tenantNombre + '"?';
+    document.getElementById('btnConfirmarEstado').textContent =
+        accion.charAt(0).toUpperCase() + accion.slice(1);
+});
+</script>
+{% endblock %}
