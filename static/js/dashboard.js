@@ -3,74 +3,59 @@ let _biometricPersonCount = 0;
 
 document.addEventListener('DOMContentLoaded', () => {
     fetchStatus();
-    setInterval(fetchStatus, 30000);
+    fetchDispositivos();
+    const interval = setInterval(() => { fetchStatus(); fetchDispositivos(); }, 30000);
     fetchEstadoHorarios();
-    fetchAlertasTardanzas();
 });
 
+// ── Estado global (estadísticas agregadas) ─────────────────────────────────
 function fetchStatus() {
     apiCall('/api/estado-sync')
         .then(data => {
             _biometricPersonCount = data.personas_en_db || 0;
-            updateStatusBar(data);
-            fetchEstadoHorarios(); 
+            updateAggregateStats(data);
+            fetchEstadoHorarios();
         })
-        .catch(() => updateStatusBar(null));
+        .catch(() => {});
 }
 
-function updateStatusBar(data) {
-    const dot = document.getElementById('status-dot');
-    const text = document.getElementById('status-device-text');
+function updateAggregateStats(data) {
+    const el = id => document.getElementById(id);
 
-    if (!data) {
-        dot.className = 'status-dot dot-gray';
-        text.textContent = 'No se pudo obtener el estado';
-        return;
+    if (el('status-total')) el('status-total').textContent = (data.total_registros || 0).toLocaleString('es');
+    if (el('status-personas')) el('status-personas').textContent = data.personas_en_db || 0;
+
+    if (el('status-ultima-sync')) {
+        if (data.ultima_sync) {
+            const ts = new Date(data.ultima_sync.fecha_sync);
+            el('status-ultima-sync').textContent =
+                ts.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) +
+                ' (+' + data.ultima_sync.registros_nuevos + ')';
+        } else {
+            el('status-ultima-sync').textContent = 'Nunca';
+        }
     }
 
-    if (data.dispositivo_accesible) {
-        dot.className = 'status-dot dot-green';
-        text.textContent = 'Dispositivo en línea (192.168.7.129)';
-    } else {
-        dot.className = 'status-dot dot-red';
-        text.textContent = 'Dispositivo no accesible — modo offline';
-    }
-
-    document.getElementById('status-total').textContent = (data.total_registros || 0).toLocaleString('es');
-    document.getElementById('status-personas').textContent = data.personas_en_db || 0;
-
-    if (data.ultima_sync) {
-        const ts = new Date(data.ultima_sync.fecha_sync);
-        document.getElementById('status-ultima-sync').textContent = ts.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' (+' + data.ultima_sync.registros_nuevos + ')';
-    } else {
-        document.getElementById('status-ultima-sync').textContent = 'Nunca';
-    }
-
-    // --- Monitoreo de Capacidad (Fase 1: Paso 4.1) ---
     const capMax = data.capacidad_maxima || 80000;
     const capOcupada = data.registros_en_dispositivo || 0;
     const pct = data.porcentaje_ocupado || 0;
 
-    const spanOcupada = document.getElementById('status-capacidad-ocupada');
-    const spanMax = document.getElementById('status-capacidad-max');
-    const spanPct = document.getElementById('status-capacidad-pct');
-    const bar = document.getElementById('status-capacidad-bar');
-    const divWarning = document.getElementById('status-capacidad-warning');
-    const spanDias = document.getElementById('status-capacidad-dias');
+    if (el('status-capacidad-ocupada')) el('status-capacidad-ocupada').textContent = capOcupada.toLocaleString('es');
+    if (el('status-capacidad-max')) el('status-capacidad-max').textContent = capMax.toLocaleString('es');
+    if (el('status-capacidad-pct')) el('status-capacidad-pct').textContent = pct + '%';
 
-    if (spanOcupada) spanOcupada.textContent = capOcupada.toLocaleString('es');
-    if (spanMax) spanMax.textContent = capMax.toLocaleString('es');
-    if (spanPct) spanPct.textContent = pct + '%';
-    
+    const bar = el('status-capacidad-bar');
     if (bar) {
         bar.style.width = pct + '%';
-        bar.className = 'progress-bar'; // reset
+        bar.className = 'progress-bar';
         if (pct >= 85) bar.className += ' bg-danger';
         else if (pct >= 75) bar.className += ' bg-warning';
         else if (pct >= 60) bar.className += ' bg-info';
         else bar.className += ' bg-success';
     }
 
+    const divWarning = el('status-capacidad-warning');
+    const spanDias = el('status-capacidad-dias');
     if (divWarning && spanDias) {
         if (pct >= 60) {
             divWarning.classList.remove('d-none');
@@ -81,23 +66,80 @@ function updateStatusBar(data) {
     }
 }
 
+// ── Listado de dispositivos (por dispositivo) ──────────────────────────────
+function fetchDispositivos() {
+    apiCall('/api/dispositivos')
+        .then(data => {
+            if (!data.dispositivos || data.dispositivos.length === 0) {
+                document.getElementById('dispositivos-container').innerHTML =
+                    '<div class="text-muted small text-center py-3">No hay dispositivos registrados. ' +
+                    '<a href="/admin/dispositivos">Agregar uno</a>.</div>';
+                return;
+            }
+            renderDispositivos(data.dispositivos);
+        })
+        .catch(() => {
+            const c = document.getElementById('dispositivos-container');
+            if (c) c.innerHTML = '<div class="text-muted small py-2">No disponible.</div>';
+        });
+}
+
+function renderDispositivos(dispositivos) {
+    const container = document.getElementById('dispositivos-container');
+    if (!container) return;
+
+    container.innerHTML = dispositivos.map((d, i) => {
+        const e = d.sync_estado || {};
+        const online = e.accesible;
+        const dotClass = online === true ? 'dot-green' : (online === false ? 'dot-red' : 'dot-gray');
+        const dotTitle = online === true ? 'En línea' : (online === false ? 'Sin conexión' : 'Estado desconocido');
+        const driver = (d.driver || 'zk').toUpperCase();
+        const badgeColor = (d.driver || 'zk') === 'hikvision' ? 'info' : 'primary';
+        const lastSync = e.ultima_sync
+            ? new Date(e.ultima_sync).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            : 'Sin sync';
+        const borderClass = i < dispositivos.length - 1 ? 'border-bottom' : '';
+
+        return `<div class="d-flex align-items-center gap-2 py-2 ${borderClass}" style="font-size:0.85rem;">
+            <span class="status-dot ${dotClass} flex-shrink-0" title="${dotTitle}"></span>
+            <span class="fw-semibold flex-grow-1 text-truncate" style="max-width:130px;" title="${d.nombre}">${d.nombre}</span>
+            <span class="text-muted" style="font-size:0.72rem;">${d.ip}:${d.puerto}</span>
+            <span class="badge bg-${badgeColor} bg-opacity-10 text-${badgeColor} border border-${badgeColor} border-opacity-25 fw-normal" style="font-size:0.7rem;">${driver}</span>
+            <span class="text-muted d-none d-lg-inline" style="font-size:0.72rem;" title="Última sync">${lastSync}</span>
+            <button class="btn btn-outline-secondary btn-sm py-0 px-1 flex-shrink-0" style="font-size:0.7rem;"
+                onclick="iniciarSyncDispositivo('${d.id}')" title="Sincronizar este dispositivo">
+                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:-2px;">sync</span>
+            </button>
+        </div>`;
+    }).join('');
+}
+
+function iniciarSyncDispositivo(id) {
+    apiCall('/api/dispositivos/' + id + '/sync', { method: 'POST' })
+        .then(() => {
+            showSuccess('Sincronización iniciada.');
+            setTimeout(() => { fetchStatus(); fetchDispositivos(); }, 3000);
+        })
+        .catch(err => showError('Error al sincronizar: ' + err.message));
+}
+
+// ── Horarios ───────────────────────────────────────────────────────────────
 function fetchEstadoHorarios() {
     apiCall('/api/horarios/estado')
         .then(data => {
             const statusDot = document.getElementById('horarios-dot');
             const statusText = document.getElementById('horarios-status-text');
             const detalles = document.getElementById('horarios-detalles');
-            
+
             if (data.cargados) {
                 statusDot.className = 'status-dot dot-green';
                 statusText.innerHTML = `${data.total} personas configuradas`;
-                
+
                 detalles.style.display = 'block';
                 document.getElementById('stat-semana').textContent = `${data.con_semana} sem`;
                 document.getElementById('stat-mes').textContent = `${data.con_mes} mes`;
                 document.getElementById('stat-almuerzo').textContent = `${data.con_almuerzo} con almuerzo`;
-                
-                // Cálculo de cobertura
+
                 if (_biometricPersonCount > 0) {
                     const cobertura = Math.min(100, Math.round((data.total / _biometricPersonCount) * 100));
                     let statCobertura = document.getElementById('stat-cobertura');
@@ -113,7 +155,9 @@ function fetchEstadoHorarios() {
                 }
                 if (data.actualizado_en) {
                     const ts = new Date(data.actualizado_en);
-                    document.getElementById('stat-actualizado').textContent = ts.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' + ts.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('stat-actualizado').textContent =
+                        ts.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }) + ' ' +
+                        ts.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
                 }
             } else {
                 statusDot.className = 'status-dot dot-red';
@@ -123,6 +167,7 @@ function fetchEstadoHorarios() {
         });
 }
 
+// ── Sincronizar todos ──────────────────────────────────────────────────────
 function iniciarSync() {
     document.getElementById('sync-progress').style.display = 'block';
     document.getElementById('btn-sync').disabled = true;
@@ -152,10 +197,8 @@ function pollSyncJob(jobId) {
                     clearInterval(syncJobInterval);
                     resetSyncUI();
                     fetchStatus();
-                    showSuccess(
-                        'Sincronización completada. ' +
-                        data.registros_nuevos + ' registro(s) nuevos guardados.'
-                    );
+                    fetchDispositivos();
+                    showSuccess('Sincronización completada. ' + data.registros_nuevos + ' registro(s) nuevos guardados.');
                 } else if (data.estado === 'error') {
                     clearInterval(syncJobInterval);
                     resetSyncUI();
@@ -200,6 +243,7 @@ function resetSyncUI() {
     document.getElementById('sync-progress-detail').textContent = '';
 }
 
+// ── Limpiar log del dispositivo ─────────────────────────────────────────────
 function mostrarConfirmLimpiar() {
     document.getElementById('confirm-limpiar').style.display = 'block';
     document.getElementById('btn-limpiar').style.display = 'none';
@@ -222,60 +266,14 @@ function ejecutarLimpiar() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirmar: true, password: pwd })
     })
-    .then(data => {
-        showSuccess('Dispositivo limpiado correctamente. Bórrados ' + data.registros_borrados + ' registros.');
-        cancelarLimpiar();
-        fetchStatus();
-    })
-    .catch(err => {
-        errObj.textContent = err.message;
-        errObj.style.display = 'block';
-    });
-}
-
-function fetchAlertasTardanzas() {
-    const loading = document.getElementById('alertas-loading');
-    const vacio = document.getElementById('alertas-vacio');
-    const lista = document.getElementById('alertas-lista');
-    
-    if(!loading) return;
-
-    loading.style.display = 'block';
-    vacio.style.display = 'none';
-    lista.style.display = 'none';
-
-    apiCall('/api/alertas/tardanzas-severas')
         .then(data => {
-            loading.style.display = 'none';
-            if (data.warning) {
-                vacio.textContent = data.warning;
-                vacio.className = 'alert alert-warning py-2 mb-0 small';
-                vacio.style.display = 'block';
-                return;
-            }
-            if (!data.alertas || data.alertas.length === 0) {
-                vacio.style.display = 'block';
-                return;
-            }
-
-            lista.innerHTML = data.alertas.map(a => `
-                <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-1 bg-light bg-opacity-10">
-                    <div>
-                        <span class="fw-bold text-dark">${a.persona}</span>
-                        <br>
-                        <small class="text-muted">ID: ${a.id_usuario}</small>
-                    </div>
-                    <span class="badge bg-danger text-white rounded-pill px-2 py-1">${a.conteo} tardanzas severas</span>
-                </div>
-            `).join('');
-            lista.style.display = 'block';
+            showSuccess('Dispositivo limpiado correctamente. Borrados ' + data.registros_borrados + ' registros.');
+            cancelarLimpiar();
+            fetchStatus();
+            fetchDispositivos();
         })
         .catch(err => {
-            if(loading) loading.style.display = 'none';
-            if(vacio) {
-                vacio.textContent = `Error cargando alertas: ${err.message}`;
-                vacio.className = 'alert alert-danger py-2 mb-0 small';
-                vacio.style.display = 'block';
-            }
+            errObj.textContent = err.message;
+            errObj.style.display = 'block';
         });
 }

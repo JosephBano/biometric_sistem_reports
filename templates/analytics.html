@@ -48,6 +48,24 @@
     </div>
 </div>
 
+<!-- Alertas de Asistencia — carga dinámica, siempre visible -->
+<div class="card border-0 shadow-sm mb-4" style="border-left: 4px solid #ffc107;">
+    <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-warning" style="font-size:1.3rem;">warning</span>
+            <h5 class="fw-bold mb-0">Alertas de Asistencia</h5>
+            <small class="text-muted fw-normal">(Mes actual)</small>
+        </div>
+        <div id="alertas-loading" class="text-center py-3 text-muted">
+            <div class="spinner-border spinner-border-sm text-warning" role="status"></div> Calculando alertas...
+        </div>
+        <div id="alertas-vacio" style="display:none;" class="alert alert-success py-2 mb-0 small">
+            No hay alertas críticas de tardanzas severas este mes. ¡Buen trabajo!
+        </div>
+        <div id="alertas-lista" style="display:none;" class="list-group list-group-flush mb-0"></div>
+    </div>
+</div>
+
 {% if not hallazgos or not hallazgos.exito %}
 <div class="alert alert-info border-0 shadow-sm" role="alert">
     No hay suficientes datos analíticos para el rango y filtros especificados. Intente con un rango más amplio.
@@ -230,4 +248,60 @@
     justify-content: center;
 }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Animar barras de progreso
+    document.querySelectorAll('[data-width]').forEach(el => {
+        el.style.width = el.getAttribute('data-width') + '%';
+    });
+    fetchAlertasTardanzas();
+});
+
+function fetchAlertasTardanzas() {
+    const loading = document.getElementById('alertas-loading');
+    const vacio = document.getElementById('alertas-vacio');
+    const lista = document.getElementById('alertas-lista');
+    if (!loading) return;
+
+    loading.style.display = 'block';
+    vacio.style.display = 'none';
+    lista.style.display = 'none';
+
+    apiCall('/api/alertas/tardanzas-severas')
+        .then(data => {
+            loading.style.display = 'none';
+            if (data.warning) {
+                vacio.textContent = data.warning;
+                vacio.className = 'alert alert-warning py-2 mb-0 small';
+                vacio.style.display = 'block';
+                return;
+            }
+            if (!data.alertas || data.alertas.length === 0) {
+                vacio.style.display = 'block';
+                return;
+            }
+            lista.innerHTML = data.alertas.map(a => `
+                <div class="list-group-item d-flex justify-content-between align-items-center py-2 px-1">
+                    <div>
+                        <span class="fw-bold text-dark">${a.persona}</span>
+                        <br><small class="text-muted">ID: ${a.id_usuario}</small>
+                    </div>
+                    <span class="badge bg-danger text-white rounded-pill px-2 py-1">${a.conteo} tardanzas severas</span>
+                </div>
+            `).join('');
+            lista.style.display = 'block';
+        })
+        .catch(err => {
+            if (loading) loading.style.display = 'none';
+            if (vacio) {
+                vacio.textContent = `Error cargando alertas: ${err.message}`;
+                vacio.className = 'alert alert-danger py-2 mb-0 small';
+                vacio.style.display = 'block';
+            }
+        });
+}
+</script>
 {% endblock %}
