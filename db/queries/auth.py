@@ -93,9 +93,8 @@ def crear_usuario_db(tenant_id: str, email: str, password_hash: str, nombre: str
                 INSERT INTO public.usuarios
                     (tenant_id, email, password_hash, nombre, roles, configuracion)
                 VALUES
-                    (:tenant_id, :email, :password_hash, :nombre,
-                     :roles::text[], :configuracion::jsonb)
-                RETURNING id::text, tenant_id::text, email, nombre,
+                    (:tenant_id, :email, :password_hash, :nombre, :roles, :configuracion)
+                RETURNING CAST(id AS text) AS id, CAST(tenant_id AS text) AS tenant_id, email, nombre,
                           roles, activo, configuracion, creado_en
             """),
             {
@@ -103,7 +102,7 @@ def crear_usuario_db(tenant_id: str, email: str, password_hash: str, nombre: str
                 "email": email,
                 "password_hash": password_hash,
                 "nombre": nombre,
-                "roles": roles_pg,
+                "roles": roles,
                 "configuracion": json.dumps(configuracion),
             },
         ).fetchone()
@@ -121,14 +120,14 @@ def actualizar_roles_db(usuario_id: str, roles: list,
     if configuracion is not None:
         sql = """
             UPDATE public.usuarios
-               SET roles = :roles::text[],
-                   configuracion = :configuracion::jsonb
+               SET roles = CAST(:roles AS text[]),
+                   configuracion = CAST(:configuracion AS jsonb)
              WHERE id = :id
         """
         params = {"id": usuario_id, "roles": roles_pg,
                   "configuracion": json.dumps(configuracion)}
     else:
-        sql = "UPDATE public.usuarios SET roles = :roles::text[] WHERE id = :id"
+        sql = "UPDATE public.usuarios SET roles = CAST(:roles AS text[]) WHERE id = :id"
         params = {"id": usuario_id, "roles": roles_pg}
 
     with get_engine().connect() as conn:
