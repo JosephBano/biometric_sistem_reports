@@ -97,11 +97,12 @@ def sincronizar_dispositivo(dispositivo_id: str, desde: datetime = None, force_h
     # 2. Determinar fecha de partición 
     # Usar incremental si no se fuerza y hay watermark
     if not force_historico and disp.get("watermark_ultima_fecha"):
-        # Agregarle 1 segundo para no repetir el último registro
-        # O dejar que el DO NOTHING del insert se encargue, pero optimizamos
         rango_desde = disp["watermark_ultima_fecha"]
+        # PostgreSQL TIMESTAMPTZ devuelve datetimes timezone-aware;
+        # los drivers trabajan con datetimes naive → normalizar aquí.
+        if rango_desde.tzinfo is not None:
+            rango_desde = rango_desde.replace(tzinfo=None)
     else:
-        # Descarga total o desde fecha_inicio provista
         rango_desde = desde
 
     # 3. Descargar marcaciones
@@ -158,11 +159,7 @@ def sincronizar_con_reintento(dispositivo_id: str, desde: datetime = None, force
             db_module.actualizar_estado_sync_ui(dispositivo_id, "error", mensaje=f"Reintentando en {espera}s")
             time_module.sleep(espera)
         except Exception as e:
-            import traceback
-            tb = traceback.format_exc()
-            import logging
-            logging.getLogger(__name__).error("Sync error:\n%s", tb)
-            db_module.actualizar_estado_sync_ui(dispositivo_id, "error", 0, 0, tb[-400:])
+            db_module.actualizar_estado_sync_ui(dispositivo_id, "error", 0, 0, str(e))
             db_module.registrar_sync(
                 datetime.min, datetime.max, 0, 0, False, str(e), 0, dispositivo_id=dispositivo_id
             )
