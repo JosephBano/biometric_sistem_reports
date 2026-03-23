@@ -214,7 +214,7 @@
                             </div>
                         </div>
                         <div class="card-body p-4 pt-2">
-                            <div class="border rounded-3 p-3 bg-light-subtle" style="min-height: 120px;">
+                            <div class="border rounded-3 p-3 bg-light-subtle" style="max-height: 350px; overflow-y: auto;">
                                 <div id="tard-loading" class="text-center py-3 text-muted">
                                     <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
                                     <span class="ms-2 small">Cargando…</span>
@@ -242,7 +242,7 @@
                             </div>
                         </div>
                         <div class="card-body p-4 pt-2">
-                            <div class="border rounded-3 overflow-hidden" style="max-height: 320px; overflow-y: auto;">
+                            <div class="border rounded-3" style="max-height: 350px; overflow-y: auto;">
                                 <ul id="anomalias-lista" class="list-group list-group-flush w-100"></ul>
                             </div>
                         </div>
@@ -259,7 +259,7 @@
                     <h5 class="fw-bold mb-0">Top Personas en Riesgo de Cumplimiento (Risk Score)</h5>
                 </div>
                 <div class="card-body p-0 px-4 pb-4">
-                    <div class="table-responsive border rounded-3">
+                    <div class="table-responsive border rounded-3" style="max-height: 350px; overflow-y: auto;">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="bg-light">
                                 <tr>
@@ -462,14 +462,16 @@ function renderAlertas(analytics, tardData) {
     const tardLista   = document.getElementById('tard-lista');
     hide('tard-loading');
 
+    const alertasOrdenadas = (tardData.alertas || []).sort((a, b) => (b.conteo || 0) - (a.conteo || 0));
+
     if (tardData.warning) {
         tardVacio.textContent = tardData.warning;
         tardVacio.className = 'alert alert-warning border-0 py-2 mb-0 small text-center';
         show('tard-vacio');
-    } else if (!tardData.alertas || tardData.alertas.length === 0) {
+    } else if (alertasOrdenadas.length === 0) {
         show('tard-vacio');
     } else {
-        tardLista.innerHTML = tardData.alertas.map(a => `
+        tardLista.innerHTML = alertasOrdenadas.map(a => `
             <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
                 <div>
                     <span class="fw-bold text-dark">${a.persona}</span>
@@ -483,7 +485,7 @@ function renderAlertas(analytics, tardData) {
 
     // — Anomalías —
     const anomaliasList = document.getElementById('anomalias-lista');
-    const anomalias = analytics.anomalias || [];
+    const anomalias = (analytics.anomalias || []).sort((a, b) => (b.cantidad || 0) - (a.cantidad || 0));
     if (anomalias.length === 0) {
         anomaliasList.innerHTML = `
             <li class="list-group-item text-center text-muted p-5 border-0 bg-light">
@@ -511,7 +513,7 @@ function renderAlertas(analytics, tardData) {
 
     // — Risk Scores —
     const tbody = document.getElementById('riesgos-tbody');
-    const riesgos = analytics.riesgos || [];
+    const riesgos = (analytics.riesgos || []).sort((a, b) => (b.score || 0) - (a.score || 0));
     if (riesgos.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="text-center py-5 text-muted bg-light border-0">
             <span class="material-symbols-outlined text-muted mb-2" style="font-size:2rem;">verified_user</span><br>
