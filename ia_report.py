@@ -74,26 +74,72 @@ def generar_narrativo(hallazgos: dict, contexto: str = "") -> str:
               logger.warning(f"DeepSeek API falló, usando fallback: {e}")
               
     # --- FALLBACK REGLA-BASE ---
-    text = f"💡 **Reporte de Desempeño Ejecutivo ({hallazgos['rango']['inicio']} — {hallazgos['rango']['fin']})**\n\n"
-    text += f"Durante este período, se ha registrado una asistencia promedio del **{resumen['tasa_asistencia_promedio']}%** sobre la jornada laboral programada. "
-    
-    if resumen['tasa_asistencia_promedio'] >= 90:
-         text += "El comportamiento general se mantiene en niveles satisfactorios y óptimos.\n\n"
-    elif resumen['tasa_asistencia_promedio'] >= 75:
-         text += "Se observa una disminución ligera en la puntualidad que requiere seguimiento preventivo.\n\n"
+    rango_inicio = hallazgos['rango']['inicio']
+    rango_fin = hallazgos['rango']['fin']
+    tasa = resumen['tasa_asistencia_promedio']
+    total = resumen['total_registros']
+    ausentes = resumen['ausentes']
+    tardanzas = resumen['tardanzas']
+    presentes = resumen.get('presentes', total - ausentes - tardanzas)
+
+    text = f"**Reporte de Desempeño — {rango_inicio} al {rango_fin}**\n\n"
+
+    # Párrafo 1: Resumen general con cifras concretas
+    text += f"Durante este período se analizaron **{total} registros diarios**. "
+    text += f"La tasa de asistencia promedio fue del **{tasa}%** "
+    text += f"({presentes} presentes, {ausentes} ausencias, {tardanzas} tardanzas). "
+
+    if tasa >= 90:
+        text += "El equipo mantiene un nivel de asistencia **excelente**.\n\n"
+    elif tasa >= 75:
+        text += "El nivel es **aceptable** pero se detectan oportunidades de mejora en puntualidad.\n\n"
     else:
-         text += "⚠️ **Alerta:** La tasa de asistencia actual está por debajo del estándar mínimo aceptable. Se requiere intervención inmediata.\n\n"
-         
-    if riesgos_altos or anomalias:
-         text += "🚨 **Señales de Alerta Críticas:**\n"
-         if riesgos_altos:
-              text += f"- Se identificaron **{len(riesgos_altos)} personas** en zona de riesgo alto de incumplimiento por acumulación de inasistencias o tardanzas constantes.\n"
-         if anomalias:
-              text += f"- Se han detectado **{len(anomalias)} comportamientos anómalos** estadísticamente (exceso puntual de tardanzas no habituales).\n"
-         text += "\n"
-         
-    text += "📋 **Recomendaciones para Supervisión:**\n"
-    text += "1. Entrevistar a las personas con mayor Risk Score para mitigar ausentismo.\n"
-    text += "2. Monitorear los horarios asignados para descartar desconfiguraciones administrativas.\n"
-    
+        text += "La tasa está **por debajo del estándar mínimo (75%)** y requiere intervención inmediata.\n\n"
+
+    # Párrafo 2: Personas en riesgo alto con nombres
+    if riesgos_altos:
+        nombres_riesgo = [r['nombre'] for r in riesgos_altos[:5]]
+        text += f"**Personas en riesgo alto ({len(riesgos_altos)} detectadas):**\n"
+        for r in riesgos_altos[:5]:
+            grupo_str = f" — {r['grupo']}" if r.get('grupo') else ""
+            text += f"- **{r['nombre']}**{grupo_str}: Score {r['score']}/100\n"
+        if len(riesgos_altos) > 5:
+            text += f"- _(y {len(riesgos_altos) - 5} más)_\n"
+        text += "\n"
+    else:
+        text += "No se identificaron personas en zona de riesgo alto. El equipo muestra un cumplimiento consistente.\n\n"
+
+    # Párrafo 3: Anomalías estadísticas con detalle
+    if anomalias:
+        text += f"**Anomalías estadísticas detectadas ({len(anomalias)}):**\n"
+        for a in anomalias[:5]:
+            text += f"- **{a['nombre']}**: {a['detalle']}\n"
+        if len(anomalias) > 5:
+            text += f"- _(y {len(anomalias) - 5} más)_\n"
+        text += "\n"
+
+    # Párrafo 4: Recomendaciones específicas
+    text += "**Recomendaciones:**\n"
+    if riesgos_altos:
+        nombres_top = ", ".join([r['nombre'] for r in riesgos_altos[:3]])
+        text += f"1. Citar a entrevista de seguimiento a: {nombres_top}.\n"
+    else:
+        text += "1. Mantener el seguimiento habitual — no hay casos críticos urgentes.\n"
+
+    if tardanzas > 0:
+        pct_tard = round(tardanzas / total * 100, 1) if total > 0 else 0
+        text += f"2. Las tardanzas representan el **{pct_tard}%** de los registros. "
+        if pct_tard > 15:
+            text += "Revisar horarios de ingreso y considerar medidas correctivas.\n"
+        else:
+            text += "Nivel aceptable; monitorear preventivamente.\n"
+
+    if ausentes > 0:
+        pct_aus = round(ausentes / total * 100, 1) if total > 0 else 0
+        text += f"3. Las ausencias representan el **{pct_aus}%** del período. "
+        if pct_aus > 10:
+            text += "Verificar justificaciones y evaluar medidas de incentivo a la asistencia.\n"
+        else:
+            text += "Nivel dentro del rango esperado.\n"
+
     return text

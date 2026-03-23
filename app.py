@@ -1368,6 +1368,7 @@ def crear_justificacion():
     recuperable = 1 if data.get('recuperable') else 0
     fecha_recuperacion = str(data.get('fecha_recuperacion', '')).strip() or None
     hora_recuperacion = str(data.get('hora_recuperacion', '')).strip() or None
+    hora_recuperacion_fin = str(data.get('hora_recuperacion_fin', '')).strip() or None
 
     duracion_permitida_min = data.get('duracion_permitida_min')
     if duracion_permitida_min is not None and str(duracion_permitida_min).strip() != "":
@@ -1392,16 +1393,18 @@ def crear_justificacion():
             return jsonify({'error': 'La hora de retorno debe ser posterior a la de salida'}), 400
             
     if recuperable:
-        if not fecha_recuperacion or not hora_recuperacion:
-            return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha y hora de recuperación'}), 400
+        if not fecha_recuperacion or not hora_recuperacion or not hora_recuperacion_fin:
+            return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha, hora inicio y hora fin de recuperación'}), 400
         try:
             f_rec = datetime.strptime(fecha_recuperacion, "%Y-%m-%d").date()
             if f_rec < date.today():
                 return jsonify({'error': 'La fecha de recuperación debe ser futura o el día de hoy'}), 400
         except ValueError:
             return jsonify({'error': 'Formato de fecha_recuperacion inválido. Use YYYY-MM-DD'}), 400
-        if not _HORA_RE.match(hora_recuperacion):
-            return jsonify({'error': 'La hora de recuperación debe tener formato HH:MM'}), 400
+        if not _HORA_RE.match(hora_recuperacion) or not _HORA_RE.match(hora_recuperacion_fin):
+            return jsonify({'error': 'Las horas de recuperación deben tener formato HH:MM'}), 400
+        if hora_recuperacion_fin <= hora_recuperacion:
+            return jsonify({'error': 'La hora de fin de recuperación debe ser posterior a la de inicio'}), 400
 
     if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto', 'salida_anticipada', 'permiso'):
         return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto | salida_anticipada | permiso"}), 400
@@ -1413,7 +1416,8 @@ def crear_justificacion():
             incluye_almuerzo=incluye_almuerzo,
             recuperable=recuperable,
             fecha_recuperacion=fecha_recuperacion,
-            hora_recuperacion=hora_recuperacion
+            hora_recuperacion=hora_recuperacion,
+            hora_recuperacion_fin=hora_recuperacion_fin
         )
         return jsonify({'success': True, 'justificacion': result}), 201
     except Exception as e:
@@ -1458,7 +1462,7 @@ def actualizar_justificacion(jid):
     permitidos = [
         'fecha', 'tipo', 'motivo', 'aprobado_por', 'hora_permitida', 'estado', 
         'duracion_permitida_min', 'hora_retorno_permiso', 
-        'incluye_almuerzo', 'recuperable', 'fecha_recuperacion', 'hora_recuperacion'
+        'incluye_almuerzo', 'recuperable', 'fecha_recuperacion', 'hora_recuperacion', 'hora_recuperacion_fin'
     ]
     for k in permitidos:
         if k in data:
@@ -1483,10 +1487,13 @@ def actualizar_justificacion(jid):
     if rec:
         f_rec = campos.get('fecha_recuperacion', current.get('fecha_recuperacion'))
         h_rec = campos.get('hora_recuperacion', current.get('hora_recuperacion'))
-        if not f_rec or not h_rec:
-             return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha y hora de recuperación'}), 400
-        if not _HORA_RE.match(str(h_rec)):
-             return jsonify({'error': 'La hora de recuperación debe tener formato HH:MM'}), 400
+        h_rec_fin = campos.get('hora_recuperacion_fin', current.get('hora_recuperacion_fin'))
+        if not f_rec or not h_rec or not h_rec_fin:
+             return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha, hora inicio y hora fin de recuperación'}), 400
+        if not _HORA_RE.match(str(h_rec)) or not _HORA_RE.match(str(h_rec_fin)):
+             return jsonify({'error': 'Las horas de recuperación deben tener formato HH:MM'}), 400
+        if str(h_rec) >= str(h_rec_fin):
+             return jsonify({'error': 'La hora de fin de recuperación debe ser posterior a la de inicio'}), 400
 
     try:
         if db_module.actualizar_justificacion_completa(jid, **campos):
@@ -2155,54 +2162,14 @@ def admin_actualizar_categoria(id):
 @app.route('/analytics')
 @require_role('admin', 'superadmin', 'gestor')
 def analytics_vista():
-    fecha_inicio_str = request.args.get('fecha_inicio')
-    fecha_fin_str = request.args.get('fecha_fin')
-    tipo_persona_id = request.args.get('tipo_persona_id')
-    grupo_id = request.args.get('grupo_id')
-    tab_activa = request.args.get('tab', 'resumen')
-    
     hoy = date.today()
-    
-    try:
-        if fecha_inicio_str:
-            fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date()
-        else:
-            if tab_activa == 'alertas':
-                fecha_inicio = hoy.replace(day=1)
-            else:
-                fecha_inicio = hoy - timedelta(days=30)
-                
-        if fecha_fin_str:
-            fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date()
-        else:
-            fecha_fin = hoy
-    except ValueError:
-        return "Formato de fecha inválido", 400
-        
-    import analytics
-    import ia_report
-
-    try:
-        hallazgos = analytics.analizar(
-            tipo_persona_id=tipo_persona_id,
-            grupo_id=grupo_id,
-            fecha_inicio=fecha_inicio,
-            fecha_fin=fecha_fin
-        )
-    except Exception as e:
-        app.logger.error(f"Error en analytics.analizar: {e}", exc_info=True)
-        hallazgos = {"exito": False, "error": f"Error interno al calcular analytics: {e}"}
-
-    narrativo = ia_report.generar_narrativo(hallazgos) if hallazgos.get("exito") else ""
-
+    fecha_inicio = (hoy - timedelta(days=30)).strftime('%Y-%m-%d')
+    fecha_fin = hoy.strftime('%Y-%m-%d')
     grupos = db_module.listar_grupos(activo=True)
     return render_template('analytics.html',
                              active_page='analytics',
-                             fecha_inicio=fecha_inicio.strftime('%Y-%m-%d'),
-                             fecha_fin=fecha_fin.strftime('%Y-%m-%d'),
-                             tab_activa=tab_activa,
-                             hallazgos=hallazgos,
-                             narrativo=narrativo,
+                             fecha_inicio=fecha_inicio,
+                             fecha_fin=fecha_fin,
                              grupos=grupos)
 
 @app.route('/analytics/periodo/<periodo_id>')
@@ -2247,15 +2214,18 @@ def api_analytics():
     fecha_fin_str = request.args.get('fecha_fin')
     tipo_persona_id = request.args.get('tipo_persona_id')
     grupo_id = request.args.get('grupo_id')
-    
+
     try:
         fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date() if fecha_inicio_str else date.today() - timedelta(days=30)
         fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else date.today()
     except ValueError:
-         return jsonify({"error": "Formato de fecha inválido"}), 400
-         
+        return jsonify({"error": "Formato de fecha inválido"}), 400
+
     import analytics
+    import ia_report
     hallazgos = analytics.analizar(tipo_persona_id, grupo_id, None, fecha_inicio, fecha_fin)
+    narrativo = ia_report.generar_narrativo(hallazgos) if hallazgos.get("exito") else ""
+    hallazgos["narrativo"] = narrativo
     return jsonify(hallazgos)
 
 

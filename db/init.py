@@ -31,6 +31,21 @@ def init_db():
 
         # Schema del tenant
         conn.execute(text(get_tenant_ddl(tenant)))
+        # Migración: Agregar hora_recuperacion_fin si no existe (Fase C + Rango)
+        conn.execute(text(f"""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_schema = '{tenant}' 
+                      AND table_name = 'justificaciones' 
+                      AND column_name = 'hora_recuperacion_fin'
+                ) THEN 
+                    ALTER TABLE {tenant}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
+                END IF;
+            END $$;
+        """))
         conn.commit()
 
     # Datos de referencia
