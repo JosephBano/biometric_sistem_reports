@@ -537,7 +537,8 @@ def analizar_por_persona(
             j = justificaciones.get((str(id_usuario), fecha_eval.isoformat(), tipo_obs))
             if j and j.get("recuperable") == 1:
                 # Modificar el motivo para incluir la nota
-                nota = f" [RECUPERABLE – se compensará {j.get('fecha_recuperacion')} {j.get('hora_recuperacion')}]"
+                h_fin = f" a {j.get('hora_recuperacion_fin')}" if j.get('hora_recuperacion_fin') else ""
+                nota = f" [RECUPERABLE – se compensará {j.get('fecha_recuperacion')} {j.get('hora_recuperacion')}{h_fin}]"
                 j = dict(j)  # copiar para no mutar el dict global
                 j["motivo"] = (j.get("motivo") or "") + nota
             return j

@@ -292,6 +292,7 @@ function agregarJustificacion() {
         payload.recuperable = true;
         payload.fecha_recuperacion = document.getElementById('just-fecha_recuperacion').value;
         payload.hora_recuperacion = document.getElementById('just-hora_recuperacion').value;
+        payload.hora_recuperacion_fin = document.getElementById('just-hora_recuperacion_fin').value;
     }
     
     apiCall('/api/justificaciones', {
@@ -311,6 +312,7 @@ function agregarJustificacion() {
         if(document.getElementById('just-recuperable')) document.getElementById('just-recuperable').checked = false;
         if(document.getElementById('just-fecha_recuperacion')) document.getElementById('just-fecha_recuperacion').value = '';
         if(document.getElementById('just-hora_recuperacion')) document.getElementById('just-hora_recuperacion').value = '';
+        if(document.getElementById('just-hora_recuperacion_fin')) document.getElementById('just-hora_recuperacion_fin').value = '';
         if(typeof toggleCamposRecuperacion === 'function') toggleCamposRecuperacion();
         document.getElementById('permiso-neto-info').style.display = 'none';
         cargarJustificaciones();
@@ -396,6 +398,7 @@ function abrirEditarJustificacion(jid) {
                 document.getElementById('just-recuperable').checked = j.recuperable === 1;
                 document.getElementById('just-fecha_recuperacion').value = j.fecha_recuperacion || '';
                 document.getElementById('just-hora_recuperacion').value = j.hora_recuperacion || '';
+                document.getElementById('just-hora_recuperacion_fin').value = j.hora_recuperacion_fin || '';
                 toggleCamposRecuperacion();
             }
 
@@ -446,10 +449,12 @@ function guardarCambiosJustificacion() {
         payload.recuperable = true;
         payload.fecha_recuperacion = document.getElementById('just-fecha_recuperacion').value;
         payload.hora_recuperacion = document.getElementById('just-hora_recuperacion').value;
+        payload.hora_recuperacion_fin = document.getElementById('just-hora_recuperacion_fin').value;
     } else {
         payload.recuperable = false;
         payload.fecha_recuperacion = null;
         payload.hora_recuperacion = null;
+        payload.hora_recuperacion_fin = null;
     }
 
     apiCall(`/api/justificaciones/${justificacionEditandoId}`, {

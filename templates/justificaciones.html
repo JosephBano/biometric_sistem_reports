@@ -81,9 +81,9 @@
                 <option value="ausencia">Ausencia completa</option>
                 <option value="tardanza">Tardanza</option>
                 <option value="almuerzo">Exceso almuerzo</option>
-                <option value="incompleto">Reg. incompleto</option>
+                <option value="incompleto">Registro incompleto</option>
                 <option value="salida_anticipada">Salida anticipada</option>
-                <option value="permiso">Permiso temporal during workday</option>
+                <option value="permiso">Permiso temporal durante jornada</option>
             </select>
         </div>
     </div>
@@ -91,7 +91,7 @@
     <!-- Campos Dinámicos (Fase C + Parte II) -->
     <div id="dynamic-fields-container" class="p-3 bg-light rounded mb-3 border border-secondary border-opacity-25" style="display:none;">
         <div id="df-hora_permitida" style="display:none;">
-            <label class="form-label small text-primary fw-bold">Hora Salida/Tardanza autorizada</label>
+            <label class="form-label small text-primary fw-bold">Hora Entrada/Tardanza autorizada</label>
             <input type="time" class="form-control form-control-sm" id="just-hora_permitida"
                    oninput="actualizarPermisoNeto();">
         </div>
@@ -134,13 +134,17 @@
                 </label>
             </div>
             <div id="campos-recuperacion" style="display:none;" class="row g-2 mt-1 p-2 bg-light rounded border">
-                <div class="col-6">
+                <div class="col-4">
                     <label class="form-label small text-muted">Fecha recuperación</label>
                     <input type="date" class="form-control form-control-sm" id="just-fecha_recuperacion">
                 </div>
-                <div class="col-6">
-                    <label class="form-label small text-muted">Hora recuperación</label>
+                <div class="col-4">
+                    <label class="form-label small text-muted">Hora Inicio</label>
                     <input type="time" class="form-control form-control-sm" id="just-hora_recuperacion">
+                </div>
+                <div class="col-4">
+                    <label class="form-label small text-muted">Hora Fin</label>
+                    <input type="time" class="form-control form-control-sm" id="just-hora_recuperacion_fin">
                 </div>
             </div>
         </div>

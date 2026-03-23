@@ -21,7 +21,8 @@ _SELECT_COLS = """
     TO_CHAR(j.creado_en AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') AS creado_en,
     j.recuperable,
     TO_CHAR(j.fecha_recuperacion, 'YYYY-MM-DD') AS fecha_recuperacion,
-    j.hora_recuperacion::text
+    j.hora_recuperacion::text,
+    j.hora_recuperacion_fin::text
 """
 
 _FROM_JOINS = """
@@ -47,6 +48,7 @@ def insertar_justificacion(
     recuperable: int = 0,
     fecha_recuperacion: str = None,
     hora_recuperacion: str = None,
+    hora_recuperacion_fin: str = None,
 ) -> dict:
     """Inserta o reemplaza una justificación. fecha debe ser 'YYYY-MM-DD'."""
     with get_connection() as conn:
@@ -59,12 +61,12 @@ def insertar_justificacion(
                     persona_id, fecha, tipo, motivo, aprobado_por,
                     hora_permitida, estado, duracion_permitida_min,
                     hora_retorno_permiso, incluye_almuerzo,
-                    recuperable, fecha_recuperacion, hora_recuperacion
+                    recuperable, fecha_recuperacion, hora_recuperacion, hora_recuperacion_fin
                 ) VALUES (
                     CAST(:persona_id AS uuid), :fecha, :tipo, :motivo, :aprobado_por,
                     CAST(:hora_permitida AS time), :estado, :duracion_permitida_min,
                     CAST(:hora_retorno_permiso AS time), :incluye_almuerzo,
-                    :recuperable, CAST(:fecha_recuperacion AS date), CAST(:hora_recuperacion AS time)
+                    :recuperable, CAST(:fecha_recuperacion AS date), CAST(:hora_recuperacion AS time), CAST(:hora_recuperacion_fin AS time)
                 )
                 ON CONFLICT (persona_id, fecha, tipo) DO UPDATE SET
                     motivo                 = EXCLUDED.motivo,
@@ -77,6 +79,7 @@ def insertar_justificacion(
                     recuperable            = EXCLUDED.recuperable,
                     fecha_recuperacion     = EXCLUDED.fecha_recuperacion,
                     hora_recuperacion      = EXCLUDED.hora_recuperacion,
+                    hora_recuperacion_fin  = EXCLUDED.hora_recuperacion_fin,
                     creado_en              = NOW()
             """),
             {
@@ -93,6 +96,7 @@ def insertar_justificacion(
                 "recuperable": bool(recuperable),
                 "fecha_recuperacion": fecha_recuperacion,
                 "hora_recuperacion": hora_recuperacion,
+                "hora_recuperacion_fin": hora_recuperacion_fin,
             },
         )
 
@@ -187,9 +191,10 @@ def actualizar_justificacion_completa(id_justificacion: int, **campos) -> bool:
         "fecha", "tipo", "motivo", "aprobado_por", "hora_permitida", "estado",
         "duracion_permitida_min", "hora_retorno_permiso",
         "incluye_almuerzo", "recuperable", "fecha_recuperacion", "hora_recuperacion",
+        "hora_recuperacion_fin",
     }
     # Tipos que necesitan cast en PostgreSQL
-    time_cols = {"hora_permitida", "hora_retorno_permiso", "hora_recuperacion"}
+    time_cols = {"hora_permitida", "hora_retorno_permiso", "hora_recuperacion", "hora_recuperacion_fin"}
     date_cols = {"fecha", "fecha_recuperacion"}
 
     set_parts = []

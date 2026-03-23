@@ -331,6 +331,7 @@ CREATE TABLE IF NOT EXISTS justificaciones (
     recuperable            BOOLEAN     NOT NULL DEFAULT false,
     fecha_recuperacion     DATE,
     hora_recuperacion      TIME,
+    hora_recuperacion_fin  TIME,
     creado_en              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (persona_id, fecha, tipo)
 );
