@@ -18,7 +18,7 @@ try:
     
     # Inserción
     res = insertar_justificacion(
-        id_usuario=str(p['nombre']), 
+        id_usuario=str(p['id']),
         nombre=p['nombre'],
         fecha='2026-05-01', 
         tipo='tardanza',
