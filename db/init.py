@@ -31,6 +31,21 @@ def init_db():
 
         # Schema del tenant
         conn.execute(text(get_tenant_ddl(tenant)))
+        # Migración: Agregar hora_recuperacion_fin si no existe (Fase C + Rango)
+        conn.execute(text(f"""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (
+                    SELECT 1 
+                    FROM information_schema.columns 
+                    WHERE table_schema = '{tenant}' 
+                      AND table_name = 'justificaciones' 
+                      AND column_name = 'hora_recuperacion_fin'
+                ) THEN 
+                    ALTER TABLE {tenant}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
+                END IF;
+            END $$;
+        """))
         conn.commit()
 
     # Datos de referencia
@@ -58,6 +73,32 @@ def _seed_datos_iniciales(tenant: str):
             {"slug": tenant, "nombre": nombre_inst, "nombre_corto": nombre_inst[:20]},
         )
         conn.commit()
+
+        # SUPERADMIN INICIAL desde .env
+        sa_email = os.environ.get("INITIAL_SUPERADMIN_EMAIL")
+        sa_pass = os.environ.get("INITIAL_SUPERADMIN_PASSWORD")
+        if sa_email and sa_pass:
+            from auth import hash_password
+            import json
+            # Verificar si ya existe un usuario
+            count = conn.execute(text("SELECT count(*) FROM public.usuarios")).scalar()
+            if count == 0:
+                 # Obtener id del tenant para vincularlo
+                 t_id = conn.execute(text("SELECT id FROM public.tenants WHERE slug = :slug"), {"slug": tenant}).scalar()
+                 log.info(f"Creando Superadmin inicial ({sa_email})...")
+                 conn.execute(
+                     text("""
+                         INSERT INTO public.usuarios (tenant_id, email, password_hash, nombre, roles, configuracion)
+                         VALUES (:t_id, :email, :pass_hash, :nombre, '{superadmin,admin}', '{}')
+                     """),
+                     {
+                         "t_id": t_id,
+                         "email": sa_email.strip().lower(),
+                         "pass_hash": hash_password(sa_pass),
+                         "nombre": "Administrador Inicial"
+                     }
+                 )
+                 conn.commit()
 
     # Datos dentro del schema del tenant
     with get_connection(tenant) as conn:

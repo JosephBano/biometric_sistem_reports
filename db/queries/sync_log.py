@@ -13,10 +13,12 @@ def registrar_sync(
     exito: bool,
     error: str = None,
     registros_en_dispositivo: int = 0,
+    dispositivo_id: str = None,
 ):
     """Registra el resultado de una sincronización."""
     with get_connection() as conn:
-        dispositivo_id = _get_dispositivo_id(conn)
+        if not dispositivo_id:
+            dispositivo_id = _get_dispositivo_id(conn)
         conn.execute(
             text("""
                 INSERT INTO sync_log (
@@ -42,3 +44,4 @@ def registrar_sync(
                 "error": error,
             },
         )
+        conn.commit()

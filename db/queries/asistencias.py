@@ -12,7 +12,7 @@ from db.connection import get_connection
 from db.queries.personas import resolver_persona_id, _get_dispositivo_id
 
 
-def insertar_asistencias(registros: list[dict]) -> int:
+def insertar_asistencias(registros: list[dict], dispositivo_id: str = None) -> int:
     """
     Inserta registros ignorando duplicados (UNIQUE persona_id + fecha_hora).
     Retorna la cantidad de filas realmente insertadas.
@@ -25,19 +25,38 @@ def insertar_asistencias(registros: list[dict]) -> int:
 
     count = 0
     with get_connection() as conn:
-        dispositivo_id = _get_dispositivo_id(conn)
+        if not dispositivo_id:
+            dispositivo_id = _get_dispositivo_id(conn)
         for r in registros:
             id_usuario = str(r["id_usuario"])
             nombre = r.get("nombre", id_usuario)
 
             persona_id, _ = resolver_persona_id(conn, id_usuario, nombre, dispositivo_id)
 
+            # Resolver periodo_vigencia_id activo para la fecha
+            fecha_dt = r["fecha_hora"]
+            fecha_solo = fecha_dt.strftime("%Y-%m-%d") if hasattr(fecha_dt, "strftime") else str(fecha_dt)[:10]
+
+            periodo_row = conn.execute(
+                text("""
+                    SELECT id FROM periodos_vigencia
+                    WHERE persona_id = CAST(:persona_id AS uuid)
+                      AND estado = 'activo'
+                      AND fecha_inicio <= CAST(:fecha AS date)
+                      AND (fecha_fin IS NULL OR fecha_fin >= CAST(:fecha AS date))
+                    LIMIT 1
+                """),
+                {"persona_id": persona_id, "fecha": fecha_solo},
+            ).fetchone()
+            periodo_id = str(periodo_row[0]) if periodo_row else None
+
             result = conn.execute(
                 text("""
                     INSERT INTO asistencias
-                        (persona_id, fecha_hora, punch_raw, tipo, fuente, dispositivo_id)
+                        (persona_id, periodo_vigencia_id, fecha_hora, punch_raw, tipo, fuente, dispositivo_id)
                     VALUES (
                         CAST(:persona_id AS uuid),
+                        CAST(:periodo_id AS uuid),
                         CAST(:fecha_hora AS timestamptz),
                         :punch_raw,
                         :tipo,
@@ -48,6 +67,7 @@ def insertar_asistencias(registros: list[dict]) -> int:
                 """),
                 {
                     "persona_id": persona_id,
+                    "periodo_id": periodo_id,
                     "fecha_hora": r["fecha_hora"],
                     "punch_raw": r.get("punch_raw"),
                     "tipo": r["tipo"],
@@ -56,6 +76,7 @@ def insertar_asistencias(registros: list[dict]) -> int:
                 },
             )
             count += result.rowcount
+        conn.commit()
 
     return count
 

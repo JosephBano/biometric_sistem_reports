@@ -24,3 +24,12 @@ alembic>=1.13
 
 # Cifrado (contraseñas de dispositivos ZK en BD)
 cryptography>=42.0
+
+# Autenticación — Fase 2
+bcrypt>=4.1
+flask-limiter>=3.5
+
+# Analytics & IA — Fase 5
+pandas>=2.2
+numpy>=1.26
+requests>=2.31

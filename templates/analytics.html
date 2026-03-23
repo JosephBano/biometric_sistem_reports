@@ -1,0 +1,542 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Analytics &amp; Inteligencia de Asistencia</h3>
+        <p class="text-muted">Análisis estadístico, detección de anomalías y visualizaciones de comportamiento continuo.</p>
+    </div>
+</div>
+
+<!-- Pestañas de Navegación -->
+<ul class="nav nav-pills mb-4 gap-2" id="analyticsTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-bold px-4 py-2 custom-tab shadow-sm" id="resumen-tab"
+            data-bs-toggle="tab" data-bs-target="#resumen" type="button" role="tab">
+            <span class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined fs-5">monitoring</span>
+                Resumen Analítico
+            </span>
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="alertas-tab"
+            data-bs-toggle="tab" data-bs-target="#alertas" type="button" role="tab">
+            <span class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined fs-5">warning</span>
+                Gestión de Alertas
+            </span>
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="analyticsTabsContent">
+
+    <!-- ===== TAB RESUMEN ===== -->
+    <div class="tab-pane fade show active" id="resumen" role="tabpanel">
+
+        <!-- Filtros -->
+        <div class="card border-0 shadow-sm mb-4 analytics-card">
+            <div class="card-body p-4">
+                <form class="row g-4 align-items-end" id="analyticsForm">
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Rango de Fecha</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control bg-light border-0" id="r_fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio }}">
+                            <span class="input-group-text border-0 bg-light text-muted">a</span>
+                            <input type="date" class="form-control bg-light border-0" id="r_fecha_fin" name="fecha_fin" value="{{ fecha_fin }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo de Persona</label>
+                        <select class="form-select bg-light border-0" id="r_tipo_persona_id" name="tipo_persona_id">
+                            <option value="">Todos los tipos</option>
+                            {% for t in tenant_tipos %}
+                            <option value="{{ t.id }}">{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
+                        <select class="form-select bg-light border-0" id="r_grupo_id" name="grupo_id">
+                            <option value="">Todos los grupos</option>
+                            {% for g in grupos %}
+                            <option value="{{ g.id }}">{{ g.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex">
+                        <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm">
+                            <span class="material-symbols-outlined pb-1">auto_graph</span>
+                            Analizar Datos
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Estado vacío inicial -->
+        <div id="resumen-empty" class="text-center py-5 text-muted">
+            <span class="material-symbols-outlined mb-3 d-block" style="font-size: 3rem; color: #c0c8d8;">monitoring</span>
+            <p class="mb-0 fw-semibold">Selecciona un rango de fechas y pulsa <strong>Analizar Datos</strong> para ver el reporte.</p>
+        </div>
+
+        <!-- Loading overlay -->
+        <div id="resumen-loading" style="display:none;" class="text-center py-5">
+            <div class="d-inline-flex flex-column align-items-center gap-3 bg-white rounded-4 shadow px-5 py-4">
+                <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;" role="status"></div>
+                <span class="fw-semibold text-secondary">Calculando análisis de asistencia…</span>
+                <small class="text-muted">Esto puede tardar unos segundos</small>
+            </div>
+        </div>
+
+        <!-- Resultados (ocultos hasta que lleguen datos) -->
+        <div id="resumen-results" style="display:none;">
+
+            <!-- KPIs -->
+            <div class="row g-4 mb-4 mt-1">
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100 analytics-card">
+                        <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                            <span class="material-symbols-outlined text-success mb-2" style="font-size: 2rem;">task_alt</span>
+                            <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Asistencia Promedio</h6>
+                            <h2 class="fw-bold text-success mb-1 display-5" id="kpi-tasa">—</h2>
+                            <div class="progress mt-3" style="height: 6px; border-radius: 10px;">
+                                <div class="progress-bar bg-success" id="kpi-tasa-bar" style="width:0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100 analytics-card">
+                        <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                            <span class="material-symbols-outlined text-primary mb-2" style="font-size: 2rem;">database</span>
+                            <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Total Registros</h6>
+                            <h2 class="fw-bold text-primary mb-1 display-5" id="kpi-total">—</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100 analytics-card">
+                        <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                            <span class="material-symbols-outlined text-danger mb-2" style="font-size: 2rem;">person_off</span>
+                            <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Ausencias</h6>
+                            <h2 class="fw-bold text-danger mb-1 display-5" id="kpi-ausentes">—</h2>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card border-0 shadow-sm h-100 analytics-card">
+                        <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
+                            <span class="material-symbols-outlined text-warning mb-2" style="font-size: 2rem;">schedule</span>
+                            <h6 class="text-muted small text-uppercase fw-bold letter-spacing-1">Tardanzas</h6>
+                            <h2 class="fw-bold text-warning mb-1 display-5" id="kpi-tardanzas">—</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Narrativo IA -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                    <div class="icon-shape bg-purple-soft text-purple rounded-circle p-2 d-flex">
+                        <span class="material-symbols-outlined">psychology</span>
+                    </div>
+                    <h5 class="fw-bold mb-0">Reporte Narrativo Ejecutivo</h5>
+                </div>
+                <div class="card-body p-4 pt-2">
+                    <div class="bg-light-subtle p-4 rounded-3 border">
+                        <div id="narrativo-content" class="text-secondary narrative-body"></div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /resumen-results -->
+
+        <!-- Error -->
+        <div id="resumen-error" style="display:none;" class="alert alert-danger border-0 shadow-sm" role="alert"></div>
+
+    </div><!-- /tab resumen -->
+
+
+    <!-- ===== TAB ALERTAS ===== -->
+    <div class="tab-pane fade" id="alertas" role="tabpanel">
+
+        <!-- Filtros alertas -->
+        <div class="card border-0 shadow-sm mb-4 analytics-card">
+            <div class="card-body p-4">
+                <form class="row g-4 align-items-end" id="alertasForm">
+                    <div class="col-md-4">
+                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Evaluar Período</label>
+                        <div class="input-group">
+                            <input type="date" class="form-control bg-light border-0" id="a_fecha_inicio" name="fecha_inicio" value="{{ fecha_inicio }}">
+                            <span class="input-group-text border-0 bg-light text-muted">a</span>
+                            <input type="date" class="form-control bg-light border-0" id="a_fecha_fin" name="fecha_fin" value="{{ fecha_fin }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex">
+                        <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2 fw-bold shadow-sm">
+                            <span class="material-symbols-outlined pb-1">analytics</span>
+                            Evaluar Alertas
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Estado vacío alertas -->
+        <div id="alertas-empty" class="text-center py-5 text-muted">
+            <span class="material-symbols-outlined mb-3 d-block" style="font-size: 3rem; color: #c0c8d8;">warning</span>
+            <p class="mb-0 fw-semibold">Selecciona un período y pulsa <strong>Evaluar Alertas</strong>.</p>
+        </div>
+
+        <!-- Loading alertas -->
+        <div id="alertas-loading" style="display:none;" class="text-center py-5">
+            <div class="d-inline-flex flex-column align-items-center gap-3 bg-white rounded-4 shadow px-5 py-4">
+                <div class="spinner-border text-warning" style="width:2.5rem;height:2.5rem;" role="status"></div>
+                <span class="fw-semibold text-secondary">Evaluando alertas y riesgos…</span>
+                <small class="text-muted">Esto puede tardar unos segundos</small>
+            </div>
+        </div>
+
+        <!-- Resultados alertas -->
+        <div id="alertas-results" style="display:none;">
+            <div class="row g-4 mb-4">
+                <!-- Tardanzas severas -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                            <div class="icon-shape bg-warning-soft text-warning rounded-circle p-2 d-flex">
+                                <span class="material-symbols-outlined">notification_important</span>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0">Tardanzas Severas</h5>
+                                <small class="text-muted fw-normal">3 o más tardanzas en el período</small>
+                            </div>
+                        </div>
+                        <div class="card-body p-4 pt-2">
+                            <div class="border rounded-3 p-3 bg-light-subtle" style="max-height: 350px; overflow-y: auto;">
+                                <div id="tard-loading" class="text-center py-3 text-muted">
+                                    <div class="spinner-border spinner-border-sm text-warning" role="status"></div>
+                                    <span class="ms-2 small">Cargando…</span>
+                                </div>
+                                <div id="tard-vacio" style="display:none;" class="alert alert-success border-0 py-2 mb-0 small text-center">
+                                    <span class="material-symbols-outlined d-block mx-auto text-success mb-1" style="font-size:1.8rem;">check_circle</span>
+                                    No hay alertas críticas de tardanzas severas.
+                                </div>
+                                <div id="tard-lista" style="display:none;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Anomalías estadísticas -->
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-header bg-transparent p-4 pb-2 border-0 d-flex align-items-center gap-3">
+                            <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
+                                <span class="material-symbols-outlined">warning</span>
+                            </div>
+                            <div>
+                                <h5 class="fw-bold mb-0">Anomalías Estadísticas</h5>
+                                <small class="text-muted fw-normal">Desviación estándar de asistencia</small>
+                            </div>
+                        </div>
+                        <div class="card-body p-4 pt-2">
+                            <div class="border rounded-3" style="max-height: 350px; overflow-y: auto;">
+                                <ul id="anomalias-lista" class="list-group list-group-flush w-100"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk Scores -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-transparent p-4 border-0 pb-3 d-flex align-items-center gap-3">
+                    <div class="icon-shape bg-danger-soft text-danger rounded-circle p-2 d-flex">
+                        <span class="material-symbols-outlined">monitor_heart</span>
+                    </div>
+                    <h5 class="fw-bold mb-0">Top Personas en Riesgo de Cumplimiento (Risk Score)</h5>
+                </div>
+                <div class="card-body p-0 px-4 pb-4">
+                    <div class="table-responsive border rounded-3" style="max-height: 350px; overflow-y: auto;">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="py-3 px-4 border-bottom-0 text-muted small text-uppercase letter-spacing-1">Persona</th>
+                                    <th class="py-3 px-4 border-bottom-0 text-muted small text-uppercase letter-spacing-1">Grupo</th>
+                                    <th class="py-3 px-4 border-bottom-0 text-muted small text-uppercase letter-spacing-1">Risk Score (0–100)</th>
+                                    <th class="py-3 px-4 border-bottom-0 text-muted small text-uppercase letter-spacing-1 text-end">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody id="riesgos-tbody">
+                                <tr><td colspan="4" class="text-center py-4 text-muted">Sin datos</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div><!-- /alertas-results -->
+
+        <!-- Error alertas -->
+        <div id="alertas-error" style="display:none;" class="alert alert-danger border-0 shadow-sm" role="alert"></div>
+
+    </div><!-- /tab alertas -->
+
+</div><!-- /tab-content -->
+
+<style>
+    .text-purple { color: #8a2be2; }
+    .bg-purple-soft { background-color: rgba(138,43,226,0.1); }
+    .bg-danger-soft { background-color: rgba(220,53,69,0.1); }
+    .bg-warning-soft { background-color: rgba(255,193,7,0.15); }
+    .text-warning { color: #d39e00 !important; }
+    .bg-success-soft { background-color: rgba(25,135,84,0.1); }
+    .custom-tab {
+        background-color: transparent !important;
+        color: #6c757d !important;
+        border: none;
+        border-radius: 10px !important;
+        transition: all 0.2s ease-in-out;
+    }
+    .custom-tab.active {
+        background-color: #fff !important;
+        color: #0d6efd !important;
+        box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,.075) !important;
+    }
+    .analytics-card {
+        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    }
+    .analytics-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important;
+    }
+    .letter-spacing-1 { letter-spacing: 1px; }
+    .icon-shape {
+        width: 48px; height: 48px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    /* Narrative rendered HTML */
+    .narrative-body p { margin-bottom: .75rem; line-height: 1.7; }
+    .narrative-body ul { padding-left: 1.25rem; margin-bottom: .75rem; }
+    .narrative-body li { margin-bottom: .2rem; }
+    .narrative-body h4 { font-size: 1rem; font-weight: 700; margin: 1rem 0 .4rem; }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Markdown mini-parser ─────────────────────────────────────────────────────
+function renderMarkdown(text) {
+    if (!text) return '';
+    // Escape HTML primero
+    text = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Negrillas **texto**
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Cursivas _texto_
+    text = text.replace(/_(.*?)_/g, '<em>$1</em>');
+    // Encabezados de línea (línea que empieza con **)
+    // Separar en bloques por párrafo
+    const lines = text.split('\n');
+    let html = '';
+    let inList = false;
+    for (let line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- ') || trimmed.match(/^\d+\. /)) {
+            if (!inList) { html += '<ul>'; inList = true; }
+            html += `<li>${trimmed.replace(/^-\s+/, '').replace(/^\d+\.\s+/, '')}</li>`;
+        } else {
+            if (inList) { html += '</ul>'; inList = false; }
+            if (trimmed === '') {
+                html += '';
+            } else {
+                html += `<p>${trimmed}</p>`;
+            }
+        }
+    }
+    if (inList) html += '</ul>';
+    return html;
+}
+
+// ── Helpers UI ───────────────────────────────────────────────────────────────
+function show(id) { const el = document.getElementById(id); if (el) el.style.display = ''; }
+function hide(id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }
+
+function semaforoBadge(sem) {
+    const map = {
+        'Rojo':     ['bg-danger-soft text-danger',  'error',        'Rojo'],
+        'Amarillo': ['bg-warning-soft text-warning', 'warning',      'Amarillo'],
+        'Verde':    ['bg-success-soft text-success', 'check_circle', 'Verde'],
+    };
+    const [cls, icon, label] = map[sem] || ['bg-secondary text-white','info', sem];
+    return `<span class="badge rounded-pill px-3 py-2 ${cls}">
+        <span class="d-flex align-items-center gap-1">
+            <span class="material-symbols-outlined" style="font-size:14px;">${icon}</span>${label}
+        </span></span>`;
+}
+
+// ── Analizar Datos (tab Resumen) ─────────────────────────────────────────────
+document.getElementById('analyticsForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const fi = document.getElementById('r_fecha_inicio').value;
+    const ff = document.getElementById('r_fecha_fin').value;
+    const tp = document.getElementById('r_tipo_persona_id').value;
+    const gr = document.getElementById('r_grupo_id').value;
+
+    hide('resumen-empty');
+    hide('resumen-results');
+    hide('resumen-error');
+    show('resumen-loading');
+
+    const qs = new URLSearchParams({ fecha_inicio: fi, fecha_fin: ff });
+    if (tp) qs.set('tipo_persona_id', tp);
+    if (gr) qs.set('grupo_id', gr);
+
+    apiCall('/api/analytics?' + qs.toString())
+        .then(data => {
+            hide('resumen-loading');
+            if (!data.exito) {
+                document.getElementById('resumen-error').textContent =
+                    data.error || 'No hay suficientes datos para el rango especificado.';
+                show('resumen-error');
+                return;
+            }
+            renderResumen(data);
+            show('resumen-results');
+        })
+        .catch(err => {
+            hide('resumen-loading');
+            document.getElementById('resumen-error').textContent = `Error: ${err.message}`;
+            show('resumen-error');
+        });
+});
+
+function renderResumen(data) {
+    const r = data.resumen_general;
+    document.getElementById('kpi-tasa').textContent = r.tasa_asistencia_promedio + '%';
+    document.getElementById('kpi-tasa-bar').style.width = r.tasa_asistencia_promedio + '%';
+    document.getElementById('kpi-total').textContent = r.total_registros;
+    document.getElementById('kpi-ausentes').textContent = r.ausentes;
+    document.getElementById('kpi-tardanzas').textContent = r.tardanzas;
+
+    // Narrativo
+    const nc = document.getElementById('narrativo-content');
+    nc.innerHTML = data.narrativo ? renderMarkdown(data.narrativo)
+        : '<p class="text-muted fst-italic">No se generó narrativo para este período.</p>';
+}
+
+// ── Evaluar Alertas (tab Alertas) ────────────────────────────────────────────
+document.getElementById('alertasForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const fi = document.getElementById('a_fecha_inicio').value;
+    const ff = document.getElementById('a_fecha_fin').value;
+
+    hide('alertas-empty');
+    hide('alertas-results');
+    hide('alertas-error');
+    show('alertas-loading');
+
+    const qs = new URLSearchParams({ fecha_inicio: fi, fecha_fin: ff });
+
+    // Fetch analytics (anomalias + riesgos) y tardanzas severas en paralelo
+    Promise.all([
+        apiCall('/api/analytics?' + qs.toString()),
+        apiCall('/api/alertas/tardanzas-severas?' + qs.toString())
+    ])
+    .then(([analytics, tardanzas]) => {
+        hide('alertas-loading');
+        renderAlertas(analytics, tardanzas);
+        show('alertas-results');
+    })
+    .catch(err => {
+        hide('alertas-loading');
+        document.getElementById('alertas-error').textContent = `Error: ${err.message}`;
+        show('alertas-error');
+    });
+});
+
+function renderAlertas(analytics, tardData) {
+    // — Tardanzas severas —
+    const tardLoading = document.getElementById('tard-loading');
+    const tardVacio   = document.getElementById('tard-vacio');
+    const tardLista   = document.getElementById('tard-lista');
+    hide('tard-loading');
+
+    const alertasOrdenadas = (tardData.alertas || []).sort((a, b) => (b.conteo || 0) - (a.conteo || 0));
+
+    if (tardData.warning) {
+        tardVacio.textContent = tardData.warning;
+        tardVacio.className = 'alert alert-warning border-0 py-2 mb-0 small text-center';
+        show('tard-vacio');
+    } else if (alertasOrdenadas.length === 0) {
+        show('tard-vacio');
+    } else {
+        tardLista.innerHTML = alertasOrdenadas.map(a => `
+            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                <div>
+                    <span class="fw-bold text-dark">${a.persona}</span>
+                    <small class="text-muted d-block">ID: ${a.id_usuario}</small>
+                </div>
+                <span class="badge bg-danger text-white rounded-pill px-2 py-1">${a.conteo} tardanzas severas</span>
+            </div>
+        `).join('');
+        show('tard-lista');
+    }
+
+    // — Anomalías —
+    const anomaliasList = document.getElementById('anomalias-lista');
+    const anomalias = (analytics.anomalias || []).sort((a, b) => (b.cantidad || 0) - (a.cantidad || 0));
+    if (anomalias.length === 0) {
+        anomaliasList.innerHTML = `
+            <li class="list-group-item text-center text-muted p-5 border-0 bg-light">
+                <span class="material-symbols-outlined text-muted mb-2 shadow-sm p-3 rounded-circle bg-white"
+                    style="font-size:2rem;">check_circle</span><br>
+                No se detectaron anomalías severas en el rango evaluado.
+            </li>`;
+    } else {
+        anomaliasList.innerHTML = anomalias.map(a => `
+            <li class="list-group-item d-flex justify-content-between align-items-center p-3 border-bottom-0 border-top">
+                <div class="ms-2 me-auto">
+                    <div class="fw-bold text-dark">${a.nombre}</div>
+                    <small class="text-muted d-block mb-1">${a.tipo}</small>
+                    <div class="small fw-medium text-danger mt-1 bg-danger-soft px-2 py-1 rounded d-inline-block">${a.detalle}</div>
+                </div>
+                ${a.cantidad ? `
+                <div class="ms-3 text-center">
+                    <span class="badge bg-danger rounded-pill fs-6 px-3 py-2 shadow-sm">${a.cantidad}</span>
+                    <small class="d-block text-muted mt-1" style="font-size:.65rem;text-transform:uppercase;">
+                        ${(a.tipo && a.tipo.includes('Ausencia')) ? 'Faltas' : 'Tardanzas'}
+                    </small>
+                </div>` : ''}
+            </li>`).join('');
+    }
+
+    // — Risk Scores —
+    const tbody = document.getElementById('riesgos-tbody');
+    const riesgos = (analytics.riesgos || []).sort((a, b) => (b.score || 0) - (a.score || 0));
+    if (riesgos.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center py-5 text-muted bg-light border-0">
+            <span class="material-symbols-outlined text-muted mb-2" style="font-size:2rem;">verified_user</span><br>
+            No hay puntuaciones de riesgo críticas.</td></tr>`;
+    } else {
+        tbody.innerHTML = riesgos.map(r => {
+            const colorCls = r.score >= 70 ? 'text-danger' : (r.score >= 40 ? 'text-warning' : 'text-success');
+            const barCls   = r.score >= 70 ? 'bg-danger'   : (r.score >= 40 ? 'bg-warning'   : 'bg-success');
+            return `<tr>
+                <td class="px-4 py-3"><div class="fw-bold text-dark">${r.nombre}</div></td>
+                <td class="px-4 py-3 text-secondary">${r.grupo || '—'}</td>
+                <td class="px-4 py-3" style="width:30%">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="fw-bold ${colorCls}" style="min-width:25px">${r.score}</span>
+                        <div class="progress w-100" style="height:8px;border-radius:10px;">
+                            <div class="progress-bar ${barCls}" style="width:${r.score}%"></div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-end">${semaforoBadge(r.semaforo)}</td>
+            </tr>`;
+        }).join('');
+    }
+}
+</script>
+{% endblock %}

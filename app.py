@@ -19,16 +19,13 @@ import re
 import csv
 import io
 import sys
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.application import MIMEApplication
+import secrets
+from email_utils import enviar_correo
 import threading
 import time
-from datetime import datetime, date
-from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for, Response
+from datetime import datetime, date, timedelta
+from flask import Flask, render_template, request, jsonify, send_file, session, redirect, url_for, Response, g
 from werkzeug.utils import secure_filename
-from werkzeug.security import check_password_hash
 from script import (
     DEFAULT_CONFIG, filtrar_excluidos, deduplicar,
     analizar_dia, analizar_por_persona, generar_pdf, generar_pdf_persona,
@@ -37,12 +34,32 @@ from collections import defaultdict
 import db as db_module
 import sync as sync_module
 import horarios as horarios_module
+import auth as auth_module
+from decorators import require_role, require_tipo_persona
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
+app.config['PERMANENT_SESSION_LIFETIME'] = int(os.getenv("SESSION_LIFETIME_HOURS", "8")) * 3600
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
-APP_PASSWORD_HASH = os.getenv("APP_PASSWORD_HASH", "").strip()
-APP_MAINTENANCE_PASSWORD_HASH = os.getenv("APP_MAINTENANCE_PASSWORD_HASH", "").strip()
+# Rate limiter (memoria; migrable a Redis sin cambios en la lógica)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri="memory://",
+)
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    if request.path.startswith("/api/"):
+         return jsonify({"error": "Demasiadas solicitudes. Espere 15 minutos."}), 429
+    from flask import flash
+    flash("Demasiados intentos. Espere 15 minutos.", "danger")
+    return redirect(url_for('login'))
 
 UPLOAD_FOLDER  = os.getenv("UPLOAD_FOLDER",  "data/uploads")
 REPORTS_FOLDER = os.getenv("REPORTS_FOLDER", "data/reports")
@@ -59,7 +76,6 @@ def inject_system_info():
     return dict(
         nombre_sistema=app.config['NOMBRE_SISTEMA'],
         nombre_institucion=app.config['NOMBRE_INSTITUCION'],
-        auth_enabled=bool(APP_PASSWORD_HASH)
     )
 
 try:
@@ -95,49 +111,210 @@ threading.Thread(target=_cleanup_temp_files, daemon=True).start()
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# CSRF
+# ══════════════════════════════════════════════════════════════════════════
+
+def generate_csrf_token() -> str:
+    """Genera (o recupera) el token CSRF de la sesión actual."""
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+def validate_csrf() -> bool:
+    """Valida el token CSRF en POST requests no-API."""
+    if request.path.startswith("/api/"):
+        return True   # Las API usan JSON, no formularios
+    token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token", "")
+    return bool(token and token == session.get("csrf_token"))
+
+
+app.jinja_env.globals["csrf_token"] = generate_csrf_token
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # AUTENTICACIÓN
 # ══════════════════════════════════════════════════════════════════════════
 
+_ENDPOINTS_PUBLICOS = {"login", "static"}
+
+
 @app.before_request
-def _require_auth():
-    if not APP_PASSWORD_HASH:          # auth deshabilitada (modo dev)
-        return None
-    if request.endpoint in ("login", "logout", "static"):
-        return None
-    if not session.get("autenticado"):
-        # If it's an AJAX/fetch request (like API routes) return 401
-        # otherwise redirect to login page
-        if (request.headers.get("Accept") and "application/json" in request.headers.get("Accept")) or request.path.startswith("/api/") or request.endpoint not in ["dashboard", "configuracion_vista", "justificaciones_vista", "reportes_vista", "descargar"]:
+def autenticar_request():
+    # Endpoints públicos (login, static) no requieren sesión
+    if request.endpoint in _ENDPOINTS_PUBLICOS or request.endpoint is None:
+        return
+
+    # Sin sesión → no autenticado
+    if "usuario_id" not in session:
+        if request.path.startswith("/api/") or \
+                "application/json" in request.headers.get("Accept", ""):
             return jsonify({"error": "No autenticado"}), 401
         return redirect(url_for("login"))
 
+    # Validar CSRF para todos los POST que no sean API
+    if request.method == "POST" and not request.path.startswith("/api/"):
+        if not validate_csrf():
+            return jsonify({"error": "Token CSRF inválido"}), 403
+
+    # Cargar contexto del usuario
+    g.usuario_id    = session["usuario_id"]
+    g.tenant_schema = session.get("tenant_schema",
+                                  os.environ.get("TENANT_DEFAULT", "istpet"))
+    g.roles         = session.get("roles", [])
+    g.nombre        = session.get("nombre", "")
+    g.tenant_id     = session.get("tenant_id")
+
+    # 4. Validar si el tenant está activo antes de continuar
+    if g.tenant_schema != 'public':
+        try:
+            tenant_info = db_module.get_tenant_by_slug(g.tenant_schema)
+            if not tenant_info:
+                 # El tenant fue eliminado o no existe
+                 session.clear()
+                 return jsonify({"error": "Tenant no encontrado"}), 404 if request.path.startswith("/api/") else redirect(url_for("login"))
+
+            if tenant_info and not tenant_info.get("activo", True):
+                 # El tenant está inactivo
+                 session.clear()
+                 if request.path.startswith("/api/"):
+                     return jsonify({"error": "Cuenta de institución suspendida"}), 403
+                 return render_template("login.html", error="Acceso suspendido. Contacte a soporte."), 403
+
+            # Asignar a variable global
+            g.tenant = tenant_info
+        except Exception as e:
+            # Fallback en caso de problemas con la DB
+            g.tenant = {"nombre": "Desconocido", "activo": True, "slug": g.tenant_schema}
+
+    # Cargar tipos de persona del tenant (capacidad para @require_tipo_persona)
+    try:
+        g.tenant_tipos = db_module.get_tipos_persona(g.tenant_schema)
+    except Exception:
+        g.tenant_tipos = []
+
+
+# Helper dinámico para templates Jinja2 y lógica interna
+def tenant_tiene_tipo(nombre_tipo: str) -> bool:
+    """Helper para validar si un tipo de persona está disponible en el tenant."""
+    tipos = getattr(g, "tenant_tipos", []) or []
+    return any(t["nombre"].lower() == nombre_tipo.lower() for t in tipos)
+
+
+@app.context_processor
+def inject_user_info():
+    """Inyecta datos del usuario autenticado en todos los templates."""
+    return dict(
+        current_user_nombre=session.get("nombre", ""),
+        current_user_roles=session.get("roles", []),
+        tenant=getattr(g, "tenant", None),
+        tenant_tipos=getattr(g, "tenant_tipos", []),
+        tenant_tiene_tipo=tenant_tiene_tipo,
+    )
+
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit(
+    "5 per 15 minutes",
+    methods=["POST"],
+    error_message="Demasiados intentos de inicio de sesión. Espere 15 minutos.",
+)
 def login():
-    if not APP_PASSWORD_HASH:
+    if "usuario_id" in session:
         return redirect(url_for("dashboard"))
-    if APP_PASSWORD_HASH and session.get("autenticado"):
-        return redirect(url_for("dashboard"))
+
     error = None
-    if request.method == 'POST':
+    email_previo = ""
+
+    if request.method == "POST":
+        email    = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
-        if check_password_hash(APP_PASSWORD_HASH, password):
-            session["autenticado"] = True
-            return redirect(url_for("dashboard"))
-        error = "Contraseña incorrecta. Intente nuevamente."
-    return render_template("login.html", error=error)
+        ip       = request.remote_addr or "desconocida"
+        email_previo = email
+
+        # Verificar tasa de intentos fallidos (rate limiting manual sobre BD)
+        intentos = db_module.contar_intentos_fallidos(ip, ventana_minutos=15)
+        if intentos >= 5:
+            error = "Demasiados intentos fallidos. Espere 15 minutos e intente nuevamente."
+        else:
+            usuario = auth_module.verificar_login(email, password)
+            if usuario:
+                # Login exitoso
+                db_module.registrar_login_intento(ip, email, exitoso=True)
+                db_module.actualizar_ultimo_acceso(usuario["id"])
+
+                session.permanent = True
+                session["usuario_id"]    = usuario["id"]
+                session["tenant_schema"] = usuario["tenant_schema"]
+                session["roles"]         = usuario["roles"]
+                session["nombre"]        = usuario["nombre"]
+                session["tenant_id"]     = usuario["tenant_id"]
+
+                # Audit log
+                try:
+                    db_module.registrar_audit(
+                        tenant_id=usuario["tenant_id"],
+                        usuario_id=usuario["id"],
+                        accion="login",
+                        ip=ip,
+                    )
+                except Exception:
+                    pass
+
+                return redirect(url_for("dashboard"))
+            else:
+                db_module.registrar_login_intento(ip, email, exitoso=False)
+                error = "Credenciales incorrectas. Verifique su email y contraseña."
+
+    return render_template("login.html", error=error, email_previo=email_previo)
 
 
 @app.route('/logout', methods=['POST'])
 def logout():
+    # Audit log antes de limpiar la sesión
+    try:
+        if "usuario_id" in session:
+            db_module.registrar_audit(
+                tenant_id=session.get("tenant_id"),
+                usuario_id=session["usuario_id"],
+                accion="logout",
+                ip=request.remote_addr,
+            )
+    except Exception:
+        pass
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route('/admin/switch-tenant', methods=['POST'])
+@require_role('superadmin')
+def switch_tenant():
+    """Permite al superadmin impersonar otro tenant."""
+    slug = request.form.get("tenant_slug")
+    if not slug:
+        return "Slug requerido", 400
+        
+    if slug == 'public':
+        # Volver al contexto administrativo global
+        session["tenant_schema"] = 'public'
+        return redirect(url_for("dashboard"))
+
+    tenant = db_module.get_tenant_by_slug(slug)
+    if not tenant:
+        return "Tenant no encontrado", 404
+
+    session["tenant_schema"] = tenant["slug"]
+    session["tenant_id"] = tenant["id"]
+    return redirect(url_for("dashboard"))
 
 
 @app.context_processor
 def utility_processor():
     def get_pending_count():
-        return len(db_module.get_justificaciones_pendientes())
+        try:
+            return len(db_module.get_justificaciones_pendientes())
+        except Exception:
+            return 0
     return dict(justificaciones_pendientes_count=get_pending_count())
 
 
@@ -145,44 +322,7 @@ def utility_processor():
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════
 
-def enviar_correo(destinatario: str, asunto: str, cuerpo: str, adjunto_path: str = None) -> bool:
-    """
-    Envia un correo usando SMTP configurado en el entorno.
-    """
-    host = os.getenv("SMTP_HOST")
-    port = os.getenv("SMTP_PORT")
-    user = os.getenv("SMTP_USER")
-    pwd  = os.getenv("SMTP_PASSWORD")
-    use_tls = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
-    sender = os.getenv("SMTP_FROM", user)
-
-    if not all([host, port, user, pwd]):
-         return False
-
-    try:
-         msg = MIMEMultipart()
-         msg['From'] = sender
-         msg['To'] = destinatario
-         msg['Subject'] = asunto
-         msg.attach(MIMEText(cuerpo, 'html'))
-
-         if adjunto_path and os.path.exists(adjunto_path):
-              filename = os.path.basename(adjunto_path)
-              with open(adjunto_path, "rb") as f:
-                   part = MIMEApplication(f.read(), Name=filename)
-                   part['Content-Disposition'] = f'attachment; filename="{filename}"'
-                   msg.attach(part)
-
-         server = smtplib.SMTP(host, int(port), timeout=10)
-         if use_tls:
-              server.starttls()
-         server.login(user, pwd)
-         server.send_message(msg)
-         server.quit()
-         return True
-    except Exception as e:
-         print(f"Error enviando correo: {e}", file=sys.stderr)
-         return False
+# enviar_correo importada desde email_utils
 
 
 def _parse_config(data: dict) -> dict:
@@ -326,7 +466,6 @@ def justificaciones_vista():
 def reportes_vista():
     return render_template('reportes.html', active_page='reportes')
 
-
 @app.route('/descargar/<filename>')
 def descargar(filename):
     file_path = os.path.join(app.config['REPORTS_FOLDER'], filename)
@@ -342,11 +481,13 @@ def descargar(filename):
 @app.route('/api/estado-sync')
 def estado_sync():
     estado = db_module.get_estado()
-    estado['dispositivo_accesible'] = sync_module.ping_dispositivo()
+    # Ahora tenemos múltiples dispositivos, simplificamos el ping global asumiendo True si hay al menos uno
+    activos = db_module.get_dispositivos_activos()
+    estado['dispositivo_accesible'] = sync_module.ping_dispositivo() if activos else False
     estado['justificaciones_pendientes'] = len(db_module.get_justificaciones_pendientes())
     
     # --- Monitoreo de Capacidad (Fase 1) ---
-    capacidad_max = int(os.getenv("ZK_CAPACIDAD_MAX", "80000"))
+    capacidad_max = int(os.getenv("ZK_CAPACIDAD_MAX", "50000"))
     estado["capacidad_maxima"] = capacidad_max
     
     ultima = estado.get("ultima_sync")
@@ -359,15 +500,123 @@ def estado_sync():
         estado["registros_en_dispositivo"] = 0
         estado["porcentaje_ocupado"] = 0.0
         
-    # Proyección (por defecto 680 registros/día según análisis de ISTPET)
-    tasa_diaria = 680 
-    registros_restantes = max(0, capacidad_max - estado["registros_en_dispositivo"])
-    estado["dias_para_llenado"] = int(registros_restantes / tasa_diaria)
+    estado["dias_para_llenado"] = int(max(0, capacidad_max - estado["registros_en_dispositivo"]) / 680)
     
     return jsonify(estado)
 
 
+@app.route('/api/dispositivos', methods=['GET'])
+@require_role('admin', 'superadmin')
+def api_get_dispositivos():
+    try:
+        dispositivos = db_module.get_dispositivos_activos()
+        estados = db_module.get_estado_sync_ui()
+        for d in dispositivos:
+            # Quitamos la pass por seguridad
+            d.pop("password", None)
+            d.pop("password_enc", None)
+            sid = str(d["id"])
+            if sid in estados:
+                d["sync_estado"] = estados[sid]
+        return jsonify({"dispositivos": dispositivos})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/dispositivos', methods=['POST'])
+@require_role('admin', 'superadmin')
+def api_upsert_dispositivo():
+    data = request.json or {}
+    try:
+        if "password_enc" in data and data["password_enc"]:
+            from auth import encrypt_device_password
+            data["password_enc"] = encrypt_device_password(data["password_enc"])
+            
+        did = db_module.upsert_dispositivo(data)
+        return jsonify({"status": "ok", "id": did})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/dispositivos/<id>/test', methods=['GET'])
+@require_role('admin', 'superadmin')
+def api_test_dispositivo(id):
+    ok = sync_module.ping_dispositivo(id)
+    return jsonify({"ok": ok})
+
+@app.route('/api/dispositivos/<id>/sync', methods=['POST'])
+@require_role('admin', 'superadmin')
+def api_sync_dispositivo(id):
+    def _run():
+        try:
+            sync_module.sincronizar_con_reintento(id, force_historico=False)
+        except Exception:
+            pass
+    threading.Thread(target=_run, daemon=True).start()
+    return jsonify({"status": "procesando"})
+
+
+@app.route('/api/usuarios-zk')
+@require_role('admin', 'superadmin')
+def api_usuarios_zk():
+    """Lista usuarios del biométrico con estado de vinculación a persona."""
+    try:
+        usuarios = db_module.get_usuarios_zk_con_estado()
+        vinculados = sum(1 for u in usuarios if u.get("persona_id"))
+        return jsonify({
+            "usuarios": usuarios,
+            "total": len(usuarios),
+            "vinculados": vinculados,
+            "sin_vincular": len(usuarios) - vinculados,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/usuarios-zk/<id_usuario>/vincular', methods=['POST'])
+@require_role('admin', 'superadmin')
+def api_vincular_usuario_zk(id_usuario):
+    """Vincula un ID de usuario ZK a una persona del catálogo."""
+    data = request.get_json() or {}
+    persona_id = (data.get('persona_id') or '').strip()
+    if not persona_id:
+        return jsonify({"error": "persona_id requerido"}), 400
+    try:
+        db_module.actualizar_persona(persona_id, {"id_usuario_zk": id_usuario})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/personas-lista')
+@require_role('admin', 'superadmin')
+def api_personas_lista():
+    """Lista simplificada de personas para selectores."""
+    try:
+        personas = db_module.listar_personas(activo=None)
+        return jsonify({"personas": [
+            {"id": p["id"], "nombre": p["nombre"],
+             "identificacion": p.get("identificacion"),
+             "id_usuario_zk": p.get("id_usuario_zk")}
+            for p in personas
+        ]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/sync/estado')
+@require_role('admin', 'superadmin')
+def api_sync_estado():
+    """Estado de sync granular por dispositivo para polling."""
+    try:
+        estados = db_module.get_estado_sync_ui()
+        return jsonify(estados)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/sincronizar', methods=['POST'])
+@require_role('admin', 'superadmin')
 def sincronizar():
     data             = request.json or {}
     fecha_inicio_str = data.get('fecha_inicio')
@@ -425,10 +674,26 @@ def personas_db():
 
 @app.route('/api/alertas/tardanzas-severas')
 def alertas_tardanzas_severas():
-    """Retorna personas con 3 o más tardanzas severas en el mes actual."""
+    """Retorna personas con 3 o más tardanzas severas en el rango definido."""
     hoy = date.today()
-    fecha_inicio = hoy.replace(day=1)
-    fecha_fin = hoy
+    fi_str = request.args.get('fecha_inicio')
+    ff_str = request.args.get('fecha_fin')
+    
+    if fi_str:
+        try:
+            fecha_inicio = datetime.strptime(fi_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_inicio = hoy.replace(day=1)
+    else:
+        fecha_inicio = hoy.replace(day=1)
+        
+    if ff_str:
+        try:
+            fecha_fin = datetime.strptime(ff_str, '%Y-%m-%d').date()
+        except ValueError:
+            fecha_fin = hoy
+    else:
+        fecha_fin = hoy
 
     registros = db_module.consultar_asistencias(fecha_inicio, fecha_fin)
     if not registros:
@@ -476,7 +741,38 @@ def alertas_tardanzas_severas():
         return jsonify({'error': str(e)}), 500
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# VISTA DE PRESENCIA CRUDA (Para todos los tenants)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/presencia')
+def vista_presencia():
+    """Muestra registros crudos de asistencia."""
+    fi_str = request.args.get('fecha_inicio')
+    ff_str = request.args.get('fecha_fin')
+    try:
+        fi = datetime.strptime(fi_str, "%Y-%m-%d").date() if fi_str else date.today()
+        ff = datetime.strptime(ff_str, "%Y-%m-%d").date() if ff_str else date.today()
+    except ValueError:
+        return "Formato de fecha inválido", 400
+
+    registros = db_module.consultar_asistencias(fi, ff)
+    
+    if request.args.get('export') == 'csv':
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["ID Usuario", "Nombre", "Fecha", "Hora", "Tipo"])
+        for r in registros:
+            writer.writerow([r["id_usuario"], r["nombre"], r["fecha"].strftime('%Y-%m-%d'), r["hora"].strftime('%H:%M:%S'), r["tipo"]])
+        output.seek(0)
+        return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": f"attachment; filename=presencia_{fi}_{ff}.csv"})
+
+    return render_template("presencia.html", registros=registros, fecha_inicio=fi, fecha_fin=ff)
+
+
 @app.route('/api/generar-desde-db', methods=['POST'])
+@require_role('superadmin', 'admin', 'gestor')
 def generar_desde_db():
     data = request.json
     try:
@@ -528,6 +824,17 @@ def generar_desde_db():
                    fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, filtros=filtros)
         labels = {'general': 'General', 'persona': 'Persona', 'varias': 'Varias_Personas'}
         label  = labels.get(modo, 'Reporte')
+        try:
+            db_module.registrar_audit(
+                tenant_id=g.get("tenant_id"),
+                usuario_id=g.get("usuario_id"),
+                accion="generar_pdf",
+                detalle={"modo": modo, "fecha_inicio": str(fecha_inicio),
+                         "fecha_fin": str(fecha_fin)},
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
         return jsonify({
             'success':      True,
             'download_url': f'/descargar/{pdf_filename}',
@@ -540,6 +847,7 @@ def generar_desde_db():
 
 
 @app.route('/api/reportes/enviar-email', methods=['POST'])
+@require_role('superadmin', 'admin', 'gestor')
 def enviar_reporte_email():
     """Genera el reporte de una persona y lo envía por correo electrónico."""
     data = request.json or {}
@@ -600,32 +908,26 @@ def enviar_reporte_email():
 
 
 @app.route('/api/limpiar-dispositivo', methods=['POST'])
+@require_role('superadmin', 'admin')
 def limpiar_dispositivo():
     data = request.json or {}
     if not data.get('confirmar'):
         return jsonify({
             'error': 'Se requiere { "confirmar": true } en el cuerpo de la solicitud.'
         }), 400
-    # Verificar contraseña si la autenticación está habilitada
-    pwd_hash_check = APP_MAINTENANCE_PASSWORD_HASH or APP_PASSWORD_HASH
-    if pwd_hash_check:
-        password = data.get('password', '')
-        if not password or not check_password_hash(pwd_hash_check, password):
-            return jsonify({'error': 'Contraseña incorrecta. Esta acción requiere autenticación.'}), 403
     try:
-        # --- Backup Pre-Limpieza Automático (Fase 2: Paso 2.3) ---
-        import shutil
-        dir_backups = os.path.join(os.getenv("DATA_DIR", "data"), "backups")
-        os.makedirs(dir_backups, exist_ok=True)
-        backup_name = f"pre_limpieza_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-        shutil.copy2(db_module.DB_PATH, os.path.join(dir_backups, backup_name))
-        
         total_borrado = sync_module.limpiar_log_dispositivo()
-        return jsonify({
-            'success': True, 
-            'registros_borrados': total_borrado,
-            'backup_creado': backup_name
-        })
+        try:
+            db_module.registrar_audit(
+                tenant_id=g.get("tenant_id"),
+                usuario_id=g.get("usuario_id"),
+                accion="limpiar_dispositivo",
+                detalle={"registros_borrados": total_borrado},
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
+        return jsonify({'success': True, 'registros_borrados': total_borrado})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -635,21 +937,13 @@ def limpiar_dispositivo():
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/backup/descargar')
+@require_role('superadmin', 'admin')
 def descargar_backup_db():
-    dir_backups = os.path.join(os.getenv("DATA_DIR", "data"), "backups")
-    os.makedirs(dir_backups, exist_ok=True)
-    temp_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-    dest_path = os.path.join(dir_backups, temp_name)
-    
-    import shutil
-    try:
-        shutil.copy2(db_module.DB_PATH, dest_path)
-        return send_file(dest_path, as_attachment=True, download_name=os.path.basename(db_module.DB_PATH))
-    except Exception as e:
-        return jsonify({'error': f'Error creando backup: {str(e)}'}), 500
+    return jsonify({'error': 'Backup de BD PostgreSQL no disponible vía HTTP. Use pg_dump.'}), 501
 
 
 @app.route('/api/backup/csv')
+@require_role('superadmin', 'admin', 'gestor')
 def descargar_backup_csv():
     import csv as csv_writer
     import io
@@ -685,6 +979,7 @@ def descargar_backup_csv():
 # ══════════════════════════════════════════════════════════════════════════
 
 @app.route('/api/historicos/importar', methods=['POST'])
+@require_role('superadmin', 'admin')
 def importar_historicos():
     if 'archivo' not in request.files:
          return jsonify({'error': 'No se envió ningún archivo'}), 400
@@ -766,6 +1061,7 @@ ALLOWED_HORARIOS_EXT = {".obd", ".ods", ".csv"}
 
 
 @app.route('/api/horarios/importar', methods=['POST'])
+@require_role('superadmin', 'admin', 'gestor')
 def cargar_horarios():
     """
     Recibe un archivo .obd/.ods, lo parsea e inserta los horarios en la DB.
@@ -939,6 +1235,7 @@ def _validar_horario_body(data: dict):
 
 
 @app.route('/api/horarios/exportar')
+@require_role('superadmin', 'admin', 'gestor')
 def exportar_horarios_csv():
     """Genera y descarga los horarios actuales como archivo CSV."""
     horarios = db_module.get_horarios()
@@ -992,6 +1289,7 @@ def exportar_horarios_csv():
 
 
 @app.route('/api/horarios', methods=['POST'])
+@require_role('superadmin', 'admin', 'gestor')
 def api_horarios_crear():
     """Crea un nuevo registro de horario. 409 si el ID ya existe."""
     data = request.json or {}
@@ -1010,6 +1308,7 @@ def api_horarios_crear():
 
 
 @app.route('/api/horarios/<id_usuario>', methods=['PUT'])
+@require_role('superadmin', 'admin', 'gestor')
 def api_horarios_actualizar(id_usuario):
     """Actualiza el horario de una persona. 404 si no existe."""
     if not db_module.get_horario(id_usuario):
@@ -1026,6 +1325,7 @@ def api_horarios_actualizar(id_usuario):
 
 
 @app.route('/api/horarios/<id_usuario>', methods=['DELETE'])
+@require_role('superadmin', 'admin')
 def api_horarios_eliminar(id_usuario):
     """Elimina el horario de una persona. 404 si no existe."""
     if not db_module.delete_horario(id_usuario):
@@ -1051,6 +1351,7 @@ def get_justificaciones():
 
 
 @app.route('/api/justificaciones', methods=['POST'])
+@require_role('superadmin', 'admin', 'gestor')
 def crear_justificacion():
     data = request.json or {}
     id_usuario = str(data.get('id_usuario', '')).strip()
@@ -1067,6 +1368,7 @@ def crear_justificacion():
     recuperable = 1 if data.get('recuperable') else 0
     fecha_recuperacion = str(data.get('fecha_recuperacion', '')).strip() or None
     hora_recuperacion = str(data.get('hora_recuperacion', '')).strip() or None
+    hora_recuperacion_fin = str(data.get('hora_recuperacion_fin', '')).strip() or None
 
     duracion_permitida_min = data.get('duracion_permitida_min')
     if duracion_permitida_min is not None and str(duracion_permitida_min).strip() != "":
@@ -1091,16 +1393,18 @@ def crear_justificacion():
             return jsonify({'error': 'La hora de retorno debe ser posterior a la de salida'}), 400
             
     if recuperable:
-        if not fecha_recuperacion or not hora_recuperacion:
-            return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha y hora de recuperación'}), 400
+        if not fecha_recuperacion or not hora_recuperacion or not hora_recuperacion_fin:
+            return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha, hora inicio y hora fin de recuperación'}), 400
         try:
             f_rec = datetime.strptime(fecha_recuperacion, "%Y-%m-%d").date()
             if f_rec < date.today():
                 return jsonify({'error': 'La fecha de recuperación debe ser futura o el día de hoy'}), 400
         except ValueError:
             return jsonify({'error': 'Formato de fecha_recuperacion inválido. Use YYYY-MM-DD'}), 400
-        if not _HORA_RE.match(hora_recuperacion):
-            return jsonify({'error': 'La hora de recuperación debe tener formato HH:MM'}), 400
+        if not _HORA_RE.match(hora_recuperacion) or not _HORA_RE.match(hora_recuperacion_fin):
+            return jsonify({'error': 'Las horas de recuperación deben tener formato HH:MM'}), 400
+        if hora_recuperacion_fin <= hora_recuperacion:
+            return jsonify({'error': 'La hora de fin de recuperación debe ser posterior a la de inicio'}), 400
 
     if tipo not in ('ausencia', 'tardanza', 'almuerzo', 'incompleto', 'salida_anticipada', 'permiso'):
         return jsonify({'error': "tipo debe ser: ausencia | tardanza | almuerzo | incompleto | salida_anticipada | permiso"}), 400
@@ -1112,7 +1416,8 @@ def crear_justificacion():
             incluye_almuerzo=incluye_almuerzo,
             recuperable=recuperable,
             fecha_recuperacion=fecha_recuperacion,
-            hora_recuperacion=hora_recuperacion
+            hora_recuperacion=hora_recuperacion,
+            hora_recuperacion_fin=hora_recuperacion_fin
         )
         return jsonify({'success': True, 'justificacion': result}), 201
     except Exception as e:
@@ -1157,7 +1462,7 @@ def actualizar_justificacion(jid):
     permitidos = [
         'fecha', 'tipo', 'motivo', 'aprobado_por', 'hora_permitida', 'estado', 
         'duracion_permitida_min', 'hora_retorno_permiso', 
-        'incluye_almuerzo', 'recuperable', 'fecha_recuperacion', 'hora_recuperacion'
+        'incluye_almuerzo', 'recuperable', 'fecha_recuperacion', 'hora_recuperacion', 'hora_recuperacion_fin'
     ]
     for k in permitidos:
         if k in data:
@@ -1182,10 +1487,13 @@ def actualizar_justificacion(jid):
     if rec:
         f_rec = campos.get('fecha_recuperacion', current.get('fecha_recuperacion'))
         h_rec = campos.get('hora_recuperacion', current.get('hora_recuperacion'))
-        if not f_rec or not h_rec:
-             return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha y hora de recuperación'}), 400
-        if not _HORA_RE.match(str(h_rec)):
-             return jsonify({'error': 'La hora de recuperación debe tener formato HH:MM'}), 400
+        h_rec_fin = campos.get('hora_recuperacion_fin', current.get('hora_recuperacion_fin'))
+        if not f_rec or not h_rec or not h_rec_fin:
+             return jsonify({'error': 'Para justificaciones recuperables es obligatoria la fecha, hora inicio y hora fin de recuperación'}), 400
+        if not _HORA_RE.match(str(h_rec)) or not _HORA_RE.match(str(h_rec_fin)):
+             return jsonify({'error': 'Las horas de recuperación deben tener formato HH:MM'}), 400
+        if str(h_rec) >= str(h_rec_fin):
+             return jsonify({'error': 'La hora de fin de recuperación debe ser posterior a la de inicio'}), 400
 
     try:
         if db_module.actualizar_justificacion_completa(jid, **campos):
@@ -1196,6 +1504,7 @@ def actualizar_justificacion(jid):
 
 
 @app.route('/api/justificaciones/<int:jid>', methods=['DELETE'])
+@require_role('superadmin', 'admin')
 def eliminar_justificacion(jid):
     if not db_module.eliminar_justificacion(jid):
         return jsonify({'error': f'No existe justificación con ID {jid}'}), 404
@@ -1223,6 +1532,7 @@ def get_feriados():
 
 
 @app.route('/api/feriados', methods=['POST'])
+@require_role('superadmin', 'admin')
 def crear_feriado():
     data = request.json or {}
     fecha       = str(data.get('fecha', '')).strip()
@@ -1238,6 +1548,7 @@ def crear_feriado():
 
 
 @app.route('/api/feriados/<fecha>', methods=['DELETE'])
+@require_role('superadmin', 'admin')
 def eliminar_feriado(fecha):
     if not db_module.eliminar_feriado(fecha):
         return jsonify({'error': f'No existe feriado para la fecha {fecha}'}), 404
@@ -1245,6 +1556,7 @@ def eliminar_feriado(fecha):
 
 
 @app.route('/api/feriados/importar', methods=['POST'])
+@require_role('superadmin', 'admin')
 def importar_feriados():
     if 'archivo' not in request.files:
         return jsonify({'error': 'No se envió ningún archivo'}), 400
@@ -1280,11 +1592,8 @@ def exportar_feriados():
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# ARRANQUE
-# ══════════════════════════════════════════════════════════════════════════
-
 @app.route('/api/categorizar-break', methods=['POST'])
+@require_role('superadmin', 'admin', 'gestor')
 def API_categorizar_break():
     data = request.json or {}
     id_usuario = data.get('id_usuario')
@@ -1293,7 +1602,7 @@ def API_categorizar_break():
     h_fin      = data.get('hora_fin')
     cat        = data.get('categoria') # 'almuerzo' | 'permiso' | 'injustificado'
     motivo     = data.get('motivo', '')
-    aprobado   = session.get('usuario', 'Admin')
+    aprobado   = g.get('nombre', session.get('nombre', 'Sistema'))
 
     if not all([id_usuario, fecha, h_ini, h_fin, cat]):
         return jsonify({'error': 'Faltan campos (id_usuario, fecha, hora_inicio, hora_fin, categoria)'}), 400
@@ -1306,6 +1615,644 @@ def API_categorizar_break():
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# ══════════════════════════════════════════════════════════════════════════
+# ADMINISTRACIÓN DE TENANTS (Superadmin)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/tenants', methods=['GET'])
+@require_role('superadmin')
+def admin_tenants():
+    """Lista todos los tenants."""
+    tenants = db_module.listar_tenants()
+    return render_template("admin/tenants.html", tenants=tenants, active_page="admin_tenants")
+
+
+@app.route('/admin/tenants', methods=['POST'])
+@require_role('superadmin')
+def admin_crear_tenant():
+    """Crea un nuevo tenant y provisiona su schema."""
+    nombre = request.form.get("nombre", "").strip()
+    nombre_corto = request.form.get("nombre_corto", "").strip()
+    slug = request.form.get("slug", "").strip().lower()
+    zona_horaria = request.form.get("zona_horaria", "America/Guayaquil")
+    
+    # Validaciones básicas
+    if not nombre or not slug:
+        return "Nombre y Slug son requeridos", 400
+        
+    if not all(c.isalnum() or c == '_' for c in slug):
+        return "Slug debe contener solo letras, números y guiones bajos", 400
+
+    try:
+        # 1. Crear registro en public.tenants
+        nuevo_tenant = db_module.crear_tenant(nombre, nombre_corto, slug, zona_horaria)
+        
+        # 2. Provisionar Schema (Tablas y Datos iniciales)
+        # Por defecto, habilitar 'Empleado' y 'Practicante'
+        db_module.provisionar_schema(slug, tipos_persona=["Empleado", "Practicante"])
+        
+        return redirect(url_for("admin_tenants") + "?msg=Tenant+creado+con+éxito")
+    except Exception as e:
+        return f"Error al crear tenant: {str(e)}", 500
+
+
+@app.route('/admin/tenants/<tenant_id>', methods=['POST'])
+@require_role('superadmin')
+def admin_actualizar_tenant(tenant_id):
+    """Actualiza datos de un tenant (ej: activar/desactivar)."""
+    # En HTML los formularios no soportan PUT directamente
+    activo = request.form.get("activo") == "1"
+    
+    try:
+        db_module.actualizar_tenant(tenant_id, {"activo": activo})
+        return redirect(url_for("admin_tenants") + "?msg=Tenant+actualizado")
+    except Exception as e:
+         return f"Error: {e}", 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ADMINISTRACIÓN DE USUARIOS
+# ══════════════════════════════════════════════════════════════════════════
+
+_ROLES_DISPONIBLES = ["superadmin", "admin", "gestor",
+                      "supervisor_grupo", "supervisor_periodo", "readonly"]
+
+
+def _get_grupos_periodos():
+    """Carga grupos y períodos activos para los selects de scope en admin UI."""
+    grupos = []
+    periodos = []
+    try:
+        with db_module.get_connection() as conn:
+            from sqlalchemy import text as _text
+            rows = conn.execute(
+                _text("SELECT id::text, nombre FROM grupos WHERE activo = true ORDER BY nombre")
+            ).fetchall()
+            grupos = [dict(r._mapping) for r in rows]
+    except Exception:
+        pass
+    try:
+        with db_module.get_connection() as conn:
+            from sqlalchemy import text as _text
+            rows = conn.execute(
+                _text("""
+                    SELECT pv.id::text, p.nombre || ' — ' || pv.nombre AS nombre
+                    FROM periodos_vigencia pv
+                    JOIN personas p ON p.id = pv.persona_id
+                    WHERE pv.estado = 'activo'
+                    ORDER BY p.nombre, pv.nombre
+                """)
+            ).fetchall()
+            periodos = [dict(r._mapping) for r in rows]
+    except Exception:
+        pass
+    return grupos, periodos
+
+
+@app.route('/admin/dispositivos', methods=['GET'])
+@require_role('superadmin', 'admin')
+def admin_dispositivos():
+    return render_template("admin/dispositivos.html", active_page="admin_dispositivos")
+
+
+@app.route('/admin/usuarios', methods=['GET'])
+@require_role('superadmin', 'admin')
+def admin_usuarios():
+    tenant_id = g.get("tenant_id")
+    usuarios = []
+    mensaje = request.args.get("msg")
+    mensaje_tipo = request.args.get("tipo", "success")
+    if tenant_id:
+        try:
+            usuarios = db_module.get_usuarios_tenant(tenant_id)
+        except Exception as e:
+            mensaje = f"Error cargando usuarios: {e}"
+            mensaje_tipo = "danger"
+    grupos, periodos = _get_grupos_periodos()
+    return render_template(
+        "admin/usuarios.html",
+        active_page="admin_usuarios",
+        usuarios=usuarios,
+        roles_disponibles=_ROLES_DISPONIBLES,
+        grupos=grupos,
+        periodos=periodos,
+        mensaje=mensaje,
+        mensaje_tipo=mensaje_tipo,
+    )
+
+
+@app.route('/admin/usuarios', methods=['POST'])
+@require_role('superadmin', 'admin')
+def admin_crear_usuario():
+    nombre   = request.form.get("nombre", "").strip()
+    email    = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    roles    = request.form.getlist("roles")
+
+    if not nombre or not email or not password:
+        return redirect(url_for("admin_usuarios") + "?msg=Campos+requeridos+faltantes&tipo=danger")
+
+    if len(password) < 8:
+        return redirect(url_for("admin_usuarios") + "?msg=La+contraseña+debe+tener+al+menos+8+caracteres&tipo=danger")
+
+    # Scopes para supervisores
+    configuracion = {}
+    if "supervisor_grupo" in roles and request.form.get("supervisor_grupo_id"):
+        configuracion["supervisor_grupo_id"] = request.form.get("supervisor_grupo_id")
+    if "supervisor_periodo" in roles and request.form.get("supervisor_periodo_id"):
+        configuracion["supervisor_periodo_id"] = request.form.get("supervisor_periodo_id")
+
+    # Solo superadmin puede crear otro superadmin
+    if "superadmin" in roles and "superadmin" not in g.get("roles", []):
+        return redirect(url_for("admin_usuarios") + "?msg=No+tiene+permisos+para+crear+superadmin&tipo=danger")
+
+    try:
+        nuevo = auth_module.crear_usuario(
+            tenant_id=g.get("tenant_id"),
+            email=email,
+            password=password,
+            nombre=nombre,
+            roles=roles,
+            configuracion=configuracion,
+        )
+        try:
+            db_module.registrar_audit(
+                tenant_id=g.get("tenant_id"),
+                usuario_id=g.get("usuario_id"),
+                accion="crear_usuario",
+                entidad="usuario",
+                entidad_id=nuevo["id"],
+                detalle={"email": email, "roles": roles},
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
+        return redirect(url_for("admin_usuarios") + f"?msg=Usuario+'{nombre}'+creado+exitosamente")
+    except ValueError as e:
+        return redirect(url_for("admin_usuarios") + f"?msg={str(e)}&tipo=danger")
+    except Exception as e:
+        return redirect(url_for("admin_usuarios") + f"?msg=Error+creando+usuario&tipo=danger")
+
+
+@app.route('/admin/usuarios/<usuario_id>', methods=['POST'])
+@require_role('superadmin', 'admin')
+def admin_editar_usuario(usuario_id):
+    """Edita roles, scopes y estado activo de un usuario (via POST con _method=PUT)."""
+    roles  = request.form.getlist("roles")
+    activo = bool(request.form.get("activo"))
+
+    # Solo superadmin puede asignar rol superadmin
+    if "superadmin" in roles and "superadmin" not in g.get("roles", []):
+        return redirect(url_for("admin_usuarios") + "?msg=No+tiene+permisos+para+asignar+superadmin&tipo=danger")
+
+    configuracion = {}
+    if "supervisor_grupo" in roles and request.form.get("supervisor_grupo_id"):
+        configuracion["supervisor_grupo_id"] = request.form.get("supervisor_grupo_id")
+    if "supervisor_periodo" in roles and request.form.get("supervisor_periodo_id"):
+        configuracion["supervisor_periodo_id"] = request.form.get("supervisor_periodo_id")
+
+    try:
+        auth_module.actualizar_roles(usuario_id, roles, configuracion)
+        if activo:
+            auth_module.activar_usuario(usuario_id)
+        else:
+            auth_module.desactivar_usuario(usuario_id)
+            try:
+                db_module.registrar_audit(
+                    tenant_id=g.get("tenant_id"),
+                    usuario_id=g.get("usuario_id"),
+                    accion="desactivar_usuario",
+                    entidad="usuario",
+                    entidad_id=usuario_id,
+                    ip=request.remote_addr,
+                )
+            except Exception:
+                pass
+
+        try:
+            db_module.registrar_audit(
+                tenant_id=g.get("tenant_id"),
+                usuario_id=g.get("usuario_id"),
+                accion="editar_usuario",
+                entidad="usuario",
+                entidad_id=usuario_id,
+                detalle={"roles": roles, "activo": activo},
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
+
+        return redirect(url_for("admin_usuarios") + "?msg=Usuario+actualizado+correctamente")
+    except Exception as e:
+        return redirect(url_for("admin_usuarios") + f"?msg=Error+actualizando+usuario&tipo=danger")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PERIODOS Y PERSONAS (FASE 4)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/periodos')
+@require_role('admin', 'superadmin', 'gestor')
+def periodos_lista():
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    # Listar periodos activos e historial desde db
+    activos = db_module.listar_periodos_activos()
+    historial = db_module.listar_periodos_historial()
+    return render_template('periodos/lista.html', 
+                             active_page='periodos',
+                             periodos_activos=activos,
+                             periodos_historial=historial)
+
+@app.route('/periodos/crear', methods=['POST'])
+@require_role('admin', 'superadmin')
+def crear_periodo_route():
+    nombre = request.form.get('nombre')
+    fecha_inicio_str = request.form.get('fecha_inicio')
+    fecha_fin_str = request.form.get('fecha_fin')
+    descripcion = request.form.get('descripcion')
+    
+    if not nombre or not fecha_inicio_str:
+        from flask import flash
+        flash("Nombre y Fecha Inicio requeridos", "danger")
+        return redirect(url_for('periodos_lista'))
+        
+    try:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date()
+        fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else None
+        
+        db_module.crear_periodo(nombre=nombre, fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, descripcion=descripcion)
+        from flask import flash
+        flash("Período creado exitosamente", "success")
+    except Exception as e:
+        from flask import flash
+        flash(f"Error: {e}", "danger")
+        
+    return redirect(url_for('periodos_lista'))
+
+@app.route('/periodos/<id>')
+@require_role('admin', 'superadmin', 'gestor')
+def periodo_detalle(id):
+    periodo = db_module.get_periodo(id)
+    if not periodo:
+        return "Periodo no encontrado", 404
+        
+    # Calcular asistencias de las personas asociadas en tiempo real
+    personas = db_module.calcular_asistencia_periodo(id)
+    
+    # Calcular resumen agregado
+    total_asistencias = 0
+    t_suma = 0
+    for p in personas:
+        t_suma += p["resumen"]["porcentaje_asistencia"]
+    promedio = round(t_suma / len(personas), 2) if personas else 0
+    
+    resumen_general = {
+        "asistencia_promedio": promedio
+    }
+    
+    return render_template('periodos/detalle.html', 
+                             active_page='periodos',
+                             periodo=periodo,
+                             personas=personas,
+                             resumen_general=resumen_general)
+
+@app.route('/periodos/<id>/importar-personas', methods=['POST'])
+@require_role('admin', 'superadmin')
+def periodo_importar_personas_route(id):
+    tipo_persona_id = request.form.get('tipo_persona_id')
+    file = request.files.get('archivo_csv')
+    
+    if not file or not tipo_persona_id:
+        from flask import flash
+        flash("Archivo y Tipo Persona requeridos", "danger")
+        return redirect(url_for('periodo_detalle', id=id))
+        
+    filename = secure_filename(file.filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"periodo_{id}_{filename}")
+    file.save(filepath)
+    
+    try:
+        resultado = db_module.procesar_csv_personas_periodo(filepath, id, tipo_persona_id)
+        from flask import flash
+        if resultado.get("exito"):
+            msg = f"Cargado: {resultado['procesadas']} personas. Nuevas: {resultado['nuevas']}. Actualizadas: {resultado['actualizadas']}."
+            flash(msg, "success")
+            if resultado.get("errores"):
+                flash(f"Errores en {len(resultado['errores'])} registros.", "warning")
+        else:
+             flash(f"Error procesando CSV: {resultado.get('error')}", "danger")
+    except Exception as e:
+         from flask import flash
+         flash(f"Error: {e}", "danger")
+    finally:
+         try: os.remove(filepath) 
+         except: pass
+         
+    return redirect(url_for('periodo_detalle', id=id))
+
+@app.route('/periodos/<id>/cerrar', methods=['POST'])
+@require_role('admin', 'superadmin')
+def cerrar_periodo_route(id):
+    p = db_module.get_periodo(id)
+    if p:
+         db_module.cerrar_periodo(id)
+         from flask import flash
+         flash("Período cerrado exitosamente", "success")
+    return redirect(url_for('periodos_lista'))
+
+
+@app.route('/periodos/<id>/archivar', methods=['POST'])
+@require_role('admin', 'superadmin')
+def archivar_periodo_route(id):
+    p = db_module.get_periodo(id)
+    if p:
+        db_module.archivar_periodo(id)
+        from flask import flash
+        flash("Período archivado exitosamente", "success")
+    return redirect(url_for('periodos_lista'))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# PERSONAS (FASE 4)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/personas')
+@require_role('admin', 'superadmin', 'gestor')
+def personas_lista():
+    tipo_persona_id = request.args.get('tipo_persona_id', '').strip() or None
+    grupo_id = request.args.get('grupo_id', '').strip() or None
+    busqueda = request.args.get('q', '').strip() or None
+    personas = db_module.listar_personas(tipo_persona_id=tipo_persona_id,
+                                         grupo_id=grupo_id,
+                                         activo=None,
+                                         busqueda=busqueda)
+    grupos = db_module.listar_grupos(activo=True)
+    return render_template('personas/lista.html',
+                           active_page='personas',
+                           personas=personas,
+                           grupos=grupos,
+                           tipo_persona_id=tipo_persona_id,
+                           grupo_id=grupo_id,
+                           busqueda=busqueda or '')
+
+
+@app.route('/personas/crear', methods=['POST'])
+@require_role('admin', 'superadmin')
+def personas_crear():
+    from flask import flash
+    nombre = request.form.get('nombre', '').strip()
+    if not nombre:
+        flash("El nombre es requerido", "danger")
+        return redirect(url_for('personas_lista'))
+    try:
+        db_module.crear_persona(
+            nombre=nombre,
+            identificacion=request.form.get('identificacion') or None,
+            tipo_persona_id=request.form.get('tipo_persona_id') or None,
+            grupo_id=request.form.get('grupo_id') or None,
+            categoria_id=request.form.get('categoria_id') or None,
+            email=request.form.get('email') or None,
+            telefono=request.form.get('telefono') or None,
+            notas=request.form.get('notas') or None,
+            id_usuario_zk=request.form.get('id_usuario_zk') or None,
+        )
+        flash("Persona creada exitosamente", "success")
+    except Exception as e:
+        flash(f"Error al crear persona: {e}", "danger")
+    return redirect(url_for('personas_lista'))
+
+
+@app.route('/personas/<id>', methods=['POST'])
+@require_role('admin', 'superadmin')
+def personas_editar(id):
+    from flask import flash
+    datos = {}
+    for campo in ('nombre', 'identificacion', 'email', 'telefono', 'notas',
+                  'tipo_persona_id', 'grupo_id', 'categoria_id'):
+        v = request.form.get(campo)
+        if v is not None:
+            datos[campo] = v or None
+    activo_val = request.form.get('activo')
+    if activo_val is not None:
+        datos['activo'] = activo_val == '1'
+    if 'id_usuario_zk' in request.form:
+        datos['id_usuario_zk'] = request.form.get('id_usuario_zk', '').strip() or ''
+    try:
+        db_module.actualizar_persona(id, datos)
+        flash("Persona actualizada", "success")
+    except Exception as e:
+        flash(f"Error al actualizar persona: {e}", "danger")
+    return redirect(url_for('personas_lista'))
+
+
+@app.route('/personas/historico')
+@require_role('admin', 'superadmin', 'gestor')
+def personas_historico():
+    identificacion = request.args.get('identificacion', '').strip()
+    historico = None
+    if identificacion:
+        historico = db_module.get_historico_persona(identificacion)
+    return render_template('personas/historico.html',
+                           active_page='personas',
+                           identificacion=identificacion,
+                           historico=historico)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# GRUPOS Y CATEGORÍAS (FASE 4)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/grupos', methods=['GET'])
+@require_role('admin', 'superadmin')
+def admin_grupos():
+    grupos = db_module.listar_grupos()
+    return render_template('admin/grupos.html',
+                           active_page='admin_grupos',
+                           grupos=grupos)
+
+
+@app.route('/admin/grupos', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_crear_grupo():
+    from flask import flash
+    nombre = request.form.get('nombre', '').strip()
+    tipo_grupo = request.form.get('tipo_grupo', 'general')
+    if not nombre:
+        flash("El nombre del grupo es requerido", "danger")
+        return redirect(url_for('admin_grupos'))
+    try:
+        db_module.crear_grupo(nombre=nombre, tipo_grupo=tipo_grupo)
+        flash("Grupo creado exitosamente", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_grupos'))
+
+
+@app.route('/admin/grupos/<id>', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_actualizar_grupo(id):
+    from flask import flash
+    datos = {}
+    if request.form.get('nombre'):
+        datos['nombre'] = request.form['nombre'].strip()
+    if request.form.get('tipo_grupo'):
+        datos['tipo_grupo'] = request.form['tipo_grupo']
+    activo_val = request.form.get('activo')
+    if activo_val is not None:
+        datos['activo'] = activo_val == '1'
+    try:
+        db_module.actualizar_grupo(id, datos)
+        flash("Grupo actualizado", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_grupos'))
+
+
+@app.route('/admin/categorias', methods=['GET'])
+@require_role('admin', 'superadmin')
+def admin_categorias():
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    categorias = db_module.listar_categorias(tipo_persona_id=tipo_persona_id)
+    return render_template('admin/categorias.html',
+                           active_page='admin_categorias',
+                           categorias=categorias,
+                           tipo_persona_id=tipo_persona_id)
+
+
+@app.route('/admin/categorias', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_crear_categoria():
+    from flask import flash
+    nombre = request.form.get('nombre', '').strip()
+    tipo_persona_id = request.form.get('tipo_persona_id') or None
+    if not nombre:
+        flash("El nombre de la categoría es requerido", "danger")
+        return redirect(url_for('admin_categorias'))
+    try:
+        db_module.crear_categoria(nombre=nombre, tipo_persona_id=tipo_persona_id)
+        flash("Categoría creada exitosamente", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_categorias'))
+
+
+@app.route('/admin/categorias/<id>', methods=['POST'])
+@require_role('admin', 'superadmin')
+def admin_actualizar_categoria(id):
+    from flask import flash
+    datos = {}
+    if request.form.get('nombre'):
+        datos['nombre'] = request.form['nombre'].strip()
+    activo_val = request.form.get('activo')
+    if activo_val is not None:
+        datos['activo'] = activo_val == '1'
+    try:
+        db_module.actualizar_categoria(id, datos)
+        flash("Categoría actualizada", "success")
+    except Exception as e:
+        flash(f"Error: {e}", "danger")
+    return redirect(url_for('admin_categorias'))
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ANALYTICS E IA (FASE 5)
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/analytics')
+@require_role('admin', 'superadmin', 'gestor')
+def analytics_vista():
+    hoy = date.today()
+    fecha_inicio = (hoy - timedelta(days=30)).strftime('%Y-%m-%d')
+    fecha_fin = hoy.strftime('%Y-%m-%d')
+    grupos = db_module.listar_grupos(activo=True)
+    return render_template('analytics.html',
+                             active_page='analytics',
+                             fecha_inicio=fecha_inicio,
+                             fecha_fin=fecha_fin,
+                             grupos=grupos)
+
+@app.route('/analytics/periodo/<periodo_id>')
+@require_role('admin', 'superadmin', 'gestor')
+def analytics_periodo(periodo_id):
+    import analytics as analytics_module
+    import ia_report
+    periodo = db_module.get_periodo(periodo_id)
+    if not periodo:
+        return "Período no encontrado", 404
+    resumen = analytics_module.resumen_periodo(periodo_id)
+    dist = analytics_module.distribucion_asistencia_periodo(periodo_id)
+    narrativo = ia_report.generar_narrativo(resumen) if resumen.get("exito") else ""
+    return render_template('periodos/detalle.html',
+                           active_page='periodos',
+                           periodo=periodo,
+                           personas=db_module.calcular_asistencia_periodo(periodo_id),
+                           resumen_general=resumen.get("resumen_general", {}),
+                           distribucion=dist,
+                           narrativo=narrativo)
+
+
+@app.route('/api/analytics/narrativo', methods=['POST'])
+@require_role('admin', 'superadmin', 'gestor')
+def api_narrativo():
+    """Genera narrativo IA on-demand a partir de hallazgos enviados como JSON."""
+    import ia_report
+    hallazgos = request.json or {}
+    if not hallazgos:
+        return jsonify({"error": "Se requiere payload de hallazgos"}), 400
+    try:
+        texto = ia_report.generar_narrativo(hallazgos)
+        return jsonify({"narrativo": texto})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/analytics')
+@require_role('admin', 'superadmin', 'gestor')
+def api_analytics():
+    fecha_inicio_str = request.args.get('fecha_inicio')
+    fecha_fin_str = request.args.get('fecha_fin')
+    tipo_persona_id = request.args.get('tipo_persona_id')
+    grupo_id = request.args.get('grupo_id')
+
+    try:
+        fecha_inicio = datetime.strptime(fecha_inicio_str, "%Y-%m-%d").date() if fecha_inicio_str else date.today() - timedelta(days=30)
+        fecha_fin = datetime.strptime(fecha_fin_str, "%Y-%m-%d").date() if fecha_fin_str else date.today()
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido"}), 400
+
+    import analytics
+    import ia_report
+    hallazgos = analytics.analizar(tipo_persona_id, grupo_id, None, fecha_inicio, fecha_fin)
+    narrativo = ia_report.generar_narrativo(hallazgos) if hallazgos.get("exito") else ""
+    hallazgos["narrativo"] = narrativo
+    return jsonify(hallazgos)
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# SEGURIDAD HTTP
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.after_request
+def agregar_headers_seguridad(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # CSP: permite CDN de Bootstrap, Google Fonts y el propio servidor
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self';"
+    )
+    return response
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# ARRANQUE
+# ══════════════════════════════════════════════════════════════════════════
 
 if __name__ == '__main__':
     app.run(
