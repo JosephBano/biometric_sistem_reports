@@ -487,7 +487,7 @@ def estado_sync():
     estado['justificaciones_pendientes'] = len(db_module.get_justificaciones_pendientes())
     
     # --- Monitoreo de Capacidad (Fase 1) ---
-    capacidad_max = int(os.getenv("ZK_CAPACIDAD_MAX", "80000"))
+    capacidad_max = int(os.getenv("ZK_CAPACIDAD_MAX", "50000"))
     estado["capacidad_maxima"] = capacidad_max
     
     ultima = estado.get("ultima_sync")

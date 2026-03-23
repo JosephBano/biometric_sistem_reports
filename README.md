@@ -325,7 +325,7 @@ ZK_IP=192.168.7.129
 ZK_PORT=4370
 ZK_PASSWORD=12345
 ZK_TIMEOUT=120
-ZK_CAPACIDAD_MAX=80000
+ZK_CAPACIDAD_MAX=50000
 
 # ── Analytics e IA ──────────────────────────────────
 # API key de DeepSeek para narrativos ejecutivos generados por IA.

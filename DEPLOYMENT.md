@@ -909,7 +909,7 @@ ZK_TIMEOUT=120
 ZK_UDP=false
 
 # Capacidad máxima del dispositivo (para estimar % de uso)
-ZK_CAPACIDAD_MAX=80000
+ZK_CAPACIDAD_MAX=50000
 
 # ── Sincronización automática ──────────────────────────────────────────
 # true = activa sync en background; false = solo manual desde la interfaz

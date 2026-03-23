@@ -36,7 +36,7 @@ function updateAggregateStats(data) {
         }
     }
 
-    const capMax = data.capacidad_maxima || 80000;
+    const capMax = data.capacidad_maxima || 50000;
     const capOcupada = data.registros_en_dispositivo || 0;
     const pct = data.porcentaje_ocupado || 0;
 
@@ -90,28 +90,51 @@ function renderDispositivos(dispositivos) {
 
     container.innerHTML = dispositivos.map((d, i) => {
         const e = d.sync_estado || {};
-        const online = e.accesible;
-        const dotClass = online === true ? 'dot-green' : (online === false ? 'dot-red' : 'dot-gray');
-        const dotTitle = online === true ? 'En línea' : (online === false ? 'Sin conexión' : 'Estado desconocido');
-        const driver = (d.driver || 'zk').toUpperCase();
-        const badgeColor = (d.driver || 'zk') === 'hikvision' ? 'info' : 'primary';
-        const lastSync = e.ultima_sync
-            ? new Date(e.ultima_sync).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+        const driver = (d.tipo_driver || 'zk').toUpperCase();
+        const badgeColor = (d.tipo_driver || 'zk') === 'hikvision' ? 'info' : 'primary';
+        const lastSync = e.actualizado_en && e.estado === 'completado'
+            ? new Date(e.actualizado_en).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
             : 'Sin sync';
         const borderClass = i < dispositivos.length - 1 ? 'border-bottom' : '';
+        const syncLabel = e.estado === 'error' ? 'Error' : (e.estado === 'completado' ? 'OK' : '—');
+        const syncBadgeColor = e.estado === 'error' ? 'danger' : (e.estado === 'completado' ? 'success' : 'secondary');
 
         return `<div class="d-flex align-items-center gap-2 py-2 ${borderClass}" style="font-size:0.85rem;">
-            <span class="status-dot ${dotClass} flex-shrink-0" title="${dotTitle}"></span>
+            <span class="status-dot dot-gray flex-shrink-0" id="dot-${d.id}" title="Verificando…"></span>
             <span class="fw-semibold flex-grow-1 text-truncate" style="max-width:130px;" title="${d.nombre}">${d.nombre}</span>
-            <span class="text-muted" style="font-size:0.72rem;">${d.ip}:${d.puerto}</span>
+            <span class="text-muted" style="font-size:0.75rem;">${d.ip}:${d.puerto}</span>
             <span class="badge bg-${badgeColor} bg-opacity-10 text-${badgeColor} border border-${badgeColor} border-opacity-25 fw-normal" style="font-size:0.7rem;">${driver}</span>
-            <span class="text-muted d-none d-lg-inline" style="font-size:0.72rem;" title="Última sync">${lastSync}</span>
-            <button class="btn btn-outline-secondary btn-sm py-0 px-1 flex-shrink-0" style="font-size:0.7rem;"
+            <span class="badge bg-${syncBadgeColor} bg-opacity-10 text-${syncBadgeColor} border border-${syncBadgeColor} border-opacity-25 fw-normal d-none d-md-inline" style="font-size:0.7rem;" title="${lastSync}">
+                ${syncLabel}
+            </span>
+            <button class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 flex-shrink-0"
                 onclick="iniciarSyncDispositivo('${d.id}')" title="Sincronizar este dispositivo">
-                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:-2px;">sync</span>
+                <span class="material-symbols-outlined" style="font-size:1rem;">sync</span>
             </button>
         </div>`;
     }).join('');
+
+    // Ping cada dispositivo en paralelo para actualizar el dot
+    dispositivos.forEach(d => pingDispositivo(d.id));
+}
+
+function pingDispositivo(id) {
+    const dot = document.getElementById('dot-' + id);
+    if (!dot) return;
+    apiCall('/api/dispositivos/' + id + '/test')
+        .then(data => {
+            if (data.ok === true) {
+                dot.className = 'status-dot dot-green flex-shrink-0';
+                dot.title = 'En línea';
+            } else {
+                dot.className = 'status-dot dot-red flex-shrink-0';
+                dot.title = 'Sin conexión';
+            }
+        })
+        .catch(() => {
+            dot.className = 'status-dot dot-red flex-shrink-0';
+            dot.title = 'Sin conexión';
+        });
 }
 
 function iniciarSyncDispositivo(id) {

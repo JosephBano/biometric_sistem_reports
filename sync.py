@@ -158,7 +158,11 @@ def sincronizar_con_reintento(dispositivo_id: str, desde: datetime = None, force
             db_module.actualizar_estado_sync_ui(dispositivo_id, "error", mensaje=f"Reintentando en {espera}s")
             time_module.sleep(espera)
         except Exception as e:
-            db_module.actualizar_estado_sync_ui(dispositivo_id, "error", 0, 0, str(e))
+            import traceback
+            tb = traceback.format_exc()
+            import logging
+            logging.getLogger(__name__).error("Sync error:\n%s", tb)
+            db_module.actualizar_estado_sync_ui(dispositivo_id, "error", 0, 0, tb[-400:])
             db_module.registrar_sync(
                 datetime.min, datetime.max, 0, 0, False, str(e), 0, dispositivo_id=dispositivo_id
             )
