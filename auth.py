@@ -47,7 +47,7 @@ def _get_encryption_key() -> bytes:
             "  python -c \"import secrets,base64; "
             "print(base64.b64encode(secrets.token_bytes(32)).decode())\""
         )
-    key = base64.b64decode(key_b64)
+    key = base64.urlsafe_b64decode(key_b64 + "==")
     if len(key) != 32:
         raise ValueError(
             "DB_ENCRYPTION_KEY debe ser de exactamente 32 bytes (256 bits) en base64."

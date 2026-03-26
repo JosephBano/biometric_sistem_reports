@@ -5,11 +5,23 @@ Fase 2+: leerá g.tenant_schema del contexto Flask.
 """
 
 import os
+import threading
 from contextlib import contextmanager
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
 _engine = None
+_thread_local = threading.local()
+
+
+def set_thread_tenant(schema: str):
+    """Establece el tenant schema para el hilo actual (uso en background threads)."""
+    _thread_local.tenant_schema = schema
+
+
+def clear_thread_tenant():
+    """Limpia el tenant schema del hilo actual."""
+    _thread_local.tenant_schema = None
 
 
 def get_engine():
@@ -34,9 +46,14 @@ def get_engine():
 
 def get_tenant_schema() -> str:
     """
-    Fase 1: retorna siempre TENANT_DEFAULT.
-    Fase 2+: leerá g.tenant_schema del contexto Flask.
+    Prioridad:
+    1. Thread-local (background threads que capturaron el schema antes de lanzarse)
+    2. Flask g.tenant_schema (requests HTTP normales)
+    3. TENANT_DEFAULT env var (fallback)
     """
+    schema = getattr(_thread_local, "tenant_schema", None)
+    if schema:
+        return schema
     try:
         from flask import g
         schema = getattr(g, "tenant_schema", None)

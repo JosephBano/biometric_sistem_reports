@@ -486,21 +486,15 @@ def estado_sync():
     estado['dispositivo_accesible'] = sync_module.ping_dispositivo() if activos else False
     estado['justificaciones_pendientes'] = len(db_module.get_justificaciones_pendientes())
     
-    # --- Monitoreo de Capacidad (Fase 1) ---
-    capacidad_max = int(os.getenv("ZK_CAPACIDAD_MAX", "50000"))
-    estado["capacidad_maxima"] = capacidad_max
+    logs = db_module.get_latest_sync_logs_por_dispositivo()
     
-    ultima = estado.get("ultima_sync")
-    # Recuperar registros_en_dispositivo de la DB
-    if ultima and ultima.get("registros_en_dispositivo") is not None:
-        registros = ultima["registros_en_dispositivo"]
-        estado["registros_en_dispositivo"] = registros
-        estado["porcentaje_ocupado"] = round((registros / capacidad_max) * 100, 1)
-    else:
-        estado["registros_en_dispositivo"] = 0
-        estado["porcentaje_ocupado"] = 0.0
-        
-    estado["dias_para_llenado"] = int(max(0, capacidad_max - estado["registros_en_dispositivo"]) / 680)
+    capacidad_total = sum(d.get("capacidad_max", 100000) for d in activos) if activos else 100000
+    registros_totales = sum((logs[str(d["id"])].get("registros_en_dispositivo") or 0) for d in activos if str(d["id"]) in logs)
+    
+    estado["capacidad_maxima"] = capacidad_total
+    estado["registros_en_dispositivo"] = registros_totales
+    estado["porcentaje_ocupado"] = round((registros_totales / capacidad_total) * 100, 1) if capacidad_total > 0 else 0
+    estado["dias_para_llenado"] = int(max(0, capacidad_total - registros_totales) / 680)
     
     return jsonify(estado)
 
@@ -511,6 +505,8 @@ def api_get_dispositivos():
     try:
         dispositivos = db_module.get_dispositivos_activos()
         estados = db_module.get_estado_sync_ui()
+        logs = db_module.get_latest_sync_logs_por_dispositivo()
+        
         for d in dispositivos:
             # Quitamos la pass por seguridad
             d.pop("password", None)
@@ -518,6 +514,18 @@ def api_get_dispositivos():
             sid = str(d["id"])
             if sid in estados:
                 d["sync_estado"] = estados[sid]
+                
+            # Agregar información de capacidad 
+            cap = d.get("capacidad_max") or 100000
+            d["capacidad_max"] = cap
+            if sid in logs:
+                en_disp = logs[sid].get("registros_en_dispositivo") or 0
+                d["registros_en_dispositivo"] = en_disp
+                d["porcentaje_ocupado"] = round((en_disp / cap) * 100, 1) if cap > 0 else 0
+            else:
+                d["registros_en_dispositivo"] = 0
+                d["porcentaje_ocupado"] = 0.0
+
         return jsonify({"dispositivos": dispositivos})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -538,6 +546,33 @@ def api_upsert_dispositivo():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/dispositivos/<id>', methods=['PUT'])
+@require_role('admin', 'superadmin')
+def api_editar_dispositivo(id):
+    data = request.json or {}
+    data["id"] = id
+    try:
+        if "password_enc" in data and data["password_enc"]:
+            from auth import encrypt_device_password
+            data["password_enc"] = encrypt_device_password(data["password_enc"])
+        did = db_module.upsert_dispositivo(data)
+        return jsonify({"status": "ok", "id": did})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/dispositivos/<id>', methods=['DELETE'])
+@require_role('superadmin')
+def api_eliminar_dispositivo(id):
+    try:
+        eliminado = db_module.eliminar_dispositivo(id)
+        if not eliminado:
+            return jsonify({"error": "Dispositivo no encontrado"}), 404
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/dispositivos/<id>/test', methods=['GET'])
 @require_role('admin', 'superadmin')
 def api_test_dispositivo(id):
@@ -547,11 +582,15 @@ def api_test_dispositivo(id):
 @app.route('/api/dispositivos/<id>/sync', methods=['POST'])
 @require_role('admin', 'superadmin')
 def api_sync_dispositivo(id):
+    tenant_schema = g.tenant_schema
     def _run():
+        db_module.set_thread_tenant(tenant_schema)
         try:
             sync_module.sincronizar_con_reintento(id, force_historico=False)
         except Exception:
             pass
+        finally:
+            db_module.clear_thread_tenant()
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"status": "procesando"})
 
@@ -631,12 +670,16 @@ def sincronizar():
         return jsonify({'error': 'Formato de fecha inválido. Use YYYY-MM-DD'}), 400
 
     job_id = uuid.uuid4().hex[:12]
+    tenant_schema = g.tenant_schema
 
     def _run():
+        db_module.set_thread_tenant(tenant_schema)
         try:
             sync_module.sincronizar(fecha_inicio, fecha_fin, job_id)
         except Exception:
             pass
+        finally:
+            db_module.clear_thread_tenant()
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({'job_id': job_id, 'estado': 'en_progreso'})
@@ -911,18 +954,20 @@ def enviar_reporte_email():
 @require_role('superadmin', 'admin')
 def limpiar_dispositivo():
     data = request.json or {}
-    if not data.get('confirmar'):
+    dispositivo_id = data.get('dispositivo_id')
+    
+    if not data.get('confirmar') or not dispositivo_id:
         return jsonify({
-            'error': 'Se requiere { "confirmar": true } en el cuerpo de la solicitud.'
+            'error': 'Se requiere { "confirmar": true, "dispositivo_id": "uuid" } en el cuerpo de la solicitud.'
         }), 400
     try:
-        total_borrado = sync_module.limpiar_log_dispositivo()
+        total_borrado = sync_module.limpiar_log_dispositivo(dispositivo_id)
         try:
             db_module.registrar_audit(
                 tenant_id=g.get("tenant_id"),
                 usuario_id=g.get("usuario_id"),
                 accion="limpiar_dispositivo",
-                detalle={"registros_borrados": total_borrado},
+                detalle={"registros_borrados": total_borrado, "dispositivo_id": dispositivo_id},
                 ip=request.remote_addr,
             )
         except Exception:

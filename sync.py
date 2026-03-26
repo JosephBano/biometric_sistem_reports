@@ -230,25 +230,58 @@ def verificar_dispositivos_desconectados():
             enviar_correo(admin_email, "Fallos de Sincronización en Dispositivo", cuerpo)
             db_module.marcar_alerta_enviada(d['id'])
 
+def limpiar_log_dispositivo(dispositivo_id: str) -> int:
+    """Limpia los registros del dispositivo especificado y retorna el total borrado."""
+    disp = db_module.get_dispositivo(dispositivo_id)
+    if not disp:
+        raise ValueError(f"Dispositivo {dispositivo_id} no encontrado.")
+    
+    driver = get_driver(disp)
+    if not driver.test_conexion():
+        raise ConnectionError(f"No se pudo conectar al dispositivo {disp['nombre']}.")
+        
+    return driver.clear_asistencias()
+
+
+def _get_tenant_slugs() -> list[str]:
+    """Retorna los slugs de todos los tenants activos."""
+    from db.connection import get_connection
+    from sqlalchemy import text
+    try:
+        with get_connection("public") as conn:
+            rows = conn.execute(
+                text("SELECT slug FROM tenants WHERE activo = true ORDER BY slug")
+            ).fetchall()
+            return [r[0] for r in rows]
+    except Exception:
+        return [os.getenv("TENANT_DEFAULT", "istpet")]
+
 
 def _sync_automatico():
-    """Ejecutado por schedule (incremental)"""
-    try:
-        sincronizar(force_historico=False)
-        from db.queries.periodos import cerrar_periodos_vencidos
-        cerrar_periodos_vencidos()
-    except Exception:
-        pass
+    """Ejecutado por schedule (incremental) — itera todos los tenants activos."""
+    for slug in _get_tenant_slugs():
+        db_module.set_thread_tenant(slug)
+        try:
+            sincronizar(force_historico=False)
+            from db.queries.periodos import cerrar_periodos_vencidos
+            cerrar_periodos_vencidos()
+        except Exception:
+            pass
+        finally:
+            db_module.clear_thread_tenant()
 
 
 def _sync_nocturna_completa():
-    """Ejecutado a las 2 AM (descarga el historial si no es gigante, o force true)."""
-    try:
-        # Idealmente bajamos todo, pero podemos rellenar huecos bajando ultimos 30 días
-        treinta_dias_atras = date.today() - timedelta(days=30)
-        sincronizar(fecha_inicio=treinta_dias_atras, force_historico=True)
-    except Exception:
-        pass
+    """Ejecutado a las 2 AM — itera todos los tenants activos."""
+    treinta_dias_atras = date.today() - timedelta(days=30)
+    for slug in _get_tenant_slugs():
+        db_module.set_thread_tenant(slug)
+        try:
+            sincronizar(fecha_inicio=treinta_dias_atras, force_historico=True)
+        except Exception:
+            pass
+        finally:
+            db_module.clear_thread_tenant()
 
 
 def iniciar_scheduler():

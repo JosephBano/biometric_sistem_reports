@@ -45,3 +45,16 @@ def registrar_sync(
             },
         )
         conn.commit()
+
+def get_latest_sync_logs_por_dispositivo():
+    """Obtiene el último sync_log de cada dispositivo activo."""
+    with get_connection() as conn:
+        rows = conn.execute(text("""
+            SELECT DISTINCT ON (s.dispositivo_id)
+                   s.dispositivo_id, s.fecha_sync, s.exito, s.registros_en_dispositivo
+            FROM sync_log s
+            JOIN dispositivos d ON s.dispositivo_id = d.id
+            WHERE d.activo = true
+            ORDER BY s.dispositivo_id, s.fecha_sync DESC
+        """)).mappings().all()
+        return {str(r["dispositivo_id"]): dict(r) for r in rows}

@@ -6,7 +6,7 @@ app.py, script.py y sync.py no requieren ningún cambio.
 """
 
 # ── Conexión ──────────────────────────────────────────────────────────────
-from db.connection import get_connection
+from db.connection import get_connection, set_thread_tenant, clear_thread_tenant
 
 # ── Inicialización ────────────────────────────────────────────────────────
 from db.init import init_db
@@ -37,7 +37,7 @@ from db.queries.horarios import (
 )
 
 # ── Sync log ──────────────────────────────────────────────────────────────
-from db.queries.sync_log import registrar_sync
+from db.queries.sync_log import registrar_sync, get_latest_sync_logs_por_dispositivo
 
 # ── Justificaciones ───────────────────────────────────────────────────────
 from db.queries.justificaciones import (
@@ -132,6 +132,7 @@ from db.queries.dispositivos import (
     get_estado_sync_ui,
     actualizar_estado_sync_ui,
     upsert_dispositivo,
+    eliminar_dispositivo,
     get_dispositivos_con_fallas_consecutivas,
     has_alerta_hoy,
     marcar_alerta_enviada,
@@ -162,6 +163,7 @@ __all__ = [
     "get_estado_horarios",
     # sync
     "registrar_sync",
+    "get_latest_sync_logs_por_dispositivo",
     # justificaciones
     "insertar_justificacion",
     "get_justificaciones",

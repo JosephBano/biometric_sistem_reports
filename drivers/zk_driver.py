@@ -56,12 +56,14 @@ class ZKDriver(BiometricDriver):
         if not ZK_DISPONIBLE:
             return False
         try:
-            zk = ZK(self.ip, port=self.port, timeout=10, 
+            zk = ZK(self.ip, port=self.port, timeout=10,
                     password=self.password, force_udp=self.udp, ommit_ping=True)
             conn = zk.connect()
             conn.disconnect()
             return True
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("test_conexion %s:%s falló: %s", self.ip, self.port, e)
             return False
 
     def get_usuarios(self) -> list[dict]:
@@ -141,7 +143,7 @@ class ZKDriver(BiometricDriver):
 
     def get_capacidad(self) -> dict:
         total = 0
-        cap_max = int(os.getenv("ZK_CAPACIDAD_MAX", "100000"))
+        cap_max = int(self.dispositivo.get("capacidad_max", 100000))
         try:
             zk = self._make_zk()
             conn = zk.connect()

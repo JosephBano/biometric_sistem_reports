@@ -9,7 +9,22 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h5 class="fw-bold mb-0">Gestión de Instituciones (Tenants)</h5>
+    <div>
+        <h5 class="fw-bold mb-0">Gestión de Instituciones (Tenants)</h5>
+        <small class="text-muted">
+            Contexto activo:
+            <span class="badge bg-primary font-monospace">{{ session.get('tenant_schema', 'istpet') }}</span>
+            {% if session.get('tenant_schema') != (config.TENANT_DEFAULT or 'istpet') %}
+            <form method="POST" action="{{ url_for('switch_tenant') }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="tenant_slug" value="{{ config.TENANT_DEFAULT or 'istpet' }}">
+                <button type="submit" class="btn btn-link btn-sm p-0 ms-1 text-muted">
+                    (volver al principal)
+                </button>
+            </form>
+            {% endif %}
+        </small>
+    </div>
     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrear">
         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add_business</span>
         Nueva Institución
@@ -56,7 +71,23 @@
                             <span class="badge bg-danger-subtle text-danger">Inactivo</span>
                             {% endif %}
                         </td>
-                        <td class="text-end">
+                        <td class="text-end d-flex gap-1 justify-content-end">
+                            {% if t.slug == session.get('tenant_schema') %}
+                            <span class="badge bg-success-subtle text-success border border-success border-opacity-25 px-2 py-1">
+                                <span class="material-symbols-outlined" style="font-size:0.8rem;vertical-align:-2px;">check_circle</span>
+                                Activo
+                            </span>
+                            {% else %}
+                            <form method="POST" action="{{ url_for('switch_tenant') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="tenant_slug" value="{{ t.slug }}">
+                                <button type="submit" class="btn btn-sm btn-outline-primary"
+                                        title="Cambiar a esta institución">
+                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">swap_horiz</span>
+                                    Acceder
+                                </button>
+                            </form>
+                            {% endif %}
                             <button class="btn btn-sm btn-outline-secondary"
                                     data-bs-toggle="modal"
                                     data-bs-target="#modalEstado"

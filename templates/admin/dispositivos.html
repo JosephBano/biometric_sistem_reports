@@ -27,6 +27,7 @@
                                 <th>Driver</th>
                                 <th>Prioridad / Timeout</th>
                                 <th>Última Sync</th>
+                                <th>Capacidad</th>
                                 <th>Estado Sync</th>
                                 <th class="text-end pe-4">Acciones</th>
                             </tr>
@@ -181,10 +182,14 @@
                             <small class="text-muted">Desencriptada en caliente. Vacío = no usar.</small>
                         </div>
                         <div class="col-md-3">
+                            <label class="form-label fw-bold">Capacidad Máx</label>
+                            <input type="number" class="form-control" id="disp_capacidad" name="capacidad_max" required value="100000">
+                        </div>
+                        <div class="col-md-3">
                             <label class="form-label fw-bold">Timeout (Seg)</label>
                             <input type="number" class="form-control" id="disp_timeout" name="timeout_seg" value="120">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 mt-3">
                             <label class="form-label fw-bold">Prioridad (1-10)</label>
                             <input type="number" class="form-control" id="disp_prioridad" name="prioridad" value="5" min="1" max="10">
                             <small class="text-muted">>7: Rápido</small>
@@ -212,16 +217,21 @@
 <script>
     let timerSync = null;
 
+    // Almacén global para evitar problemas con JSON.stringify en inline HTML attributes
+    let _dispositivosCache = {};
+
     function renderDispositivos(data) {
         const tbody = document.querySelector('#tablaDispositivos tbody');
         tbody.innerHTML = '';
+        _dispositivosCache = {}; 
         
         if (!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">No hay dispositivos configurados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No hay dispositivos configurados.</td></tr>';
             return;
         }
 
         data.forEach(d => {
+            _dispositivosCache[d.id] = d;
             const row = document.createElement('tr');
             if(!d.activo) row.classList.add('table-light', 'text-muted');
             
@@ -254,6 +264,13 @@
                 <td>
                     ${d.watermark_ultima_fecha ? new Date(d.watermark_ultima_fecha).toLocaleString() : '<span class="text-muted">Nunca</span>'}
                 </td>
+                <td>
+                    <div class="progress mb-1" style="height: 6px; max-width: 120px;">
+                        <div class="progress-bar ${d.porcentaje_ocupado > 90 ? 'bg-danger' : d.porcentaje_ocupado > 75 ? 'bg-warning' : 'bg-success'}" 
+                             role="progressbar" style="width: ${d.porcentaje_ocupado}%"></div>
+                    </div>
+                    <small class="text-muted">${(d.registros_en_dispositivo || 0).toLocaleString()} / ${(d.capacidad_max || 100000).toLocaleString()}</small>
+                </td>
                 <td style="width: 200px;">
                     ${statusBadge}
                 </td>
@@ -264,11 +281,24 @@
                     <button class="btn btn-sm btn-outline-success me-1" onclick="syncDispositivo('${d.id}')" title="Sincronizar">
                         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">sync</span>
                     </button>
-                    <!-- <button class="btn btn-sm btn-outline-primary" onclick="editarDispositivo('${d.id}')"><span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">edit</span></button> -->
+                    <button class="btn btn-sm btn-outline-warning me-1" onclick="limpiarDispositivo('${d.id}', '${escapeHtml(d.nombre)}')" title="Limpiar Registros">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">cleaning_services</span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="clicEditar('${d.id}')" title="Editar">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">edit</span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarDispositivo('${d.id}', '${escapeHtml(d.nombre)}')" title="Eliminar">
+                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">delete</span>
+                    </button>
                 </td>
             `;
             tbody.appendChild(row);
         });
+    }
+
+    function clicEditar(id) {
+        const d = _dispositivosCache[id];
+        if (d) editarDispositivo(d);
     }
 
     function cargarDispositivos() {
@@ -285,6 +315,39 @@
     function nuevoDispositivo() {
         document.getElementById('dispositivoForm').reset();
         document.getElementById('disp_id').value = '';
+        document.getElementById('dispositivoModalTitle').textContent = 'Nuevo Dispositivo';
+        document.getElementById('disp_puerto').value = '4370';
+        document.getElementById('disp_timeout').value = '120';
+        document.getElementById('disp_capacidad').value = '100000';
+        document.getElementById('disp_prioridad').value = '5';
+        document.getElementById('disp_activo').checked = true;
+    }
+
+    function editarDispositivo(d) {
+        document.getElementById('dispositivoModalTitle').textContent = 'Editar Dispositivo';
+        document.getElementById('disp_id').value = d.id;
+        document.getElementById('disp_nombre').value = d.nombre;
+        document.getElementById('disp_ip').value = d.ip;
+        document.getElementById('disp_puerto').value = d.puerto;
+        document.getElementById('disp_driver').value = d.tipo_driver;
+        document.getElementById('disp_protocolo').value = d.protocolo;
+        document.getElementById('disp_timeout').value = d.timeout_seg;
+        document.getElementById('disp_capacidad').value = d.capacidad_max || 100000;
+        document.getElementById('disp_prioridad').value = d.prioridad;
+        document.getElementById('disp_activo').checked = d.activo;
+        document.getElementById('disp_pwd').value = ''; // nunca mostramos la contraseña
+        new bootstrap.Modal(document.getElementById('dispositivoModal')).show();
+    }
+
+    function eliminarDispositivo(id, nombre) {
+        if (!confirm(`¿Eliminar el dispositivo "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
+        fetch(`/api/dispositivos/${id}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) { alert('Error: ' + data.error); return; }
+                cargarDispositivos();
+            })
+            .catch(() => alert('Error de red al eliminar'));
     }
 
     function guardarDispositivo() {
@@ -294,31 +357,32 @@
             return;
         }
 
+        const id = document.getElementById('disp_id').value;
         const data = {
-            id: document.getElementById('disp_id').value,
             nombre: document.getElementById('disp_nombre').value,
             ip: document.getElementById('disp_ip').value,
             puerto: document.getElementById('disp_puerto').value,
             tipo_driver: document.getElementById('disp_driver').value,
             protocolo: document.getElementById('disp_protocolo').value,
             timeout_seg: document.getElementById('disp_timeout').value,
+            capacidad_max: document.getElementById('disp_capacidad').value,
             prioridad: document.getElementById('disp_prioridad').value,
             activo: document.getElementById('disp_activo').checked,
         };
         const pwd = document.getElementById('disp_pwd').value;
-        if(pwd) data.password_enc = pwd; // El backend se encargará de encriptarla
+        if (pwd) data.password_enc = pwd;
 
-        fetch('/api/dispositivos', {
-            method: 'POST',
+        const url = id ? `/api/dispositivos/${id}` : '/api/dispositivos';
+        const method = id ? 'PUT' : 'POST';
+
+        fetch(url, {
+            method,
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(data)
         })
+        .then(res => res.json())
         .then(res => {
-            if(!res.ok) throw new Error("Error interno");
-            return res.json();
-        })
-        .then(res => {
-            // Cierra el modal y recarga visuales
+            if (res.error) { alert('Error: ' + res.error); return; }
             bootstrap.Modal.getInstance(document.getElementById('dispositivoModal')).hide();
             cargarDispositivos();
         })
@@ -341,6 +405,28 @@
                 cargarDispositivos();
                 iniciarPollSync();
             });
+    }
+
+    function limpiarDispositivo(id, nombre) {
+        if (!confirm(`¿Estás seguro de que deseas limpiar TODOS los registros del dispositivo "${nombre}"?\nEsto eliminará permanentemente la memoria del equipo (los datos ya sincronizados se conservan en el sistema).`)) return;
+        
+        fetch('/api/limpiar-dispositivo', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ confirmar: true, dispositivo_id: id })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error al limpiar el dispositivo: ' + data.error);
+            } else {
+                alert(`¡Dispositivo limpiado correctamente!\nRegistros borrados: ${data.registros_borrados}`);
+                cargarDispositivos();
+            }
+        })
+        .catch(err => {
+            alert('Error de red o procesamiento: ' + err.message);
+        });
     }
 
     function iniciarPollSync() {

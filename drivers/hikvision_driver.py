@@ -130,5 +130,5 @@ class HikvisionDriver(BiometricDriver):
     def get_capacidad(self) -> dict:
         return {
             "total_registros": 0,
-            "capacidad_max": 100000
+            "capacidad_max": int(self.dispositivo.get("capacidad_max", 100000))
         }
