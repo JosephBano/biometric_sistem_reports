@@ -29,23 +29,44 @@ def init_db():
         conn.execute(text(PUBLIC_DDL))
         conn.commit()
 
-        # Schema del tenant
+        # Schema del tenant por defecto
         conn.execute(text(get_tenant_ddl(tenant)))
-        # Migración: Agregar hora_recuperacion_fin si no existe (Fase C + Rango)
-        conn.execute(text(f"""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (
-                    SELECT 1 
-                    FROM information_schema.columns 
-                    WHERE table_schema = '{tenant}' 
-                      AND table_name = 'justificaciones' 
-                      AND column_name = 'hora_recuperacion_fin'
-                ) THEN 
-                    ALTER TABLE {tenant}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
-                END IF;
-            END $$;
-        """))
+        conn.commit()
+
+        # Obtener todos los tenants activos para aplicar migraciones a cada uno
+        tenant_slugs = [r[0] for r in conn.execute(
+            text("SELECT slug FROM public.tenants WHERE activo = true")
+        ).fetchall()] or [tenant]
+
+        for slug in tenant_slugs:
+            conn.execute(text(f"""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = '{slug}' AND table_name = 'dispositivos'
+                          AND column_name = 'prioridad'
+                    ) THEN
+                        ALTER TABLE {slug}.dispositivos ADD COLUMN prioridad INTEGER NOT NULL DEFAULT 5;
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = '{slug}' AND table_name = 'dispositivos'
+                          AND column_name = 'capacidad_max'
+                    ) THEN
+                        ALTER TABLE {slug}.dispositivos ADD COLUMN capacidad_max INTEGER NOT NULL DEFAULT 100000;
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_schema = '{slug}' AND table_name = 'justificaciones'
+                          AND column_name = 'hora_recuperacion_fin'
+                    ) THEN
+                        ALTER TABLE {slug}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
+                    END IF;
+                END $$;
+            """))
         conn.commit()
 
     # Datos de referencia
