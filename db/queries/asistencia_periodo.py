@@ -111,8 +111,9 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 if current_date in feriados:
                     status = "feriado"
                 else:
-                    # Lookup schedule
-                    horario = get_horario_en_fecha(conn, persona_id, current_date)
+                    # Lookup schedule (fallback por nombre si el UUID no tiene asignación)
+                    horario = get_horario_en_fecha(conn, persona_id, current_date,
+                                                   nombre=p_dict.get("nombre"))
                     current_weekday = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"][current_date.weekday()]
                     
                     if horario and horario.get(current_weekday):

@@ -150,6 +150,36 @@ def archivar_periodo(id: str) -> None:
         )
 
 
+def eliminar_periodo(id: str) -> bool:
+    """
+    Elimina permanentemente un grupos_periodo y todos sus periodos_vigencia asociados.
+    NO elimina las personas ni sus horarios, solo la asociación al período.
+    Retorna True si existía y fue eliminado.
+    """
+    with get_connection() as conn:
+        gp = conn.execute(
+            text("SELECT nombre, fecha_inicio, fecha_fin FROM grupos_periodo WHERE id = CAST(:id AS uuid)"),
+            {"id": id},
+        ).fetchone()
+        if not gp:
+            return False
+        d = dict(gp._mapping)
+        conn.execute(
+            text("""
+                DELETE FROM periodos_vigencia
+                WHERE nombre = :nombre
+                  AND fecha_inicio = :fi
+                  AND (fecha_fin = :ff OR (:ff IS NULL AND fecha_fin IS NULL))
+            """),
+            {"nombre": d["nombre"], "fi": d["fecha_inicio"], "ff": d["fecha_fin"]},
+        )
+        conn.execute(
+            text("DELETE FROM grupos_periodo WHERE id = CAST(:id AS uuid)"),
+            {"id": id},
+        )
+        return True
+
+
 def cerrar_periodos_vencidos() -> int:
     """Cierra grupos_periodo y periodos_vigencia cuya fecha_fin ya pasó."""
     with get_connection() as conn:

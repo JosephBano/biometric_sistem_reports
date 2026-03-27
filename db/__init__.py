@@ -103,6 +103,7 @@ from db.queries.periodos import (
     archivar_periodo,
     cerrar_periodos_vencidos,
     procesar_csv_personas_periodo,
+    eliminar_periodo,
 )
 
 from db.queries.asistencia_periodo import calcular_asistencia_periodo

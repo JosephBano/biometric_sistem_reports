@@ -82,6 +82,18 @@
                                             </button>
                                         </form>
                                     </li>
+                                    {% if 'superadmin' in session.get('roles', []) %}
+                                    <li><hr class="dropdown-menu-divider"></li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('eliminar_periodo_route', id=p.id) }}"
+                                              onsubmit="return confirm('¿Eliminar permanentemente el período «{{ p.nombre }}» y todas sus personas asociadas? Esta acción no se puede deshacer.')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger fw-bold">
+                                                <span class="material-symbols-outlined fs-6">delete_forever</span> Eliminar Permanentemente
+                                            </button>
+                                        </form>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </div>

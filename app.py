@@ -2018,6 +2018,18 @@ def archivar_periodo_route(id):
     return redirect(url_for('periodos_lista'))
 
 
+@app.route('/periodos/<id>/eliminar', methods=['POST'])
+@require_role('superadmin')
+def eliminar_periodo_route(id):
+    eliminado = db_module.eliminar_periodo(id)
+    from flask import flash
+    if eliminado:
+        flash("Período eliminado permanentemente.", "success")
+    else:
+        flash("Período no encontrado.", "danger")
+    return redirect(url_for('periodos_lista'))
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # PERSONAS (FASE 4)
 # ══════════════════════════════════════════════════════════════════════════

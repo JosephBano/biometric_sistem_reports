@@ -409,12 +409,15 @@ def get_estado_horarios() -> dict:
     }
 
 
-def get_horario_en_fecha(conn, persona_id: str, fecha: date) -> dict | None:
+def get_horario_en_fecha(conn, persona_id: str, fecha: date, nombre: str = None) -> dict | None:
     """
     Retorna el horario activo de una persona en una fecha específica.
     Maneja horarios fijos (ciclo_semanas=1) y rotaciones cíclicas.
+    Si no se encuentra por persona_id y se proporciona `nombre`, hace un
+    fallback por nombre (útil cuando la persona del período fue creada por
+    CSV y el horario fue cargado por .obd con distinto registro en personas).
     """
-    # Caso 1: horario fijo
+    # Caso 1: horario fijo por UUID
     row = conn.execute(
         text("""
             SELECT ph.*
@@ -449,6 +452,26 @@ def get_horario_en_fecha(conn, persona_id: str, fecha: date) -> dict | None:
     ).fetchone()
 
     if not ciclo_row:
+        # Caso 3: fallback por nombre cuando no hay asignación directa por UUID
+        # (ocurre cuando la persona del período fue creada por CSV y el horario
+        # fue cargado vía .obd con un registro distinto en personas)
+        if nombre:
+            row = conn.execute(
+                text("""
+                    SELECT ph.*
+                    FROM plantillas_horario ph
+                    JOIN asignaciones_horario ah ON ah.plantilla_id = ph.id
+                    JOIN personas p ON p.id = ah.persona_id
+                    WHERE UPPER(p.nombre) = UPPER(:nombre)
+                      AND ah.ciclo_semanas = 1
+                      AND ah.fecha_inicio <= :fecha
+                      AND (ah.fecha_fin IS NULL OR ah.fecha_fin >= :fecha)
+                    ORDER BY ah.fecha_inicio DESC
+                    LIMIT 1
+                """),
+                {"nombre": nombre, "fecha": fecha},
+            ).fetchone()
+            return _row_to_horario_dict(row) if row else None
         return None
 
     ref = ciclo_row[0]
