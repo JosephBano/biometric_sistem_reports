@@ -188,9 +188,15 @@ def agregar_personas_a_periodo_bulk(periodo_id: str, personas_ids: list[str]) ->
                 conn.execute(
                     text("""
                         INSERT INTO periodos_vigencia (persona_id, nombre, fecha_inicio, fecha_fin, estado, descripcion)
-                        VALUES (CAST(:persona_id AS uuid), :nombre,
-                                CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc)
-                        ON CONFLICT DO NOTHING
+                        SELECT CAST(:persona_id AS uuid), :nombre,
+                               CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM periodos_vigencia
+                            WHERE persona_id = CAST(:persona_id AS uuid)
+                              AND nombre = :nombre
+                              AND fecha_inicio = CAST(:fi AS date)
+                              AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
+                        )
                     """),
                     {"persona_id": p_id, "nombre": d["nombre"],
                      "fi": d["fecha_inicio"], "ff": d["fecha_fin"],
@@ -325,14 +331,20 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                 persona_id = str(p_new[0])
                                 nuevas += 1
 
-                        # D. Crear periodo_vigencia para la persona
+                        # D. Crear periodo_vigencia para la persona (evitar duplicados)
                         conn.execute(
                             text("""
                                 INSERT INTO periodos_vigencia
                                     (persona_id, nombre, fecha_inicio, fecha_fin, estado, descripcion)
-                                VALUES (CAST(:pid AS uuid), :nombre,
-                                        CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc)
-                                ON CONFLICT DO NOTHING
+                                SELECT CAST(:pid AS uuid), :nombre,
+                                       CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc
+                                WHERE NOT EXISTS (
+                                    SELECT 1 FROM periodos_vigencia
+                                    WHERE persona_id = CAST(:pid AS uuid)
+                                      AND nombre = :nombre
+                                      AND fecha_inicio = CAST(:fi AS date)
+                                      AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
+                                )
                             """),
                             {"pid": persona_id, "nombre": p_data["nombre"],
                              "fi": fecha_inicio, "ff": fecha_fin,

@@ -73,12 +73,16 @@
                     <td><span class="badge bg-light text-dark fw-normal">{{ p.grupo or '-' }}</span></td>
                     <td>{{ p.categoria or '-' }}</td>
                     <td>
+                        {% if p.resumen.sin_horario %}
+                        <span class="badge text-white" style="background:#AAAAAA">Sin horario</span>
+                        {% else %}
                         <div class="d-flex align-items-center gap-2">
                              <span class="badge text-white" data-bg-color="{{ p.resumen.color }}">{{ p.resumen.porcentaje_asistencia }}%</span>
                              <div class="progress w-100" style="height: 6px;">
                                  <div class="progress-bar" data-width="{{ p.resumen.porcentaje_asistencia }}" data-bg-color="{{ p.resumen.color }}"></div>
                              </div>
                         </div>
+                        {% endif %}
                     </td>
                     <td>
                         {% if p.resumen.ausentes > 2 %}
