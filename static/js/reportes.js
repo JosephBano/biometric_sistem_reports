@@ -211,7 +211,7 @@ function generarReporte() {
     btn.disabled = true;
 
     // Use raw fetch for download capability
-    fetch('/api/generar-desde-db', {
+    fetch(_BASE + '/api/generar-desde-db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

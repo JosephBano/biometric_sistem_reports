@@ -108,7 +108,7 @@ function importarHorarios(file) {
     const formData = new FormData();
     formData.append('archivo', file);
 
-    fetch('/api/horarios/importar', { method: 'POST', body: formData })
+    fetch(_BASE + '/api/horarios/importar', { method: 'POST', body: formData })
         .then(response => response.json().then(data => ({ status: response.status, ok: response.ok, body: data })))
         .then(res => {
             document.getElementById('horarios-upload-progress').style.display = 'none';
@@ -130,7 +130,7 @@ function importarHorarios(file) {
 }
 
 function exportarHorariosCsv() {
-    window.location.href = '/api/horarios/exportar';
+    window.location.href = _BASE + '/api/horarios/exportar';
 }
 
 const DIAS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'];
@@ -377,7 +377,7 @@ function importarFeriados(file) {
     const formData = new FormData();
     formData.append('archivo', file);
 
-    fetch('/api/feriados/importar', { method: 'POST', body: formData })
+    fetch(_BASE + '/api/feriados/importar', { method: 'POST', body: formData })
         .then(response => response.json().then(data => ({ status: response.status, ok: response.ok, body: data })))
         .then(res => {
             document.getElementById('feriados-import-file').value = '';
@@ -392,7 +392,7 @@ function importarFeriados(file) {
 }
 
 function exportarFeriados() {
-    window.location.href = "/api/feriados/exportar";
+    window.location.href = _BASE + "/api/feriados/exportar";
 }
 
 // ════════════ MANTENIMIENTO E HISTÓRICOS (Fase 4: Paso 4.3) ════════════════
@@ -416,7 +416,7 @@ function subirHistorico() {
     statusDiv.innerHTML = '<div class="spinner-border spinner-border-sm text-primary" role="status"></div> Subiendo y procesando histórico...';
     btn.disabled = true;
 
-    fetch('/api/historicos/importar', {
+    fetch(_BASE + '/api/historicos/importar', {
         method: 'POST',
         body: formData
     })

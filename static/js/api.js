@@ -1,38 +1,40 @@
 // static/js/api.js
 
+const _BASE = (typeof window.APP_BASE !== 'undefined') ? window.APP_BASE : '';
+
 /**
  * Helper centralizado para llamadas al backend (Sección D.2)
  */
 const API = {
     async get(path) {
-        const res = await fetch(path);
-        if (res.status === 401) { window.location.href = '/login'; return; }
+        const res = await fetch(_BASE + path);
+        if (res.status === 401) { window.location.href = _BASE + '/login'; return; }
         if (!res.ok) throw await res.json();
         return res.json();
     },
     async post(path, body) {
-        const res = await fetch(path, {
+        const res = await fetch(_BASE + path, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
-        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 401) { window.location.href = _BASE + '/login'; return; }
         if (!res.ok) throw await res.json();
         return res.json();
     },
     async delete(path) {
-        const res = await fetch(path, { method: 'DELETE' });
-        if (res.status === 401) { window.location.href = '/login'; return; }
+        const res = await fetch(_BASE + path, { method: 'DELETE' });
+        if (res.status === 401) { window.location.href = _BASE + '/login'; return; }
         if (!res.ok) throw await res.json();
         return res.json();
     },
     async patch(path, body) {
-        const res = await fetch(path, {
+        const res = await fetch(_BASE + path, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         });
-        if (res.status === 401) { window.location.href = '/login'; return; }
+        if (res.status === 401) { window.location.href = _BASE + '/login'; return; }
         if (!res.ok) throw await res.json();
         return res.json();
     }
@@ -40,10 +42,10 @@ const API = {
 
 // Funciones para legacy compatibility o helpers directos
 function apiCall(url, options = {}) {
-    return fetch(url, options)
+    return fetch(_BASE + url, options)
         .then(response => {
             if (response.status === 401) {
-                window.location.href = '/login';
+                window.location.href = _BASE + '/login';
                 throw new Error('Sesión expirada. Redirigiendo a acceso...');
             }
             if (!response.ok) {
