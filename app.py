@@ -40,7 +40,18 @@ from decorators import require_role, require_tipo_persona
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/biometrico/static')
+
+from werkzeug.middleware.proxy_fix import ProxyFix
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.exceptions import NotFound
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+app.wsgi_app = DispatcherMiddleware(NotFound(), {
+    '/biometrico': app.wsgi_app
+})
+
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
 app.config['PERMANENT_SESSION_LIFETIME'] = int(os.getenv("SESSION_LIFETIME_HOURS", "8")) * 3600
 app.config['SESSION_COOKIE_HTTPONLY'] = True

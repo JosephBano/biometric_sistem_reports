@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   db:
     image: postgres:16-alpine
@@ -20,6 +22,9 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    networks:
+      - internal     # ← red interna para hablar con app
+      - frontend_net # ← red de NPM
 
   biometrico-app:
     build: .
@@ -27,29 +32,27 @@ services:
     env_file:
       - .env
     environment:
-      # En Docker, la app se conecta al servicio 'db' (no localhost)
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
     depends_on:
       db:
         condition: service_healthy
     volumes:
-      # Uploads y reports como volumen nombrado
       - app_data:/data
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
-
-    # Mapeo de puerto estándar. En Linux con Docker Engine se puede usar
-    # network_mode: host para acceder al ZK sin NAT.
-    # NOTA: network_mode: host es incompatible con depends_on; si se necesita,
-    # levantar primero 'db' por separado: docker compose up -d db
     ports:
       - "5000:5000"
-    # Para usar network_mode: host, comentar el bloque 'ports' y 'depends_on' de arriba
-    # y descomentar la línea siguiente:
-    # network_mode: host
+    networks:
+      - internal     # ← para conectarse a db
+      - frontend_net # ← para que NPM lo alcance
 
 volumes:
   postgres_data:
-    # Datos de PostgreSQL. Backup: docker exec biometrico-db pg_dump -U user db > backup.sql
   app_data:
-    # Uploads y reports generados por la app
+
+networks:
+  internal:
+    driver: bridge   # ← red privada entre app y db
+  frontend_net:
+    external: true
+    name: frontend_net
