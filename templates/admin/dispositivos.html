@@ -302,7 +302,7 @@
     }
 
     function cargarDispositivos() {
-        fetch('/api/dispositivos')
+        fetch(_BASE + '/api/dispositivos')
             .then(res => res.json())
             .then(data => {
                 if(data.dispositivos) {
@@ -341,7 +341,7 @@
 
     function eliminarDispositivo(id, nombre) {
         if (!confirm(`¿Eliminar el dispositivo "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
-        fetch(`/api/dispositivos/${id}`, { method: 'DELETE' })
+        fetch(_BASE + `/api/dispositivos/${id}`, { method: 'DELETE' })
             .then(res => res.json())
             .then(data => {
                 if (data.error) { alert('Error: ' + data.error); return; }
@@ -372,7 +372,7 @@
         const pwd = document.getElementById('disp_pwd').value;
         if (pwd) data.password_enc = pwd;
 
-        const url = id ? `/api/dispositivos/${id}` : '/api/dispositivos';
+        const url = id ? _BASE + `/api/dispositivos/${id}` : _BASE + '/api/dispositivos';
         const method = id ? 'PUT' : 'POST';
 
         fetch(url, {
@@ -390,7 +390,7 @@
     }
 
     function testDispositivo(id) {
-        fetch(`/api/dispositivos/${id}/test`)
+        fetch(_BASE + `/api/dispositivos/${id}/test`)
             .then(res => res.json())
             .then(data => {
                 if(data.ok) alert("✅ Conexión Exitosa con: " + data.ip);
@@ -400,7 +400,7 @@
 
     function syncDispositivo(id) {
         if(!confirm("¿Forzar sincronización de este dispositivo ahora?")) return;
-        fetch(`/api/dispositivos/${id}/sync`, {method: 'POST'})
+        fetch(_BASE + `/api/dispositivos/${id}/sync`, {method: 'POST'})
             .then(() => {
                 cargarDispositivos();
                 iniciarPollSync();
@@ -410,7 +410,7 @@
     function limpiarDispositivo(id, nombre) {
         if (!confirm(`¿Estás seguro de que deseas limpiar TODOS los registros del dispositivo "${nombre}"?\nEsto eliminará permanentemente la memoria del equipo (los datos ya sincronizados se conservan en el sistema).`)) return;
         
-        fetch('/api/limpiar-dispositivo', {
+        fetch(_BASE + '/api/limpiar-dispositivo', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ confirmar: true, dispositivo_id: id })
@@ -449,7 +449,7 @@
     let _personasCatalogo = [];
 
     function cargarResumenZK() {
-        fetch('/api/usuarios-zk')
+        fetch(_BASE + '/api/usuarios-zk')
             .then(r => r.json())
             .then(data => {
                 _zkUsuarios = data.usuarios || [];
@@ -541,7 +541,7 @@
 
         // Cargar personas si no están en caché
         if (!_personasCatalogo.length) {
-            fetch('/api/personas-lista').then(r => r.json()).then(data => {
+            fetch(_BASE + '/api/personas-lista').then(r => r.json()).then(data => {
                 _personasCatalogo = data.personas || [];
                 renderListaPersonasVincular(_personasCatalogo);
             });
@@ -595,7 +595,7 @@
         btn.disabled = true;
         btn.textContent = 'Vinculando...';
 
-        fetch(`/api/usuarios-zk/${encodeURIComponent(idUsuario)}/vincular`, {
+        fetch(_BASE + `/api/usuarios-zk/${encodeURIComponent(idUsuario)}/vincular`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({persona_id: personaId}),
@@ -607,7 +607,7 @@
                 _personasCatalogo = [];  // invalidar caché
                 showToast('Usuario vinculado correctamente', 'success');
                 // Recargar lista ZK fresca
-                fetch('/api/usuarios-zk').then(r => r.json()).then(data => {
+                fetch(_BASE + '/api/usuarios-zk').then(r => r.json()).then(data => {
                     _zkUsuarios = data.usuarios || [];
                     renderResumenZK(data);
                     renderTablaZK(_zkUsuarios);
