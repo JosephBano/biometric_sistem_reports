@@ -184,12 +184,16 @@ function generarReporte() {
     const filtros = leerFiltros();
     const modo = document.getElementById('modo').value;
 
+    const fmtEl = document.querySelector('input[name="formato-reporte"]:checked');
+    const formato = fmtEl ? fmtEl.value : 'pdf';
+
     const payload = {
         fecha_inicio: fi,
         fecha_fin: ff,
         modo: modo,
         filtros: filtros,
-        excluidos: excl
+        excluidos: excl,
+        formato: formato,
     };
 
     if (modo === 'persona') {

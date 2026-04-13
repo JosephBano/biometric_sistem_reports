@@ -30,6 +30,7 @@ from script import (
     DEFAULT_CONFIG, filtrar_excluidos, deduplicar,
     analizar_dia, analizar_por_persona, generar_pdf, generar_pdf_persona,
 )
+from script_docx import generar_docx, generar_docx_persona
 from collections import defaultdict
 import db as db_module
 import sync as sync_module
@@ -334,12 +335,14 @@ def _parse_config(data: dict) -> dict:
 
 def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                pdf_path: str, nombre_origen: str,
-               fecha_inicio=None, fecha_fin=None, filtros: dict = None):
+               fecha_inicio=None, fecha_fin=None, filtros: dict = None,
+               formato: str = "pdf"):
     """
-    Aplica filtros, deduplicación, análisis y genera el PDF.
+    Aplica filtros, deduplicación, análisis y genera el reporte (PDF o DOCX).
     Los horarios son obligatorios; lanza ValueError si no hay ninguno cargado.
     Solo analiza las personas presentes en el archivo de horarios.
-    filtros: dict con opciones de secciones/columnas a incluir en el PDF.
+    filtros: dict con opciones de secciones/columnas a incluir en el reporte.
+    formato: 'pdf' (por defecto) o 'docx'.
     """
     if filtros is None:
         filtros = {}
@@ -430,8 +433,12 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                     "Ninguna de las personas seleccionadas tiene registros en el período."
                 )
 
-        generar_pdf_persona(pdf_path, analisis, config, nombre_origen,
-                            filtros=filtros, sin_horario=sin_horario)
+        if formato == "docx":
+            generar_docx_persona(pdf_path, analisis, config, nombre_origen,
+                                 filtros=filtros, sin_horario=sin_horario)
+        else:
+            generar_pdf_persona(pdf_path, analisis, config, nombre_origen,
+                                filtros=filtros, sin_horario=sin_horario)
     else:
         por_fecha = defaultdict(list)
         for r in registros:
@@ -442,8 +449,12 @@ def _build_pdf(registros: list, config: dict, modo: str, persona: str,
                                            justificaciones=justificaciones,
                                            feriados=feriados,
                                            permitir_sin_horario=permitir_sin_horario)
-        generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen,
-                    filtros=filtros, sin_horario=sin_horario)
+        if formato == "docx":
+            generar_docx(pdf_path, analisis, log_dup, config, nombre_origen,
+                         filtros=filtros, sin_horario=sin_horario)
+        else:
+            generar_pdf(pdf_path, analisis, log_dup, config, nombre_origen,
+                        filtros=filtros, sin_horario=sin_horario)
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -826,6 +837,9 @@ def generar_desde_db():
 
     modo    = data.get('modo', 'general')
     persona = data.get('persona', '')
+    formato = data.get('formato', 'pdf').lower()
+    if formato not in ('pdf', 'docx'):
+        formato = 'pdf'
     config  = _parse_config(data)
     if modo == 'varias':
         config['personas'] = data.get('personas', [])
@@ -859,29 +873,31 @@ def generar_desde_db():
         f"Base de datos "
         f"({fecha_inicio.strftime('%d/%m/%Y')} — {fecha_fin.strftime('%d/%m/%Y')})"
     )
-    pdf_filename = f"reporte_{uuid.uuid4().hex[:8]}.pdf"
-    pdf_path     = os.path.join(app.config['REPORTS_FOLDER'], pdf_filename)
+    ext           = f".{formato}"
+    rpt_filename  = f"reporte_{uuid.uuid4().hex[:8]}{ext}"
+    pdf_path      = os.path.join(app.config['REPORTS_FOLDER'], rpt_filename)
 
     try:
         _build_pdf(registros, config, modo, persona, pdf_path, nombre_origen,
-                   fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, filtros=filtros)
+                   fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, filtros=filtros,
+                   formato=formato)
         labels = {'general': 'General', 'persona': 'Persona', 'varias': 'Varias_Personas'}
         label  = labels.get(modo, 'Reporte')
         try:
             db_module.registrar_audit(
                 tenant_id=g.get("tenant_id"),
                 usuario_id=g.get("usuario_id"),
-                accion="generar_pdf",
+                accion=f"generar_{formato}",
                 detalle={"modo": modo, "fecha_inicio": str(fecha_inicio),
-                         "fecha_fin": str(fecha_fin)},
+                         "fecha_fin": str(fecha_fin), "formato": formato},
                 ip=request.remote_addr,
             )
         except Exception:
             pass
         return jsonify({
             'success':      True,
-            'download_url': f'/descargar/{pdf_filename}',
-            'filename':     f'Reporte_Biometrico_{label}_DB.pdf',
+            'download_url': f'/descargar/{rpt_filename}',
+            'filename':     f'Reporte_Biometrico_{label}_DB{ext}',
         })
     except ValueError as e:
         return jsonify({'error': str(e)}), 400

@@ -188,10 +188,28 @@
             </div>
         </details>
 
-        <div class="d-grid gap-2 mt-5">
+        <div class="mb-3 mt-4">
+            <label class="form-label small fw-bold text-muted mb-1">Formato del documento</label>
+            <div class="d-flex gap-3">
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="formato-reporte" id="fmt-pdf" value="pdf" checked>
+                    <label class="form-check-label small" for="fmt-pdf">
+                        <i class="bi bi-file-earmark-pdf text-danger"></i> PDF
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="radio" name="formato-reporte" id="fmt-docx" value="docx">
+                    <label class="form-check-label small" for="fmt-docx">
+                        <i class="bi bi-file-earmark-word text-primary"></i> Word (.docx)
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-grid gap-2 mt-3">
             <button type="button" class="btn btn-primary btn-lg fw-bold shadow-sm" id="btn-submit"
                 onclick="generarReporte();">
-                Generar Reporte PDF
+                Generar Reporte
             </button>
         </div>
 
