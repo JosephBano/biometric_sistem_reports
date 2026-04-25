@@ -1,11 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Configuración</h3>
-        <p class="text-muted mb-0">Atención de feriados, históricos y backups del sistema.</p>
-    </div>
+<div class="page-header mb-4">
+    <h3>Configuración</h3>
+    <p class="text-muted">Atención de feriados, históricos y backups del sistema.</p>
 </div>
 
 <!-- Tabs -->
@@ -122,18 +120,4 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
-<style>
-.custom-tab {
-    background-color: transparent !important;
-    color: #6c757d !important;
-    border: none;
-    border-radius: 10px !important;
-    transition: all 0.2s ease-in-out;
-}
-.custom-tab.active {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
-}
-</style>
 {% endblock %}

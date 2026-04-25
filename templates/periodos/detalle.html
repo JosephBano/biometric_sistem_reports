@@ -1,28 +1,26 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-         <a href="{{ url_for('periodos_lista') }}" class="btn btn-sm btn-link text-decoration-none d-inline-flex align-items-center gap-1 p-0 mb-1">
-             <span class="material-symbols-outlined fs-6">arrow_back</span> Volver
-         </a>
-         <h3 class="fw-bold mb-0 d-flex align-items-center gap-2">
-             {{ periodo.nombre }}
-             <span class="badge {{ 'bg-success-subtle text-success' if periodo.estado == 'activo' else 'bg-secondary-subtle text-secondary' }} fs-6">
-                 {{ periodo.estado | capitalize }}
-             </span>
-         </h3>
-         <p class="text-muted mb-0">
-             Vigencia: {{ periodo.fecha_inicio.strftime('%d/%m/%Y') }} — {{ periodo.fecha_fin.strftime('%d/%m/%Y') if periodo.fecha_fin else 'Indefinido' }}
-         </p>
+<div class="page-header mb-4">
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="{{ url_for('periodos_lista') }}" class="btn btn-sm btn-link text-decoration-none p-0">
+            <span class="material-symbols-outlined fs-6">arrow_back</span>
+        </a>
+        <h3 class="fw-bold mb-0 d-flex align-items-center gap-2">
+            {{ periodo.nombre }}
+            <span class="badge {{ 'bg-success-subtle text-success' if periodo.estado == 'activo' else 'bg-secondary-subtle text-secondary' }} fs-6">
+                {{ periodo.estado | capitalize }}
+            </span>
+        </h3>
     </div>
-    <div class="d-flex gap-2">
-         {% if periodo.estado == 'activo' %}
-         <button class="btn btn-outline-primary d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalImportarMasivo">
-              <span class="material-symbols-outlined">upload</span> Carga Masiva
-         </button>
-         {% endif %}
-    </div>
+    <p class="text-muted">
+        Vigencia: {{ periodo.fecha_inicio.strftime('%d/%m/%Y') }} — {{ periodo.fecha_fin.strftime('%d/%m/%Y') if periodo.fecha_fin else 'Indefinido' }}
+    </p>
+    {% if periodo.estado == 'activo' %}
+    <button class="btn btn-outline-primary mt-3 d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalImportarMasivo">
+        <span class="material-symbols-outlined">upload</span> Carga Masiva
+    </button>
+    {% endif %}
 </div>
 
 <!-- Resumen Estadístico general del periodo -->

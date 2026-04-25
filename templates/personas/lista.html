@@ -1,18 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Personas</h3>
-        <p class="text-muted mb-0">Gestión del personal y sus horarios de trabajo.</p>
-    </div>
+<div class="page-header mb-4">
+    <h3>Personas</h3>
+    <p class="text-muted">Gestión del personal y sus horarios de trabajo.</p>
     {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-    <div id="header-actions-personal">
+    <div id="header-actions-personal" class="mt-3">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
             <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">person_add</span> Nueva Persona
         </button>
     </div>
-    <div id="header-actions-horarios" style="display:none;">
+    <div id="header-actions-horarios" class="mt-3" style="display:none;">
         <label class="btn btn-outline-secondary mb-0" for="horarios-input" title="Importar horarios masivamente (.csv, .obd, .ods)">
             <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">upload_file</span> Importar
             <input type="file" id="horarios-input" style="display:none" accept=".obd,.ods,.csv">
@@ -54,39 +52,37 @@
     <div class="tab-pane fade show active" id="tab-personal">
 
         <!-- Filtros -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-                <form class="row g-3 align-items-end" method="GET">
-                    <div class="col-md-4">
-                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Búsqueda</label>
-                        <input type="text" class="form-control bg-light border-0" name="q"
-                            placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo</label>
-                        <select class="form-select bg-light border-0" name="tipo_persona_id">
-                            <option value="">Todos los tipos</option>
-                            {% for t in tenant_tipos %}
-                            <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
-                        <select class="form-select bg-light border-0" name="grupo_id">
-                            <option value="">Todos los grupos</option>
-                            {% for g in grupos %}
-                            <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary flex-fill fw-bold shadow-sm" style="height: 38px;">Filtrar</button>
-                        <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
-                    </div>
-                </form>
-            </div>
+<div class="filter-card mb-4">
+    <form class="row g-3 align-items-end" method="GET">
+        <div class="col-md-4">
+            <label class="form-label small text-muted fw-bold mb-2">Búsqueda</label>
+            <input type="text" class="form-control" name="q"
+                placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
         </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold mb-2">Tipo</label>
+            <select class="form-select" name="tipo_persona_id">
+                <option value="">Todos los tipos</option>
+                {% for t in tenant_tipos %}
+                <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold mb-2">Grupo</label>
+            <select class="form-select" name="grupo_id">
+                <option value="">Todos los grupos</option>
+                {% for g in grupos %}
+                <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
+            <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+        </div>
+    </form>
+</div>
 
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
@@ -652,18 +648,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<style>
-.custom-tab {
-    background-color: transparent !important;
-    color: #6c757d !important;
-    border: none;
-    border-radius: 10px !important;
-    transition: all 0.2s ease-in-out;
-}
-.custom-tab.active {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
-}
-</style>
 {% endblock %}
