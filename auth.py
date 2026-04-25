@@ -27,6 +27,11 @@ def hash_password(plain: str) -> str:
     ).decode("utf-8")
 
 
+def generar_temporary_password(longitud=12) -> str:
+    """Genera una contraseña temporal segura (token URL-safe)."""
+    return secrets.token_urlsafe(longitud)
+
+
 def verificar_password(plain: str, hashed: str) -> bool:
     """Verifica si el texto plano coincide con el hash bcrypt."""
     try:
@@ -153,3 +158,8 @@ def activar_usuario(usuario_id: str) -> bool:
     """Reactiva un usuario (activo=true)."""
     from db.queries.auth import activar_usuario_db
     return activar_usuario_db(usuario_id)
+
+
+def generar_temporary_password(longitud=12) -> str:
+    """Genera una contraseña temporal segura (token URL-safe)."""
+    return secrets.token_urlsafe(longitud)

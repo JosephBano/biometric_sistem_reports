@@ -83,6 +83,43 @@ def get_usuarios_tenant(tenant_id: str) -> list:
     return result
 
 
+def get_usuarios_all_tenants() -> list:
+    """Retorna TODOS los usuarios de todos los tenants, sin password_hash."""
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT u.id::text, u.tenant_id::text, u.email, u.nombre,
+                       u.roles, u.activo, u.ultimo_acceso, u.configuracion,
+                       u.creado_en,
+                       t.slug AS tenant_slug, t.nombre AS tenant_nombre
+                FROM public.usuarios u
+                LEFT JOIN public.tenants t ON t.id = u.tenant_id
+                ORDER BY t.nombre, u.nombre
+            """)
+        ).fetchall()
+    result = []
+    for row in rows:
+        d = dict(row._mapping)
+        d["roles"] = list(d.get("roles") or [])
+        d["configuracion"] = d.get("configuracion") or {}
+        result.append(d)
+    return result
+
+
+def get_tenants_activos() -> list:
+    """Retorna todos los tenants activos con su id y slug."""
+    with get_engine().connect() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id::text, slug, nombre, nombre_corto
+                FROM public.tenants
+                WHERE activo = true
+                ORDER BY nombre
+            """)
+        ).fetchall()
+    return [dict(row._mapping) for row in rows]
+
+
 def crear_usuario_db(tenant_id: str, email: str, password_hash: str, nombre: str,
                      roles: list, configuracion: dict) -> dict:
     """Inserta un nuevo usuario. Retorna el usuario creado (sin password_hash)."""

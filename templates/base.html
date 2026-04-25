@@ -111,6 +111,13 @@
                         <span>Tenants</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'superadmin_usuarios' %}active{% endif %}"
+                        href="{{ url_for('superadmin_usuarios') }}">
+                        <span class="material-symbols-outlined nav-icon">manage_accounts</span>
+                        <span>Usuarios Global</span>
+                    </a>
+                </li>
                 {% endif %}
                 {% endif %}
             </ul>

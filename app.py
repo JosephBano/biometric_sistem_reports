@@ -1923,6 +1923,170 @@ def admin_editar_usuario(usuario_id):
 
 
 # ══════════════════════════════════════════════════════════════════════════
+# SUPERADMIN: GESTIÓN GLOBAL DE USUARIOS CROSS-TENANT
+# ══════════════════════════════════════════════════════════════════════════
+
+@app.route('/admin/superadmin/usuarios', methods=['GET'])
+@require_role('superadmin')
+def superadmin_usuarios():
+    """Panel global de superadmin: ver todos los usuarios de todos los tenants."""
+    tenants = db_module.get_tenants_activos()
+    usuarios = db_module.get_usuarios_all_tenants()
+    mensaje = request.args.get("msg")
+    mensaje_tipo = request.args.get("tipo", "success")
+    return render_template(
+        "admin/superadmin_usuarios.html",
+        active_page="superadmin_usuarios",
+        usuarios=usuarios,
+        tenants=tenants,
+        roles_disponibles=_ROLES_DISPONIBLES,
+        mensaje=mensaje,
+        mensaje_tipo=mensaje_tipo,
+    )
+
+
+@app.route('/api/superadmin/usuarios/<usuario_id>', methods=['DELETE'])
+@require_role('superadmin')
+def api_superadmin_eliminar_usuario(usuario_id):
+    """Elimina (soft-delete) un usuario de cualquier tenant."""
+    try:
+        auth_module.desactivar_usuario(usuario_id)
+        try:
+            db_module.registrar_audit(
+                tenant_id=None,
+                usuario_id=g.get("usuario_id"),
+                accion="superadmin_eliminar_usuario",
+                entidad="usuario",
+                entidad_id=usuario_id,
+                detalle={"operacion": "soft-delete"},
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
+        return jsonify({"ok": True, "mensaje": "Usuario eliminado"}), 200
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/superadmin/usuarios', methods=['POST'])
+@require_role('superadmin')
+def api_superadmin_crear_usuario():
+    """Crea un usuario en un tenant específico (para re-registro tras movimiento)."""
+    data = request.get_json() or {}
+    tenant_id   = data.get("tenant_id")
+    email       = data.get("email", "").strip().lower()
+    nombre      = data.get("nombre", "").strip()
+    roles       = data.get("roles", [])
+    generar_pass = data.get("generar_password", True)
+
+    if not tenant_id or not email or not nombre:
+        return jsonify({"ok": False, "error": "tenant_id, email y nombre son requeridos"}), 400
+
+    if "superadmin" in roles and "superadmin" not in g.get("roles", []):
+        return jsonify({"ok": False, "error": "No tienes permisos para crear superadmin"}), 403
+
+    try:
+        if generar_pass:
+            temp_pass = auth_module.generar_temporary_password()
+            password = temp_pass
+        else:
+            password = data.get("password", "")
+            if len(password) < 8:
+                return jsonify({"ok": False, "error": "La contraseña debe tener al menos 8 caracteres"}), 400
+
+        nuevo = auth_module.crear_usuario(
+            tenant_id=tenant_id,
+            email=email,
+            password=password,
+            nombre=nombre,
+            roles=roles,
+        )
+        try:
+            db_module.registrar_audit(
+                tenant_id=None,
+                usuario_id=g.get("usuario_id"),
+                accion="superadmin_crear_usuario",
+                entidad="usuario",
+                entidad_id=nuevo["id"],
+                detalle={"email": email, "tenant_id": tenant_id, "roles": roles},
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
+        return jsonify({
+            "ok": True,
+            "usuario": {k: v for k, v in nuevo.items() if k != "password_hash"},
+            "password_temporal": temp_pass if generar_pass else None,
+        }), 201
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 409
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route('/api/superadmin/usuarios/mover', methods=['POST'])
+@require_role('superadmin')
+def api_superadmin_mover_usuario():
+    """Mueve un usuario de un tenant a otro: soft-delete en origen + crea en destino."""
+    data = request.get_json() or {}
+    usuario_id    = data.get("usuario_id")
+    tenant_id_destino = data.get("tenant_id_destino")
+    generar_pass  = data.get("generar_password", True)
+
+    if not usuario_id or not tenant_id_destino:
+        return jsonify({"ok": False, "error": "usuario_id y tenant_id_destino son requeridos"}), 400
+
+    try:
+        usuario_origen = db_module.get_usuario_por_id(usuario_id)
+        if not usuario_origen:
+            return jsonify({"ok": False, "error": "Usuario no encontrado"}), 404
+
+        email = usuario_origen["email"]
+        nombre = usuario_origen["nombre"]
+        roles = usuario_origen["roles"]
+
+        auth_module.desactivar_usuario(usuario_id)
+
+        temp_pass = auth_module.generar_temporary_password() if generar_pass else data.get("password", "")
+        if generar_pass and not data.get("password"):
+            pass_val = temp_pass
+        else:
+            pass_val = temp_pass if generar_pass else data.get("password", "")
+
+        nuevo = auth_module.crear_usuario(
+            tenant_id=tenant_id_destino,
+            email=email,
+            password=pass_val,
+            nombre=nombre,
+            roles=roles,
+        )
+        try:
+            db_module.registrar_audit(
+                tenant_id=None,
+                usuario_id=g.get("usuario_id"),
+                accion="superadmin_mover_usuario",
+                entidad="usuario",
+                entidad_id=usuario_id,
+                detalle={
+                    "desde_tenant": usuario_origen.get("tenant_id"),
+                    "hacia_tenant": tenant_id_destino,
+                    "nuevo_usuario_id": nuevo["id"],
+                },
+                ip=request.remote_addr,
+            )
+        except Exception:
+            pass
+        return jsonify({
+            "ok": True,
+            "password_temporal": temp_pass if generar_pass else None,
+        }), 200
+    except ValueError as e:
+        return jsonify({"ok": False, "error": str(e)}), 409
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+# ══════════════════════════════════════════════════════════════════════════
 # PERIODOS Y PERSONAS (FASE 4)
 # ══════════════════════════════════════════════════════════════════════════
 

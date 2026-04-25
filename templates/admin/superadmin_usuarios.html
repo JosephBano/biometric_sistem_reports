@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+<style>
+.role-badge { font-size: 0.75rem; }
+.user-row-inactive { opacity: 0.55; }
+.tenant-badge { font-family: monospace; font-size: 0.78rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h3>Gestión Global de Usuarios</h3>
+    <p class="text-muted">Superadmin — ver, mover y registrar usuarios entre tenants.</p>
+</div>
+
+{% if mensaje %}
+<div class="alert alert-{{ mensaje_tipo or 'info' }} alert-dismissible fade show" role="alert">
+    {{ mensaje }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0" id="tablaUsuarios">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Tenant</th>
+                        <th>Roles</th>
+                        <th>Último acceso</th>
+                        <th>Estado</th>
+                        <th class="text-end">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for u in usuarios %}
+                    <tr class="{{ 'user-row-inactive' if not u.activo else '' }}"
+                        data-usuario-id="{{ u.id }}"
+                        data-usuario-email="{{ u.email }}"
+                        data-usuario-nombre="{{ u.nombre }}"
+                        data-usuario-tenant-id="{{ u.tenant_id or '' }}"
+                        data-usuario-tenant-slug="{{ u.tenant_slug or '' }}"
+                        data-usuario-roles="{{ u.roles | tojson }}">
+                        <td class="fw-medium">{{ u.nombre }}</td>
+                        <td class="text-muted small">{{ u.email }}</td>
+                        <td>
+                            {% if u.tenant_nombre %}
+                                <span class="badge bg-dark tenant-badge">{{ u.tenant_nombre }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary tenant-badge">Sin tenant</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% for rol in u.roles %}
+                            <span class="badge role-badge
+                                {% if rol == 'superadmin' %}bg-danger
+                                {% elif rol == 'admin' %}bg-primary
+                                {% elif rol == 'gestor' %}bg-success
+                                {% elif rol in ('supervisor_grupo', 'supervisor_periodo') %}bg-warning text-dark
+                                {% else %}bg-secondary{% endif %}">
+                                {{ rol }}
+                            </span>
+                            {% else %}
+                            <span class="text-muted small">Sin roles</span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-muted small">
+                            {% if u.ultimo_acceso %}
+                                {{ u.ultimo_acceso.strftime('%d/%m/%Y %H:%M') }}
+                            {% else %}—{% endif %}
+                        </td>
+                        <td>
+                            {% if u.activo %}
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactivo</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    onclick="abrirMoverUsuario(this)">
+                                Mover
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger"
+                                    onclick="abrirEliminarUsuario(this)">
+                                Eliminar
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted py-4">No hay usuarios registrados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Mover usuario -->
+<div class="modal fade" id="modalMover" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Mover Usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p> mover a: <strong id="moverEmail"></strong></p>
+                <p class="text-muted small mb-3">Tenant actual: <span id="moverTenantOrigen" class="badge bg-secondary"></span></p>
+                <div class="mb-3">
+                    <label class="form-label fw-medium">Tenant destino <span class="text-danger">*</span></label>
+                    <select class="form-select" id="selectTenantDestino">
+                        <option value="">— Seleccione un tenant —</option>
+                        {% for t in tenants %}
+                        <option value="{{ t.id }}">{{ t.nombre }} ({{ t.slug }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="checkGenerarPass" checked
+                               onchange="togglePassField()">
+                        <label class="form-check-label" for="checkGenerarPass">
+                            Generar contraseña temporal automáticamente
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-3" id="fieldPassManual" style="display:none;">
+                    <label class="form-label">Contraseña manual</label>
+                    <input type="password" class="form-control" id="inputPassManual"
+                           placeholder="Mínimo 8 caracteres" minlength="8">
+                </div>
+                <div id="tempPassContainer" class="alert alert-success mb-0" style="display:none;">
+                    <strong>Contraseña temporal:</strong>
+                    <code id="tempPassMostrar" class="d-block mt-1 fs-5"></code>
+                    <small class="text-muted">Cópiela y entréguela al usuario.</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarMover">Mover usuario</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Eliminar usuario -->
+<div class="modal fade" id="modalEliminar" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger">Eliminar Usuario</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>¿Eliminar al usuario <strong id="eliminarEmail"></strong>?</p>
+                <p class="text-muted small">Esta acción lo desactivará (soft-delete). Podrá re-registrarlo en otro tenant cuando lo necesite.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger" id="btnConfirmarEliminar">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let rowSeleccionada = null;
+
+function abrirMoverUsuario(btn) {
+    rowSeleccionada = btn.closest('tr');
+    const email = rowSeleccionada.dataset.usuarioEmail;
+    const nombre = rowSeleccionada.dataset.usuarioNombre;
+    const tenantSlug = rowSeleccionada.dataset.usuarioTenantSlug || '—';
+
+    document.getElementById('moverEmail').textContent = email + ' (' + nombre + ')';
+    document.getElementById('moverTenantOrigen').textContent = tenantSlug;
+    document.getElementById('tempPassContainer').style.display = 'none';
+    document.getElementById('selectTenantDestino').value = '';
+    document.getElementById('checkGenerarPass').checked = true;
+    document.getElementById('fieldPassManual').style.display = 'none';
+
+    new bootstrap.Modal(document.getElementById('modalMover')).show();
+}
+
+function togglePassField() {
+    const generar = document.getElementById('checkGenerarPass').checked;
+    document.getElementById('fieldPassManual').style.display = generar ? 'none' : 'block';
+}
+
+document.getElementById('btnConfirmarMover').addEventListener('click', async function() {
+    const usuarioId = rowSeleccionada.dataset.usuarioId;
+    const tenantDestino = document.getElementById('selectTenantDestino').value;
+    const generarPass = document.getElementById('checkGenerarPass').checked;
+    const passManual = document.getElementById('inputPassManual').value;
+
+    if (!tenantDestino) {
+        alert('Seleccione un tenant destino.');
+        return;
+    }
+    if (!generarPass && passManual.length < 8) {
+        alert('La contraseña debe tener al menos 8 caracteres.');
+        return;
+    }
+
+    this.disabled = true;
+    this.textContent = 'Moviendo...';
+
+    const body = {
+        usuario_id: usuarioId,
+        tenant_id_destino: tenantDestino,
+        generar_password: generarPass,
+    };
+    if (!generarPass) body.password = passManual;
+
+    try {
+        const resp = await fetch('{{ url_for("api_superadmin_mover_usuario") }}', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token() }}'},
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            if (data.password_temporal) {
+                document.getElementById('tempPassMostrar').textContent = data.password_temporal;
+                document.getElementById('tempPassContainer').style.display = 'block';
+            } else {
+                bootstrap.Modal.getInstance(document.getElementById('modalMover')).hide();
+                window.location.reload();
+            }
+        } else {
+            alert('Error: ' + (data.error || 'desconocido'));
+            this.disabled = false;
+            this.textContent = 'Mover usuario';
+        }
+    } catch(e) {
+        alert('Error de red: ' + e);
+        this.disabled = false;
+        this.textContent = 'Mover usuario';
+    }
+});
+
+function abrirEliminarUsuario(btn) {
+    const row = btn.closest('tr');
+    document.getElementById('eliminarEmail').textContent = row.dataset.usuarioEmail;
+    rowSeleccionada = row;
+    new bootstrap.Modal(document.getElementById('modalEliminar')).show();
+}
+
+document.getElementById('btnConfirmarEliminar').addEventListener('click', async function() {
+    const usuarioId = rowSeleccionada.dataset.usuarioId;
+    this.disabled = true;
+    this.textContent = 'Eliminando...';
+    try {
+        const resp = await fetch('{{ url_for("api_superadmin_eliminar_usuario", usuario_id="") }}' + usuarioId, {
+            method: 'DELETE',
+            headers: {'X-CSRF-Token': '{{ csrf_token() }}'},
+        });
+        const data = await resp.json();
+        if (data.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('modalEliminar')).hide();
+            window.location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'desconocido'));
+            this.disabled = false;
+            this.textContent = 'Eliminar';
+        }
+    } catch(e) {
+        alert('Error de red: ' + e);
+        this.disabled = false;
+        this.textContent = 'Eliminar';
+    }
+});
+</script>
+{% endblock %}
