@@ -83,10 +83,10 @@
                         <h5 class="fw-bold mb-3">Copias de Seguridad (Backups)</h5>
                         <p class="small text-muted mb-4">Descargue respaldos de seguridad de la base de datos completa para guardado externo.</p>
                         <div class="d-flex flex-column gap-2" style="max-width: 320px;">
-                            <a href="/api/backup/descargar" class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center gap-2">
+                            <a href="{{ url_for('descargar_backup_db') }}" class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center gap-2">
                                 <span class="material-symbols-outlined" style="font-size: 1.1rem;">download</span> Descargar Base de Datos (.db)
                             </a>
-                            <a href="/api/backup/csv" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
+                            <a href="{{ url_for('descargar_backup_csv') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
                                 <span class="material-symbols-outlined" style="font-size: 1.1rem;">table_chart</span> Descargar Historial completo (CSV)
                             </a>
                         </div>

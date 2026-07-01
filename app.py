@@ -909,7 +909,7 @@ def generar_desde_db():
             pass
         return jsonify({
             'success':      True,
-            'download_url': f'/descargar/{rpt_filename}',
+            'download_url': url_for('descargar', filename=rpt_filename),
             'filename':     f'Reporte_Biometrico_{label}_DB{ext}',
         })
     except ValueError as e:
@@ -2495,7 +2495,7 @@ def agregar_headers_seguridad(response):
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com; "
         "img-src 'self' data:; "
-        "connect-src 'self';"
+        "connect-src 'self' https://cdn.jsdelivr.net;"
     )
     return response
 

@@ -23,8 +23,7 @@ services:
       start_period: 10s
     restart: unless-stopped
     networks:
-      - internal     # ← red interna para hablar con app
-      - frontend_net # ← red de NPM
+      - internal
 
   biometrico-app:
     build: .
@@ -43,8 +42,7 @@ services:
     ports:
       - "5000:5000"
     networks:
-      - internal     # ← para conectarse a db
-      - frontend_net # ← para que NPM lo alcance
+      - internal
 
 volumes:
   postgres_data:
@@ -52,7 +50,4 @@ volumes:
 
 networks:
   internal:
-    driver: bridge   # ← red privada entre app y db
-  frontend_net:
-    external: true
-    name: frontend_net
+    driver: bridge
