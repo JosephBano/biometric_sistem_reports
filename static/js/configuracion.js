@@ -446,6 +446,21 @@ function subirHistorico() {
 // SINCRONIZACIÓN AUTOMÁTICA — Fase 1
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Escapa caracteres HTML para prevenir XSS cuando se inserta texto de BD
+ * en el DOM via innerHTML. Alternativa más segura: crear nodos con
+ * createElement y asignar textContent (ver cargarSchedulerEstado).
+ */
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 async function cargarSchedulerEstado() {
     const tablaEl = document.getElementById('sync-corridas-tabla');
     const activoBadge = document.getElementById('sync-activo-badge');
@@ -466,7 +481,7 @@ async function cargarSchedulerEstado() {
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
 
-        // Resumen
+        // Resumen (textContent — sin riesgo de XSS)
         activoBadge.textContent = data.sync_activo ? 'ACTIVO' : 'INACTIVO';
         activoBadge.className = 'badge fs-6 mt-1 ' + (data.sync_activo ? 'bg-success' : 'bg-secondary');
         horaEl.textContent = data.sync_hora_nocturna || '—';
@@ -475,44 +490,97 @@ async function cargarSchedulerEstado() {
             ? new Date(data.proxima_corrida).toLocaleString('es-EC')
             : '—';
 
-        // Tabla de corridas
+        // Tabla de corridas (textContent vía createElement — seguro contra XSS)
         const corridas = data.ultimas_corridas || [];
+        tablaEl.innerHTML = '';  // limpiar
         if (corridas.length === 0) {
-            tablaEl.innerHTML = '<p class="text-muted small">Aún no hay corridas registradas. La próxima sync nocturna o incremental dejará un registro.</p>';
+            const p = document.createElement('p');
+            p.className = 'text-muted small';
+            p.textContent = 'Aún no hay corridas registradas. La próxima sync nocturna o incremental dejará un registro.';
+            tablaEl.appendChild(p);
             return;
         }
 
-        const rows = corridas.map(c => {
-            const inicio = c.inicio ? new Date(c.inicio).toLocaleString('es-EC') : '—';
-            const okBadge = c.ok
-                ? '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">OK</span>'
-                : '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">ERROR</span>';
-            const detalle = c.detalle ? (c.detalle.length > 80 ? c.detalle.slice(0, 77) + '…' : c.detalle) : '—';
-            const tenantCell = c.tenant_slug ? c.tenant_slug : '<i class="text-muted">global</i>';
-            return '<tr>' +
-                '<td><small>' + inicio + '</small></td>' +
-                '<td><span class="badge bg-light text-dark">' + c.job + '</span></td>' +
-                '<td><small>' + tenantCell + '</small></td>' +
-                '<td>' + okBadge + '</td>' +
-                '<td class="text-end"><small>' + (c.descargados ?? '—') + ' / ' + (c.insertados ?? '—') + '</small></td>' +
-                '<td><small class="text-muted">' + detalle + '</small></td>' +
-            '</tr>';
-        }).join('');
+        const table = document.createElement('table');
+        table.className = 'table table-sm table-hover align-middle';
+        const thead = document.createElement('thead');
+        thead.className = 'table-light';
+        const trHead = document.createElement('tr');
+        ['Inicio', 'Job', 'Tenant', 'Resultado', 'Desc / Insp', 'Detalle'].forEach(label => {
+            const th = document.createElement('th');
+            if (label === 'Desc / Insp') th.className = 'text-end';
+            th.textContent = label;
+            trHead.appendChild(th);
+        });
+        thead.appendChild(trHead);
+        table.appendChild(thead);
 
-        tablaEl.innerHTML = '<table class="table table-sm table-hover align-middle">' +
-            '<thead class="table-light">' +
-                '<tr>' +
-                    '<th>Inicio</th>' +
-                    '<th>Job</th>' +
-                    '<th>Tenant</th>' +
-                    '<th>Resultado</th>' +
-                    '<th class="text-end">Desc / Insp</th>' +
-                    '<th>Detalle</th>' +
-                '</tr>' +
-            '</thead>' +
-            '<tbody>' + rows + '</tbody>' +
-        '</table>';
+        const tbody = document.createElement('tbody');
+        corridas.forEach(c => {
+            const tr = document.createElement('tr');
+
+            // Inicio
+            const tdInicio = document.createElement('td');
+            const smallInicio = document.createElement('small');
+            smallInicio.textContent = c.inicio ? new Date(c.inicio).toLocaleString('es-EC') : '—';
+            tdInicio.appendChild(smallInicio);
+            tr.appendChild(tdInicio);
+
+            // Job (badge)
+            const tdJob = document.createElement('td');
+            const spanJob = document.createElement('span');
+            spanJob.className = 'badge bg-light text-dark';
+            spanJob.textContent = c.job || '';
+            tdJob.appendChild(spanJob);
+            tr.appendChild(tdJob);
+
+            // Tenant
+            const tdTenant = document.createElement('td');
+            const smallTenant = document.createElement('small');
+            smallTenant.textContent = c.tenant_slug || 'global';
+            if (!c.tenant_slug) smallTenant.className = 'text-muted';
+            tdTenant.appendChild(smallTenant);
+            tr.appendChild(tdTenant);
+
+            // Resultado (badge OK/ERROR)
+            const tdOk = document.createElement('td');
+            const spanOk = document.createElement('span');
+            if (c.ok) {
+                spanOk.className = 'badge bg-success bg-opacity-10 text-success border border-success border-opacity-25';
+                spanOk.textContent = 'OK';
+            } else {
+                spanOk.className = 'badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25';
+                spanOk.textContent = 'ERROR';
+            }
+            tdOk.appendChild(spanOk);
+            tr.appendChild(tdOk);
+
+            // Desc / Insp
+            const tdCounts = document.createElement('td');
+            tdCounts.className = 'text-end';
+            const smallCounts = document.createElement('small');
+            smallCounts.textContent = (c.descargados != null ? c.descargados : '—') + ' / ' + (c.insertados != null ? c.insertados : '—');
+            tdCounts.appendChild(smallCounts);
+            tr.appendChild(tdCounts);
+
+            // Detalle (recortado + escapado)
+            const tdDetalle = document.createElement('td');
+            const smallDetalle = document.createElement('small');
+            smallDetalle.className = 'text-muted';
+            const detalleRaw = c.detalle || '—';
+            smallDetalle.textContent = detalleRaw.length > 80 ? detalleRaw.slice(0, 77) + '…' : detalleRaw;
+            tdDetalle.appendChild(smallDetalle);
+            tr.appendChild(tdDetalle);
+
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        tablaEl.appendChild(table);
     } catch (e) {
-        tablaEl.innerHTML = '<div class="alert alert-danger small">Error cargando estado: ' + e.message + '</div>';
+        tablaEl.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'alert alert-danger small';
+        div.textContent = 'Error cargando estado: ' + (e.message || e);
+        tablaEl.appendChild(div);
     }
 }

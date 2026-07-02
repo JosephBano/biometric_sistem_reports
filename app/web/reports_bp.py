@@ -29,6 +29,7 @@ from app.domain.reports import (
     deduplicar,
     parse_config,
 )
+from app.extensions import limiter
 
 bp = Blueprint("reports", __name__)
 
@@ -180,6 +181,7 @@ def enviar_reporte_email():
 # ── Backups ──────────────────────────────────────────────────────────────
 
 @bp.get("/api/backup/descargar")
+@limiter.limit("3 per hour, 1 per 10 minutes")
 @require_role("superadmin", "admin")
 def descargar_backup_db():
     """
@@ -187,46 +189,64 @@ def descargar_backup_db():
 
     Solo accesible para superadmin/admin. Registra la descarga en `audit_log`.
 
-    El archivo generado se guarda temporalmente en REPORTS_FOLDER y el thread
-    de limpieza (15 min) lo purga solo.
+    El archivo se genera en un temporal del sistema y se BORRA al terminar
+    la transferencia (security C-1: no dejamos dumps residuales en REPORTS_FOLDER).
     """
+    import tempfile
     from backup import generar_dump
     from db import registrar_audit
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     filename = f"backup_completo_{timestamp}.dump"
-    destino = Path(current_app.config["REPORTS_FOLDER"]) / filename
+
+    # Generar en /tmp con sufijo .dump; se borra en finally.
+    fd, tmp_path = tempfile.mkstemp(suffix=".dump", prefix=f"backup_{timestamp}_")
+    os.close(fd)
+    destino = Path(tmp_path)
+    size_bytes = 0
 
     try:
         ruta = generar_dump(destino)
-    except RuntimeError as e:
-        current_app.logger.error("pg_dump falló: %s", e)
-        return jsonify({
-            "error": "No se pudo generar el backup",
-            "detalle": str(e),
-        }), 500
+        size_bytes = ruta.stat().st_size
 
-    # Registrar en audit_log
-    try:
-        registrar_audit(
-            tenant_id=g.get("tenant_id"),
-            usuario_id=g.get("usuario_id"),
-            accion="backup_db_descargar",
-            detalle={
-                "filename": filename,
-                "size_bytes": ruta.stat().st_size,
-            },
-            ip=request.remote_addr,
+        # Registrar en audit_log ANTES de servir (si la BD está caída, mejor no servir).
+        try:
+            registrar_audit(
+                tenant_id=g.get("tenant_id"),
+                usuario_id=g.get("usuario_id"),
+                accion="backup_db_descargar",
+                detalle={
+                    "filename": filename,
+                    "size_bytes": size_bytes,
+                },
+                ip=request.remote_addr,
+            )
+        except Exception:  # noqa: BLE001
+            current_app.logger.warning(
+                "No se pudo registrar backup en audit_log", exc_info=True,
+            )
+
+        return send_file(
+            str(ruta),
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/octet-stream",
         )
-    except Exception:  # noqa: BLE001
-        current_app.logger.warning("No se pudo registrar backup en audit_log")
-
-    return send_file(
-        str(ruta),
-        as_attachment=True,
-        download_name=filename,
-        mimetype="application/octet-stream",
-    )
+    except RuntimeError as e:
+        # Loguear con stacktrace; al cliente devolver mensaje genérico (security B2).
+        current_app.logger.exception("pg_dump falló al generar backup")
+        return jsonify({
+            "error": "No se pudo generar el backup de la base de datos.",
+        }), 500
+    finally:
+        # SIEMPRE borrar el dump, incluso si send_file falló a mitad.
+        try:
+            if destino.exists():
+                destino.unlink()
+        except OSError:
+            current_app.logger.warning(
+                "No se pudo borrar el dump temporal %s", destino, exc_info=True,
+            )
 
 
 @bp.get("/api/backup/csv")

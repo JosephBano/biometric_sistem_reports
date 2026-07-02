@@ -101,6 +101,54 @@ class TestRegistrarRun:
         assert params["tenant_slug"] is None
         assert params["detalle"].startswith("/data/backups/")
 
+    def test_registrar_run_rechaza_tenant_slug_invalido(self):
+        """tenant_slug que no cumple patrón ^[a-z][a-z0-9_]{0,30}$ → ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            scheduler_runs.registrar_run(
+                job="sync_incremental",
+                tenant_slug="../../etc/passwd",  # path traversal attempt
+                inicio=datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc),
+                fin=datetime(2026, 7, 2, 10, 5, tzinfo=timezone.utc),
+                ok=True,
+                descargados=10,
+                insertados=8,
+                detalle=None,
+            )
+        assert "tenant_slug" in str(exc_info.value).lower()
+
+    def test_registrar_run_rechaza_job_desconocido(self):
+        """job que no está en el conjunto permitido → ValueError."""
+        with pytest.raises(ValueError) as exc_info:
+            scheduler_runs.registrar_run(
+                job="job_malicioso_xyz",
+                tenant_slug="istpet",
+                inicio=datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc),
+                fin=datetime(2026, 7, 2, 10, 5, tzinfo=timezone.utc),
+                ok=True,
+                descargados=10,
+                insertados=8,
+                detalle=None,
+            )
+        assert "job" in str(exc_info.value).lower()
+
+    def test_registrar_run_acepta_tenant_slug_none(self):
+        """tenant_slug=None es válido (jobs globales como backup_diario)."""
+        mock_conn = MagicMock()
+        mock_engine = _make_engine_mock(mock_conn)
+
+        with patch("db.queries.scheduler_runs.get_engine", return_value=mock_engine):
+            scheduler_runs.registrar_run(
+                job="backup_diario",
+                tenant_slug=None,
+                inicio=datetime(2026, 7, 2, 3, 0, tzinfo=timezone.utc),
+                fin=datetime(2026, 7, 2, 3, 5, tzinfo=timezone.utc),
+                ok=True,
+                descargados=None,
+                insertados=None,
+                detalle="ok",
+            )
+        # No levantó excepción — test pasa si llegamos aquí
+
 
 class TestListarUltimosRuns:
 
@@ -149,7 +197,7 @@ class TestListarUltimosRuns:
 class TestPurgarMayorA:
 
     def test_purgar_borra_filas_viejas_y_devuelve_conteo(self):
-        """DELETE con WHERE inicio < NOW() - INTERVAL ... y retorna rowcount."""
+        """DELETE con WHERE inicio < NOW() - make_interval(...) y retorna rowcount."""
         mock_conn = MagicMock()
         mock_result = MagicMock()
         mock_result.rowcount = 7
@@ -162,7 +210,37 @@ class TestPurgarMayorA:
 
         assert borradas == 7
         mock_conn.commit.assert_called_once()
-        # Verificar que el SQL incluye el INTERVAL
-        sql = mock_conn.execute.call_args[0][0]
+        # Verificar SQL y parámetros
+        call_args = mock_conn.execute.call_args
+        sql = call_args[0][0]
+        # conn.execute(sql, {"dias": 90}) → args = (sql, {"dias": 90})
+        params = call_args[0][1] if len(call_args[0]) > 1 else {}
         assert "DELETE FROM public.scheduler_runs" in str(sql)
-        assert "90" in str(sql)
+        assert "make_interval" in str(sql)
+        assert params.get("dias") == 90
+
+    def test_purgar_parametriza_dias_via_bindparam(self):
+        """El parámetro dias viaja como :dias (no hardcoded en el literal)."""
+        mock_conn = MagicMock()
+        mock_result = MagicMock()
+        mock_result.rowcount = 3
+        mock_conn.execute.return_value = mock_result
+
+        mock_engine = _make_engine_mock(mock_conn)
+
+        with patch("db.queries.scheduler_runs.get_engine", return_value=mock_engine):
+            scheduler_runs.purgar_mayor_a(dias=45)
+
+        # El SQL crudo NO debe contener "45" en el literal (debe estar en bindparam)
+        sql = str(mock_conn.execute.call_args[0][0])
+        assert "45" not in sql, "dias debe venir por bindparam, no por literal"
+        assert ":dias" in sql
+
+    def test_purgar_rechaza_dias_invalidos(self):
+        """dias debe ser int >= 1; cualquier otra cosa lanza ValueError."""
+        with pytest.raises(ValueError):
+            scheduler_runs.purgar_mayor_a(dias=0)
+        with pytest.raises(ValueError):
+            scheduler_runs.purgar_mayor_a(dias=-1)
+        with pytest.raises(ValueError):
+            scheduler_runs.purgar_mayor_a(dias="hola")  # type: ignore[arg-type]

@@ -283,6 +283,20 @@ def _get_tenant_slugs() -> list[str]:
 # SCHEDULER OBSERVABLE (Fase 1)
 # ══════════════════════════════════════════════════════════════════════════
 
+def _redactar_error(mensaje: str) -> str:
+    """Redacta posibles secretos de un mensaje de error antes de loguearlo/enviarlo.
+
+    Quita: passwords en connection strings, PGPASSWORD, hostnames internos largos.
+    """
+    import re
+    # Quitar user:password@host de connection strings
+    s = re.sub(r"://[^:@]+:[^@]+@", "://***:***@", mensaje)
+    # Quitar password=... si aparece
+    s = re.sub(r"(?i)(password\s*=\s*)([^\s;&]+)", r"\1***", s)
+    # Limitar tamaño (defensa contra logs enormes)
+    return s[:500]
+
+
 def _backup_diario():
     """Ejecutado por schedule (BACKUP_HORA) — pg_dump -Fc con retención.
 
@@ -324,6 +338,7 @@ def _backup_diario():
         )
     except Exception as e:
         log.exception("backup_diario falló")
+        detalle_redactado = _redactar_error(str(e))
         _registrar_corrida_sync(
             job="backup_diario",
             tenant_slug=None,
@@ -332,16 +347,16 @@ def _backup_diario():
             ok=False,
             descargados=None,
             insertados=None,
-            detalle=str(e)[:500],
+            detalle=detalle_redactado,
         )
-        # Email de alerta al admin.
+        # Email de alerta al admin (con secreto redactado).
         admin_email = os.getenv("ADMIN_EMAIL", "")
         if admin_email:
             try:
                 enviar_correo(
                     admin_email,
                     "Fallo en backup diario",
-                    f"<p>El backup diario falló: <code>{e}</code></p>"
+                    f"<p>El backup diario falló: <code>{detalle_redactado}</code></p>"
                     f"<p>Verificar volumen <code>{BACKUP_DIR}</code> y logs del scheduler.</p>",
                 )
             except Exception:
@@ -414,7 +429,7 @@ def _sync_automatico():
                 ok=False,
                 descargados=None,
                 insertados=None,
-                detalle=str(e)[:500],
+                detalle=_redactar_error(str(e)),
             )
         finally:
             db_module.clear_thread_tenant()
@@ -454,7 +469,7 @@ def _sync_nocturna_completa():
                 ok=False,
                 descargados=None,
                 insertados=None,
-                detalle=str(e)[:500],
+                detalle=_redactar_error(str(e)),
             )
         finally:
             db_module.clear_thread_tenant()
