@@ -36,6 +36,7 @@ services:
       db:
         condition: service_healthy
     volumes:
+      # `app_data:/data` cubre /data/uploads, /data/reports y /data/backups.
       - app_data:/data
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
