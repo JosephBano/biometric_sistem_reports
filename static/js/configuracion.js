@@ -17,6 +17,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     cargarHorarios();
     cargarFeriados();
+
+    // Tab "Sincronización": cargar estado al abrirlo
+    const syncTab = document.getElementById('sync-tab');
+    if (syncTab) {
+        syncTab.addEventListener('shown.bs.tab', cargarSchedulerEstado);
+    }
 });
 
 // ════════════ HORARIOS ════════════════════════
@@ -434,4 +440,79 @@ function subirHistorico() {
         statusDiv.className = 'mt-2 alert alert-danger py-2 small mb-0';
         statusDiv.innerHTML = `Error: ${err.message}`;
     });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SINCRONIZACIÓN AUTOMÁTICA — Fase 1
+// ═══════════════════════════════════════════════════════════════════
+
+async function cargarSchedulerEstado() {
+    const tablaEl = document.getElementById('sync-corridas-tabla');
+    const activoBadge = document.getElementById('sync-activo-badge');
+    const horaEl = document.getElementById('sync-hora-nocturna');
+    const intervaloEl = document.getElementById('sync-intervalo');
+    const proximaEl = document.getElementById('sync-proxima');
+
+    if (!tablaEl) return;
+
+    try {
+        const resp = await fetch((typeof _BASE !== 'undefined' ? _BASE : '') + '/api/scheduler/estado', {
+            credentials: 'same-origin'
+        });
+        if (resp.status === 401) {
+            window.location.href = (typeof _BASE !== 'undefined' ? _BASE : '') + '/login';
+            return;
+        }
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+
+        // Resumen
+        activoBadge.textContent = data.sync_activo ? 'ACTIVO' : 'INACTIVO';
+        activoBadge.className = 'badge fs-6 mt-1 ' + (data.sync_activo ? 'bg-success' : 'bg-secondary');
+        horaEl.textContent = data.sync_hora_nocturna || '—';
+        intervaloEl.textContent = (data.sync_intervalo_horas || '—') + ' h';
+        proximaEl.textContent = data.proxima_corrida
+            ? new Date(data.proxima_corrida).toLocaleString('es-EC')
+            : '—';
+
+        // Tabla de corridas
+        const corridas = data.ultimas_corridas || [];
+        if (corridas.length === 0) {
+            tablaEl.innerHTML = '<p class="text-muted small">Aún no hay corridas registradas. La próxima sync nocturna o incremental dejará un registro.</p>';
+            return;
+        }
+
+        const rows = corridas.map(c => {
+            const inicio = c.inicio ? new Date(c.inicio).toLocaleString('es-EC') : '—';
+            const okBadge = c.ok
+                ? '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">OK</span>'
+                : '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">ERROR</span>';
+            const detalle = c.detalle ? (c.detalle.length > 80 ? c.detalle.slice(0, 77) + '…' : c.detalle) : '—';
+            const tenantCell = c.tenant_slug ? c.tenant_slug : '<i class="text-muted">global</i>';
+            return '<tr>' +
+                '<td><small>' + inicio + '</small></td>' +
+                '<td><span class="badge bg-light text-dark">' + c.job + '</span></td>' +
+                '<td><small>' + tenantCell + '</small></td>' +
+                '<td>' + okBadge + '</td>' +
+                '<td class="text-end"><small>' + (c.descargados ?? '—') + ' / ' + (c.insertados ?? '—') + '</small></td>' +
+                '<td><small class="text-muted">' + detalle + '</small></td>' +
+            '</tr>';
+        }).join('');
+
+        tablaEl.innerHTML = '<table class="table table-sm table-hover align-middle">' +
+            '<thead class="table-light">' +
+                '<tr>' +
+                    '<th>Inicio</th>' +
+                    '<th>Job</th>' +
+                    '<th>Tenant</th>' +
+                    '<th>Resultado</th>' +
+                    '<th class="text-end">Desc / Insp</th>' +
+                    '<th>Detalle</th>' +
+                '</tr>' +
+            '</thead>' +
+            '<tbody>' + rows + '</tbody>' +
+        '</table>';
+    } catch (e) {
+        tablaEl.innerHTML = '<div class="alert alert-danger small">Error cargando estado: ' + e.message + '</div>';
+    }
 }
