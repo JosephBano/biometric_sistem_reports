@@ -39,6 +39,13 @@ from db.queries.horarios import (
 # ── Sync log ──────────────────────────────────────────────────────────────
 from db.queries.sync_log import registrar_sync, get_latest_sync_logs_por_dispositivo
 
+# ── Scheduler runs (Fase 1 — Sync observable) ──────────────────────────────
+from db.queries.scheduler_runs import (
+    registrar_run,
+    listar_ultimos,
+    purgar_mayor_a,
+)
+
 # ── Justificaciones ───────────────────────────────────────────────────────
 from db.queries.justificaciones import (
     insertar_justificacion,
@@ -167,6 +174,10 @@ __all__ = [
     # sync
     "registrar_sync",
     "get_latest_sync_logs_por_dispositivo",
+    # scheduler runs
+    "registrar_run",
+    "listar_ultimos",
+    "purgar_mayor_a",
     # justificaciones
     "insertar_justificacion",
     "get_justificaciones",
