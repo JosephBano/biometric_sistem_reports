@@ -2,12 +2,20 @@
 Módulo de sincronización con dispositivos biométricos.
 Gestiona la conexión, descarga de marcaciones, transformación de datos
 y sincronización incremental hacia la base de datos local usando drivers.
+
+Fase 1 (2026-07): sync observable
+- Logger propio (`log`).
+- Helper `_registrar_corrida_sync` que persiste cada corrida del scheduler
+  en `public.scheduler_runs`.
+- Loop `_run()` inkillable: una excepción interna NO mata el hilo.
+- Flag singleton `_scheduler_started` para evitar doble inicialización.
 """
 
+import logging
 import os
 import threading
 import time as time_module
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from datetime import time as dt_time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -23,9 +31,22 @@ try:
 except ImportError:
     SCHEDULE_DISPONIBLE = False
 
+log = logging.getLogger(__name__)  # nombre: "sync"
+
 SYNC_AUTO          = os.getenv("SYNC_AUTO",          "false").lower() == "true"
 SYNC_HORA_NOCTURNA = os.getenv("SYNC_HORA_NOCTURNA", "02:00")
 SYNC_INTERVALO_HORAS = int(os.getenv("SYNC_INTERVALO_HORAS", "2"))
+
+# Variables de backup (resueltas también en app/config.py; aquí se duplican
+# porque sync.py no depende de Flask).
+_backup_auto_env = os.getenv("BACKUP_AUTO", "")
+if _backup_auto_env == "":
+    BACKUP_AUTO = SYNC_AUTO
+else:
+    BACKUP_AUTO = _backup_auto_env.lower() == "true"
+BACKUP_HORA          = os.getenv("BACKUP_HORA",          "03:00")
+BACKUP_DIR           = os.getenv("BACKUP_DIR",           "/data/backups")
+BACKUP_RETENCION_DIAS = int(os.getenv("BACKUP_RETENCION_DIAS", "30"))
 
 # ══════════════════════════════════════════════════════════════════════════
 # COMPATIBILIDAD JOBS (Para la UI antigua, aunque Fase 7 usa sync_estado)
@@ -257,49 +278,172 @@ def _get_tenant_slugs() -> list[str]:
         return [os.getenv("TENANT_DEFAULT", "istpet")]
 
 
+# ══════════════════════════════════════════════════════════════════════════
+# SCHEDULER OBSERVABLE (Fase 1)
+# ══════════════════════════════════════════════════════════════════════════
+
+def _registrar_corrida_sync(
+    job: str,
+    tenant_slug: str | None,
+    inicio: datetime,
+    fin: datetime,
+    ok: bool,
+    descargados: int | None,
+    insertados: int | None,
+    detalle: str | None,
+) -> None:
+    """Wrapper que no propaga excepciones del helper de persistencia.
+
+    Si la BD está caída durante una corrida, el scheduler NO debe morir.
+    """
+    try:
+        from db.queries import scheduler_runs
+        scheduler_runs.registrar_run(
+            job=job,
+            tenant_slug=tenant_slug,
+            inicio=inicio,
+            fin=fin,
+            ok=ok,
+            descargados=descargados,
+            insertados=insertados,
+            detalle=detalle,
+        )
+    except Exception:
+        log.exception(
+            "No se pudo registrar corrida del scheduler en BD (job=%s)", job
+        )
+
+
 def _sync_automatico():
-    """Ejecutado por schedule (incremental) — itera todos los tenants activos."""
+    """Ejecutado por schedule (incremental) — itera todos los tenants activos.
+
+    Cada tenant se procesa de forma independiente: un fallo en uno NO afecta
+    a los demás. Cada corrida se registra en `public.scheduler_runs`.
+    """
+    log.info("Iniciando sync incremental (scheduler)")
     for slug in _get_tenant_slugs():
         db_module.set_thread_tenant(slug)
+        inicio = datetime.now(timezone.utc)
         try:
-            sincronizar(force_historico=False)
+            descargados, insertados = sincronizar(force_historico=False)
             from db.queries.periodos import cerrar_periodos_vencidos
             cerrar_periodos_vencidos()
-        except Exception:
-            pass
+            _registrar_corrida_sync(
+                job="sync_incremental",
+                tenant_slug=slug,
+                inicio=inicio,
+                fin=datetime.now(timezone.utc),
+                ok=True,
+                descargados=descargados,
+                insertados=insertados,
+                detalle=None,
+            )
+        except Exception as e:
+            log.exception("sync_incremental falló para tenant=%s", slug)
+            _registrar_corrida_sync(
+                job="sync_incremental",
+                tenant_slug=slug,
+                inicio=inicio,
+                fin=datetime.now(timezone.utc),
+                ok=False,
+                descargados=None,
+                insertados=None,
+                detalle=str(e)[:500],
+            )
         finally:
             db_module.clear_thread_tenant()
 
 
 def _sync_nocturna_completa():
-    """Ejecutado a las 2 AM — itera todos los tenants activos."""
+    """Ejecutado a SYNC_HORA_NOCTURNA — itera todos los tenants activos.
+
+    Al cierre, purga filas > 90 días de `public.scheduler_runs`.
+    """
+    log.info("Iniciando sync nocturna completa (scheduler)")
     treinta_dias_atras = date.today() - timedelta(days=30)
     for slug in _get_tenant_slugs():
         db_module.set_thread_tenant(slug)
+        inicio = datetime.now(timezone.utc)
         try:
-            sincronizar(fecha_inicio=treinta_dias_atras, force_historico=True)
-        except Exception:
-            pass
+            descargados, insertados = sincronizar(
+                fecha_inicio=treinta_dias_atras, force_historico=True
+            )
+            _registrar_corrida_sync(
+                job="sync_nocturna",
+                tenant_slug=slug,
+                inicio=inicio,
+                fin=datetime.now(timezone.utc),
+                ok=True,
+                descargados=descargados,
+                insertados=insertados,
+                detalle=None,
+            )
+        except Exception as e:
+            log.exception("sync_nocturna falló para tenant=%s", slug)
+            _registrar_corrida_sync(
+                job="sync_nocturna",
+                tenant_slug=slug,
+                inicio=inicio,
+                fin=datetime.now(timezone.utc),
+                ok=False,
+                descargados=None,
+                insertados=None,
+                detalle=str(e)[:500],
+            )
         finally:
             db_module.clear_thread_tenant()
 
+    # Retención de scheduler_runs: borrar filas > 90 días.
+    try:
+        from db.queries import scheduler_runs
+        borradas = scheduler_runs.purgar_mayor_a(dias=90)
+        if borradas:
+            log.info("scheduler_runs: purgadas %s filas > 90 días", borradas)
+    except Exception:
+        log.exception("scheduler_runs purga falló (no crítico)")
+
+
+_scheduler_started = False  # guard singleton
+
 
 def iniciar_scheduler():
-    """Inicia el scheduler en un hilo daemon si SYNC_AUTO=true."""
+    """Inicia el scheduler en un hilo daemon si SYNC_AUTO=true.
+
+    Loguea siempre su estado al arrancar (ACTIVO/INACTIVO) para que el operador
+    sepa sin tener que mirar procesos. Es idempotente: si ya está activo,
+    ignora la segunda llamada.
+    """
+    global _scheduler_started
+
     if not SYNC_AUTO or not SCHEDULE_DISPONIBLE:
+        log.info("Scheduler INACTIVO (SYNC_AUTO=false o schedule no disponible)")
+        return
+
+    if _scheduler_started:
+        log.warning("Scheduler ya estaba iniciado; se ignora segunda llamada")
         return
 
     # Sync nocturna
     schedule.every().day.at(SYNC_HORA_NOCTURNA).do(_sync_nocturna_completa)
-    
-    # Sync incremental diaria (cada N minutos / horas)
-    # Por defecto está configurado a N minutos en dotenv, 
-    # pero el plan hablaba de prioridades cada 15m. Aquí para facilidad:
+
+    # Sync incremental
     schedule.every(SYNC_INTERVALO_HORAS).hours.do(_sync_automatico)
 
     def _run():
+        # Loop inkillable: cualquier excepción en una corrida NO mata el hilo.
         while True:
-            schedule.run_pending()
+            try:
+                schedule.run_pending()
+            except Exception:
+                log.exception("scheduler loop falló; continuando")
             time_module.sleep(60)
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(
+        target=_run, daemon=True, name="biometrico-scheduler"
+    ).start()
+    _scheduler_started = True
+
+    log.info(
+        "Scheduler ACTIVO: nocturna %s, incremental cada %sh",
+        SYNC_HORA_NOCTURNA, SYNC_INTERVALO_HORAS,
+    )
