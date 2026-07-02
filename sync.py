@@ -18,6 +18,7 @@ import time as time_module
 from datetime import datetime, date, timedelta, timezone
 from datetime import time as dt_time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 # Para enviar reportes de fallo
 from smtplib import SMTPException
@@ -282,6 +283,71 @@ def _get_tenant_slugs() -> list[str]:
 # SCHEDULER OBSERVABLE (Fase 1)
 # ══════════════════════════════════════════════════════════════════════════
 
+def _backup_diario():
+    """Ejecutado por schedule (BACKUP_HORA) — pg_dump -Fc con retención.
+
+    Si el backup falla, envía email a ADMIN_EMAIL. Si OK, purga los .dump
+    con mtime > BACKUP_RETENCION_DIAS. Resultado se registra en
+    `public.scheduler_runs` (job=`backup_diario`, tenant_slug=NULL).
+    """
+    log.info("Iniciando backup diario (scheduler)")
+
+    from backup import generar_dump, purgar_backups_viejos
+    from email_utils import enviar_correo
+
+    inicio = datetime.now(timezone.utc)
+    timestamp = inicio.strftime("%Y%m%d_%H%M")
+    filename = f"backup_completo_{timestamp}.dump"
+    destino = Path(BACKUP_DIR) / filename
+
+    try:
+        Path(BACKUP_DIR).mkdir(parents=True, exist_ok=True)
+        ruta = generar_dump(destino)
+        size_mb = ruta.stat().st_size / (1024 * 1024)
+
+        # Retención solo tras éxito (no borrar si el backup del día falló).
+        borrados = purgar_backups_viejos(Path(BACKUP_DIR), dias=BACKUP_RETENCION_DIAS)
+        log.info(
+            "backup_diario OK: %s (%.1f MB), purgados=%s",
+            ruta, size_mb, borrados,
+        )
+
+        _registrar_corrida_sync(
+            job="backup_diario",
+            tenant_slug=None,
+            inicio=inicio,
+            fin=datetime.now(timezone.utc),
+            ok=True,
+            descargados=None,
+            insertados=None,
+            detalle=f"{ruta} ({size_mb:.1f} MB)",
+        )
+    except Exception as e:
+        log.exception("backup_diario falló")
+        _registrar_corrida_sync(
+            job="backup_diario",
+            tenant_slug=None,
+            inicio=inicio,
+            fin=datetime.now(timezone.utc),
+            ok=False,
+            descargados=None,
+            insertados=None,
+            detalle=str(e)[:500],
+        )
+        # Email de alerta al admin.
+        admin_email = os.getenv("ADMIN_EMAIL", "")
+        if admin_email:
+            try:
+                enviar_correo(
+                    admin_email,
+                    "Fallo en backup diario",
+                    f"<p>El backup diario falló: <code>{e}</code></p>"
+                    f"<p>Verificar volumen <code>{BACKUP_DIR}</code> y logs del scheduler.</p>",
+                )
+            except Exception:
+                log.exception("No se pudo enviar email de alerta de backup")
+
+
 def _registrar_corrida_sync(
     job: str,
     tenant_slug: str | None,
@@ -428,6 +494,16 @@ def iniciar_scheduler():
 
     # Sync incremental
     schedule.every(SYNC_INTERVALO_HORAS).hours.do(_sync_automatico)
+
+    # Backup diario (si está activado)
+    if BACKUP_AUTO:
+        schedule.every().day.at(BACKUP_HORA).do(_backup_diario)
+        log.info(
+            "Backup diario ACTIVO a las %s, dir=%s, retención=%sd",
+            BACKUP_HORA, BACKUP_DIR, BACKUP_RETENCION_DIAS,
+        )
+    else:
+        log.info("Backup diario INACTIVO (BACKUP_AUTO=false)")
 
     def _run():
         # Loop inkillable: cualquier excepción en una corrida NO mata el hilo.
