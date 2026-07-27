@@ -12,9 +12,23 @@ related:
   - "[[ARQUITECTURA]]"
   - "[[API]]"
   - "[[AUTENTICACION]]"
+  - "[[OPERATIONS]]"
 supersedes: []
 superseded_by: []
 ---
+
+# Plan de ejecución — ADR-0001 (refactor monolito Flask)
+
+> **Estado verificado (2026-07-02):**
+>
+> **CERRADO**: Fases −1, 0, 1, 2, 3, 4e (1–8), 5, 7.2, 8.
+>
+> **Pendiente**: Fase 6 (Celery, ⛔ fuera de v1), Fase 7.1 (tests de integración
+> por blueprint, requiere Postgres efímero), Fase 7.4 (subir gate a 60%).
+>
+> **145 tests passing**, cobertura **24.05%** (gate temporal 20%).
+>
+> DoD verificados al 2026-07-02: DoD-1 al DoD-5, DoD-7, DoD-11, DoD-13 parcial.
 
 # Plan de ejecución — ADR-0001 (refactor monolito Flask)
 
