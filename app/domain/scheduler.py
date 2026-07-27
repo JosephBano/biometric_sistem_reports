@@ -48,15 +48,12 @@ def purgar_corridas_mayores_a(dias: int = 90) -> int:
 
 def proxima_corrida() -> str | None:
     """
-    ISO timestamp de la próxima corrida programada del scheduler `sync.py`,
-    o `None` si el scheduler no está disponible/cargado.
+    ISO timestamp de la próxima corrida programada del scheduler, o `None`.
 
-    Encapsula el acceso a `sync.schedule` (paquete de terceros) para que
-    `app/web/*` no importe el módulo legacy `sync` directamente (ADR-0001).
+    Delega a `app.domain.schedule.proxima_corrida()` para que `app/web/*`
+    no importe librerías de terceros ni el módulo legacy `sync` directamente
+    (ADR-0001).
     """
-    import sync as _sync_module
+    from app.domain.schedule import proxima_corrida as _proxima_corrida
 
-    if not _sync_module.SCHEDULE_DISPONIBLE:
-        return None
-    proximas = [j.next_run for j in _sync_module.schedule.get_jobs() if j.next_run]
-    return min(proximas).isoformat() if proximas else None
+    return _proxima_corrida()
