@@ -1,1 +1,0 @@
-/home/joeman/Documents/istpet-dev/biometrico/biometric_sistem_reports/.venv/lib/python3.12/site-packages/pgserver/pginstall/bin/postgres "-D" "/home/joeman/Documents/istpet-dev/biometrico/biometric_sistem_reports/biometrico_test_alembic_tenant" "-h" "" "-k" "/run/user/1000/python_PostgresServer/f597f0d9ad"
