@@ -1,0 +1,67 @@
+2026-07-27 15:13:58.928 -05 [106687] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:13:58.930 -05 [106687] LOG:  listening on Unix socket "/home/joeman/Documents/istpet-dev/biometrico/biometric_sistem_reports/biometrico_alembic_test/.s.PGSQL.5432"
+2026-07-27 15:13:58.935 -05 [106690] LOG:  database system was shut down at 2026-07-27 15:13:58 -05
+2026-07-27 15:13:58.939 -05 [106687] LOG:  database system is ready to accept connections
+2026-07-27 15:13:59.507 -05 [106696] ERROR:  extension "pgcrypto" is not available
+2026-07-27 15:13:59.507 -05 [106696] DETAIL:  Could not open extension control file "/home/joeman/Documents/istpet-dev/biometrico/biometric_sistem_reports/.venv/lib/python3.12/site-packages/pgserver/pginstall/share/postgresql/extension/pgcrypto.control": No such file or directory.
+2026-07-27 15:13:59.507 -05 [106696] HINT:  The extension must first be installed on the system where PostgreSQL is running.
+2026-07-27 15:13:59.507 -05 [106696] STATEMENT:  
+	-- Extensión para gen_random_uuid()
+	CREATE EXTENSION IF NOT EXISTS pgcrypto;
+	
+	-- ── Tenants ───────────────────────────────────────────────────────────────
+	CREATE TABLE IF NOT EXISTS public.tenants (
+	    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+	    slug          TEXT        UNIQUE NOT NULL,
+	    nombre        TEXT        NOT NULL,
+	    nombre_corto  TEXT,
+	    zona_horaria  TEXT        NOT NULL DEFAULT 'America/Guayaquil',
+	    activo        BOOLEAN     NOT NULL DEFAULT true,
+	    configuracion JSONB       NOT NULL DEFAULT '{}',
+	    creado_en     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	
+	-- ── Usuarios de la app ────────────────────────────────────────────────────
+	CREATE TABLE IF NOT EXISTS public.usuarios (
+	    id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+	    tenant_id     UUID        REFERENCES public.tenants(id) ON DELETE SET NULL,
+	    email         TEXT        UNIQUE NOT NULL,
+	    password_hash TEXT        NOT NULL,
+	    nombre        TEXT        NOT NULL,
+	    roles         TEXT[]      NOT NULL DEFAULT '{}',
+	    activo        BOOLEAN     NOT NULL DEFAULT true,
+	    ultimo_acceso TIMESTAMPTZ,
+	    configuracion JSONB       NOT NULL DEFAULT '{}',
+	    creado_por    UUID        REFERENCES public.usuarios(id) ON DELETE SET NULL,
+	    creado_en     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	
+	-- ── Audit log ─────────────────────────────────────────────────────────────
+	CREATE TABLE IF NOT EXISTS public.audit_log (
+	    id          BIGSERIAL   PRIMARY KEY,
+	    tenant_id   UUID        REFERENCES public.tenants(id) ON DELETE SET NULL,
+	    usuario_id  UUID        REFERENCES public.usuarios(id) ON DELETE SET NULL,
+	    accion      TEXT        NOT NULL,
+	    entidad     TEXT,
+	    entidad_id  TEXT,
+	    detalle     JSONB,
+	    ip          TEXT,
+	    creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	
+	-- ── Rate limiting de login ────────────────────────────────────────────────
+	CREATE TABLE IF NOT EXISTS public.login_intentos (
+	    id         BIGSERIAL   PRIMARY KEY,
+	    ip         TEXT        NOT NULL,
+	    email      TEXT,
+	    exitoso    BOOLEAN     NOT NULL,
+	    creado_en  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	);
+	
+2026-07-27 15:13:59.636 -05 [106687] LOG:  received fast shutdown request
+2026-07-27 15:13:59.637 -05 [106687] LOG:  aborting any active transactions
+2026-07-27 15:13:59.638 -05 [106687] LOG:  background worker "logical replication launcher" (PID 106693) exited with exit code 1
+2026-07-27 15:13:59.638 -05 [106688] LOG:  shutting down
+2026-07-27 15:13:59.639 -05 [106688] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:13:59.649 -05 [106688] LOG:  checkpoint complete: wrote 37 buffers (0.2%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.003 s, sync=0.005 s, total=0.011 s; sync files=33, longest=0.001 s, average=0.001 s; distance=140 kB, estimate=140 kB; lsn=0/14A39C8, redo lsn=0/14A39C8
+2026-07-27 15:13:59.654 -05 [106687] LOG:  database system is shut down

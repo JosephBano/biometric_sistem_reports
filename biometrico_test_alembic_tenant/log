@@ -1,0 +1,55 @@
+2026-07-27 15:16:01.775 -05 [108753] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:16:01.775 -05 [108753] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/f597f0d9ad/.s.PGSQL.5432"
+2026-07-27 15:16:01.780 -05 [108758] LOG:  database system was shut down at 2026-07-27 15:16:01 -05
+2026-07-27 15:16:01.783 -05 [108753] LOG:  database system is ready to accept connections
+2026-07-27 15:16:07.394 -05 [108753] LOG:  received fast shutdown request
+2026-07-27 15:16:07.395 -05 [108753] LOG:  aborting any active transactions
+2026-07-27 15:16:07.396 -05 [108753] LOG:  background worker "logical replication launcher" (PID 108761) exited with exit code 1
+2026-07-27 15:16:07.396 -05 [108756] LOG:  shutting down
+2026-07-27 15:16:07.397 -05 [108756] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:16:07.427 -05 [108756] LOG:  checkpoint complete: wrote 150 buffers (0.9%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.006 s, sync=0.021 s, total=0.031 s; sync files=165, longest=0.001 s, average=0.001 s; distance=869 kB, estimate=869 kB; lsn=0/1559F28, redo lsn=0/1559F28
+2026-07-27 15:16:07.431 -05 [108753] LOG:  database system is shut down
+2026-07-27 15:16:28.175 -05 [109510] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:16:28.175 -05 [109510] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/f597f0d9ad/.s.PGSQL.5432"
+2026-07-27 15:16:28.183 -05 [109518] LOG:  database system was shut down at 2026-07-27 15:16:07 -05
+2026-07-27 15:16:28.189 -05 [109510] LOG:  database system is ready to accept connections
+2026-07-27 15:16:31.516 -05 [109510] LOG:  received fast shutdown request
+2026-07-27 15:16:31.517 -05 [109510] LOG:  aborting any active transactions
+2026-07-27 15:16:31.518 -05 [109510] LOG:  background worker "logical replication launcher" (PID 109524) exited with exit code 1
+2026-07-27 15:16:31.518 -05 [109516] LOG:  shutting down
+2026-07-27 15:16:31.519 -05 [109516] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:16:31.525 -05 [109516] LOG:  checkpoint complete: wrote 7 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.002 s, total=0.008 s; sync files=4, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/1559FA0, redo lsn=0/1559FA0
+2026-07-27 15:16:31.529 -05 [109510] LOG:  database system is shut down
+2026-07-27 15:17:43.566 -05 [112124] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:17:43.566 -05 [112124] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/f597f0d9ad/.s.PGSQL.5432"
+2026-07-27 15:17:43.569 -05 [112127] LOG:  database system was shut down at 2026-07-27 15:16:31 -05
+2026-07-27 15:17:43.572 -05 [112124] LOG:  database system is ready to accept connections
+2026-07-27 15:17:46.190 -05 [112124] LOG:  received fast shutdown request
+2026-07-27 15:17:46.191 -05 [112124] LOG:  aborting any active transactions
+2026-07-27 15:17:46.192 -05 [112124] LOG:  background worker "logical replication launcher" (PID 112130) exited with exit code 1
+2026-07-27 15:17:46.192 -05 [112125] LOG:  shutting down
+2026-07-27 15:17:46.193 -05 [112125] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:17:46.198 -05 [112125] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.001 s, total=0.007 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/155A030, redo lsn=0/155A030
+2026-07-27 15:17:46.202 -05 [112124] LOG:  database system is shut down
+2026-07-27 15:17:57.667 -05 [112493] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:17:57.667 -05 [112493] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/f597f0d9ad/.s.PGSQL.5432"
+2026-07-27 15:17:57.670 -05 [112497] LOG:  database system was shut down at 2026-07-27 15:17:46 -05
+2026-07-27 15:17:57.674 -05 [112493] LOG:  database system is ready to accept connections
+2026-07-27 15:18:21.099 -05 [112493] LOG:  received fast shutdown request
+2026-07-27 15:18:21.100 -05 [112493] LOG:  aborting any active transactions
+2026-07-27 15:18:21.101 -05 [112493] LOG:  background worker "logical replication launcher" (PID 112500) exited with exit code 1
+2026-07-27 15:18:21.101 -05 [112495] LOG:  shutting down
+2026-07-27 15:18:21.102 -05 [112495] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:18:21.107 -05 [112495] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.001 s, total=0.007 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/155A0E0, redo lsn=0/155A0E0
+2026-07-27 15:18:21.112 -05 [112493] LOG:  database system is shut down
+2026-07-27 15:18:50.708 -05 [113476] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:18:50.708 -05 [113476] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/f597f0d9ad/.s.PGSQL.5432"
+2026-07-27 15:18:50.711 -05 [113479] LOG:  database system was shut down at 2026-07-27 15:18:21 -05
+2026-07-27 15:18:50.714 -05 [113476] LOG:  database system is ready to accept connections
+2026-07-27 15:19:14.188 -05 [113476] LOG:  received fast shutdown request
+2026-07-27 15:19:14.189 -05 [113476] LOG:  aborting any active transactions
+2026-07-27 15:19:14.189 -05 [113476] LOG:  background worker "logical replication launcher" (PID 113482) exited with exit code 1
+2026-07-27 15:19:14.189 -05 [113477] LOG:  shutting down
+2026-07-27 15:19:14.190 -05 [113477] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:19:14.196 -05 [113477] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.001 s, total=0.007 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/155A190, redo lsn=0/155A190
+2026-07-27 15:19:14.199 -05 [113476] LOG:  database system is shut down

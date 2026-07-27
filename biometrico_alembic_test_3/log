@@ -1,0 +1,23 @@
+2026-07-27 15:14:40.326 -05 [107401] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:14:40.326 -05 [107401] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/da07d227e2/.s.PGSQL.5432"
+2026-07-27 15:14:40.329 -05 [107406] LOG:  database system was shut down at 2026-07-27 15:14:40 -05
+2026-07-27 15:14:40.332 -05 [107401] LOG:  database system is ready to accept connections
+2026-07-27 15:14:40.987 -05 [107401] LOG:  received fast shutdown request
+2026-07-27 15:14:40.987 -05 [107401] LOG:  aborting any active transactions
+2026-07-27 15:14:40.988 -05 [107401] LOG:  background worker "logical replication launcher" (PID 107409) exited with exit code 1
+2026-07-27 15:14:40.988 -05 [107404] LOG:  shutting down
+2026-07-27 15:14:40.989 -05 [107404] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:14:41.018 -05 [107404] LOG:  checkpoint complete: wrote 150 buffers (0.9%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.006 s, sync=0.022 s, total=0.031 s; sync files=165, longest=0.002 s, average=0.001 s; distance=869 kB, estimate=869 kB; lsn=0/1559D68, redo lsn=0/1559D68
+2026-07-27 15:14:41.023 -05 [107401] LOG:  database system is shut down
+2026-07-27 15:14:47.938 -05 [107565] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:14:47.938 -05 [107565] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/da07d227e2/.s.PGSQL.5432"
+2026-07-27 15:14:47.941 -05 [107571] LOG:  database system was shut down at 2026-07-27 15:14:41 -05
+2026-07-27 15:14:47.944 -05 [107565] LOG:  database system is ready to accept connections
+2026-07-27 15:14:48.078 -05 [107565] LOG:  received fast shutdown request
+2026-07-27 15:14:48.079 -05 [107565] LOG:  aborting any active transactions
+2026-07-27 15:14:48.079 -05 [107575] FATAL:  terminating connection due to administrator command
+2026-07-27 15:14:48.079 -05 [107565] LOG:  background worker "logical replication launcher" (PID 107574) exited with exit code 1
+2026-07-27 15:14:48.080 -05 [107569] LOG:  shutting down
+2026-07-27 15:14:48.080 -05 [107569] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:14:48.087 -05 [107569] LOG:  checkpoint complete: wrote 16 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.002 s, total=0.007 s; sync files=5, longest=0.001 s, average=0.001 s; distance=42 kB, estimate=42 kB; lsn=0/15648C0, redo lsn=0/15648C0
+2026-07-27 15:14:48.091 -05 [107565] LOG:  database system is shut down

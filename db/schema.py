@@ -15,8 +15,9 @@ Schema tenant (istpet por defecto):
 """
 
 PUBLIC_DDL = """
--- Extensión para gen_random_uuid()
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+-- gen_random_uuid() es built-in desde PostgreSQL 13+ (no requiere pgcrypto).
+-- Si tu PostgreSQL es < 13, descomenta la línea siguiente:
+-- CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ── Tenants ───────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.tenants (

@@ -3,6 +3,14 @@ Inicialización de la base de datos PostgreSQL.
 
 init_db() es idempotente: puede llamarse múltiples veces sin efecto adverso.
 Crea las tablas si no existen y siembra los datos iniciales del tenant.
+
+Soporta dos modos:
+- **Modo legacy** (default): aplica PUBLIC_DDL + get_tenant_ddl con CREATE
+  TABLE IF NOT EXISTS. Funciona en cualquier BD vacía.
+- **Modo Alembic-aware**: si la tabla `public.alembic_version` existe (BD ya
+  migrada con `alembic upgrade head`), salta el DDL y solo siembra los datos
+  de referencia. Esto evita duplicar trabajo en producción donde Alembic es
+  la fuente de verdad.
 """
 
 import os
@@ -15,64 +23,89 @@ from db.schema import PUBLIC_DDL, get_tenant_ddl
 log = logging.getLogger(__name__)
 
 
+def _alembic_applied() -> bool:
+    """Detecta si Alembic ya aplicó migraciones (existe `alembic_version`)."""
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            row = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                      AND table_name   = 'alembic_version'
+                )
+            """)).scalar()
+        return bool(row)
+    except Exception:
+        return False
+
+
 def init_db():
     """
-    1. Aplica DDL público (tenants, usuarios, audit_log, login_intentos).
-    2. Crea el schema del tenant y sus tablas.
-    3. Inserta datos de referencia iniciales (idempotente).
+    1. Si Alembic NO ha migrado, aplica DDL público + tenant (modo legacy).
+    2. Si Alembic SÍ ha migrado, salta el DDL (ya existe).
+    3. Crea el schema del tenant y sus tablas (si aplica).
+    4. Inserta datos de referencia iniciales (idempotente).
     """
     tenant = validate_schema_name(os.environ.get("TENANT_DEFAULT", "istpet"))
     engine = get_engine()
+    alembic_done = _alembic_applied()
 
     with engine.connect() as conn:
-        # Schema público
-        conn.execute(text(PUBLIC_DDL))
-        conn.commit()
+        if alembic_done:
+            log.info(
+                "Alembic ya aplicó migraciones (alembic_version existe). "
+                "Saltando DDL legacy."
+            )
+        else:
+            # Schema público
+            conn.execute(text(PUBLIC_DDL))
+            conn.commit()
 
-        # Schema del tenant por defecto
-        conn.execute(text(get_tenant_ddl(tenant)))
-        conn.commit()
+            # Schema del tenant por default
+            conn.execute(text(get_tenant_ddl(tenant)))
+            conn.commit()
 
-        # Obtener todos los tenants activos para aplicar migraciones a cada uno
-        tenant_slugs = [r[0] for r in conn.execute(
-            text("SELECT slug FROM public.tenants WHERE activo = true")
-        ).fetchall()] or [tenant]
+            # Obtener todos los tenants activos para aplicar migraciones a cada uno
+            tenant_slugs = [r[0] for r in conn.execute(
+                text("SELECT slug FROM public.tenants WHERE activo = true")
+            ).fetchall()] or [tenant]
 
-        for slug in tenant_slugs:
-            validate_schema_name(slug)
-            conn.execute(text(f"""
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_schema = '{slug}' AND table_name = 'dispositivos'
-                          AND column_name = 'prioridad'
-                    ) THEN
-                        ALTER TABLE {slug}.dispositivos ADD COLUMN prioridad INTEGER NOT NULL DEFAULT 5;
-                    END IF;
+            for slug in tenant_slugs:
+                validate_schema_name(slug)
+                conn.execute(text(f"""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = '{slug}' AND table_name = 'dispositivos'
+                              AND column_name = 'prioridad'
+                        ) THEN
+                            ALTER TABLE {slug}.dispositivos ADD COLUMN prioridad INTEGER NOT NULL DEFAULT 5;
+                        END IF;
 
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_schema = '{slug}' AND table_name = 'dispositivos'
-                          AND column_name = 'capacidad_max'
-                    ) THEN
-                        ALTER TABLE {slug}.dispositivos ADD COLUMN capacidad_max INTEGER NOT NULL DEFAULT 100000;
-                    END IF;
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = '{slug}' AND table_name = 'dispositivos'
+                              AND column_name = 'capacidad_max'
+                        ) THEN
+                            ALTER TABLE {slug}.dispositivos ADD COLUMN capacidad_max INTEGER NOT NULL DEFAULT 100000;
+                        END IF;
 
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns
-                        WHERE table_schema = '{slug}' AND table_name = 'justificaciones'
-                          AND column_name = 'hora_recuperacion_fin'
-                    ) THEN
-                        ALTER TABLE {slug}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
-                    END IF;
-                END $$;
-            """))
-        conn.commit()
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = '{slug}' AND table_name = 'justificaciones'
+                              AND column_name = 'hora_recuperacion_fin'
+                        ) THEN
+                            ALTER TABLE {slug}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
+                        END IF;
+                    END $$;
+                """))
+            conn.commit()
 
-    # Datos de referencia
+    # Datos de referencia (siempre, incluso si Alembic ya migró)
     _seed_datos_iniciales(tenant)
-    log.info("init_db completado para tenant=%s", tenant)
+    log.info("init_db completado para tenant=%s (alembic=%s)", tenant, alembic_done)
 
 
 def _seed_datos_iniciales(tenant: str):

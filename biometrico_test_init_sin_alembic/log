@@ -1,0 +1,59 @@
+2026-07-27 15:16:05.690 -05 [108838] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:16:05.690 -05 [108838] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/5816ef4792/.s.PGSQL.5432"
+2026-07-27 15:16:05.693 -05 [108841] LOG:  database system was shut down at 2026-07-27 15:16:05 -05
+2026-07-27 15:16:05.696 -05 [108838] LOG:  database system is ready to accept connections
+2026-07-27 15:16:05.808 -05 [108845] ERROR:  relation "public.tenants" does not exist at character 22
+2026-07-27 15:16:05.808 -05 [108845] STATEMENT:  SELECT count(*) FROM public.tenants WHERE slug = 'istpet'
+2026-07-27 15:16:07.088 -05 [108838] LOG:  received fast shutdown request
+2026-07-27 15:16:07.089 -05 [108838] LOG:  aborting any active transactions
+2026-07-27 15:16:07.089 -05 [108838] LOG:  background worker "logical replication launcher" (PID 108844) exited with exit code 1
+2026-07-27 15:16:07.089 -05 [108839] LOG:  shutting down
+2026-07-27 15:16:07.090 -05 [108839] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:16:07.095 -05 [108839] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.001 s, total=0.006 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/14807E0, redo lsn=0/14807E0
+2026-07-27 15:16:07.100 -05 [108838] LOG:  database system is shut down
+2026-07-27 15:16:30.434 -05 [109561] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:16:30.434 -05 [109561] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/5816ef4792/.s.PGSQL.5432"
+2026-07-27 15:16:30.438 -05 [109564] LOG:  database system was shut down at 2026-07-27 15:16:07 -05
+2026-07-27 15:16:30.442 -05 [109561] LOG:  database system is ready to accept connections
+2026-07-27 15:16:30.549 -05 [109568] ERROR:  relation "public.tenants" does not exist at character 22
+2026-07-27 15:16:30.549 -05 [109568] STATEMENT:  SELECT count(*) FROM public.tenants WHERE slug = 'istpet'
+2026-07-27 15:16:31.209 -05 [109561] LOG:  received fast shutdown request
+2026-07-27 15:16:31.210 -05 [109561] LOG:  aborting any active transactions
+2026-07-27 15:16:31.210 -05 [109561] LOG:  background worker "logical replication launcher" (PID 109567) exited with exit code 1
+2026-07-27 15:16:31.211 -05 [109562] LOG:  shutting down
+2026-07-27 15:16:31.211 -05 [109562] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:16:31.218 -05 [109562] LOG:  checkpoint complete: wrote 3 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.004 s, sync=0.001 s, total=0.008 s; sync files=2, longest=0.001 s, average=0.001 s; distance=0 kB, estimate=0 kB; lsn=0/1480858, redo lsn=0/1480858
+2026-07-27 15:16:31.224 -05 [109561] LOG:  database system is shut down
+2026-07-27 15:17:45.248 -05 [112163] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:17:45.248 -05 [112163] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/5816ef4792/.s.PGSQL.5432"
+2026-07-27 15:17:45.251 -05 [112166] LOG:  database system was shut down at 2026-07-27 15:16:31 -05
+2026-07-27 15:17:45.254 -05 [112163] LOG:  database system is ready to accept connections
+2026-07-27 15:17:45.883 -05 [112163] LOG:  received fast shutdown request
+2026-07-27 15:17:45.884 -05 [112163] LOG:  aborting any active transactions
+2026-07-27 15:17:45.885 -05 [112163] LOG:  background worker "logical replication launcher" (PID 112169) exited with exit code 1
+2026-07-27 15:17:45.885 -05 [112164] LOG:  shutting down
+2026-07-27 15:17:45.886 -05 [112164] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:17:45.921 -05 [112164] LOG:  checkpoint complete: wrote 160 buffers (1.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.009 s, sync=0.023 s, total=0.036 s; sync files=164, longest=0.002 s, average=0.001 s; distance=859 kB, estimate=859 kB; lsn=0/1557668, redo lsn=0/1557668
+2026-07-27 15:17:45.926 -05 [112163] LOG:  database system is shut down
+2026-07-27 15:17:59.336 -05 [112547] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:17:59.336 -05 [112547] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/5816ef4792/.s.PGSQL.5432"
+2026-07-27 15:17:59.340 -05 [112550] LOG:  database system was shut down at 2026-07-27 15:17:45 -05
+2026-07-27 15:17:59.342 -05 [112547] LOG:  database system is ready to accept connections
+2026-07-27 15:18:20.791 -05 [112547] LOG:  received fast shutdown request
+2026-07-27 15:18:20.792 -05 [112547] LOG:  aborting any active transactions
+2026-07-27 15:18:20.793 -05 [112547] LOG:  background worker "logical replication launcher" (PID 112553) exited with exit code 1
+2026-07-27 15:18:20.793 -05 [112548] LOG:  shutting down
+2026-07-27 15:18:20.794 -05 [112548] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:18:20.802 -05 [112548] LOG:  checkpoint complete: wrote 23 buffers (0.1%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.003 s, total=0.009 s; sync files=20, longest=0.001 s, average=0.001 s; distance=52 kB, estimate=52 kB; lsn=0/15646A0, redo lsn=0/15646A0
+2026-07-27 15:18:20.807 -05 [112547] LOG:  database system is shut down
+2026-07-27 15:18:52.227 -05 [113535] LOG:  starting PostgreSQL 16.2 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 10.2.1 20210130 (Red Hat 10.2.1-11), 64-bit
+2026-07-27 15:18:52.228 -05 [113535] LOG:  listening on Unix socket "/run/user/1000/python_PostgresServer/5816ef4792/.s.PGSQL.5432"
+2026-07-27 15:18:52.231 -05 [113538] LOG:  database system was shut down at 2026-07-27 15:18:20 -05
+2026-07-27 15:18:52.234 -05 [113535] LOG:  database system is ready to accept connections
+2026-07-27 15:19:13.881 -05 [113535] LOG:  received fast shutdown request
+2026-07-27 15:19:13.882 -05 [113535] LOG:  aborting any active transactions
+2026-07-27 15:19:13.882 -05 [113535] LOG:  background worker "logical replication launcher" (PID 113541) exited with exit code 1
+2026-07-27 15:19:13.882 -05 [113536] LOG:  shutting down
+2026-07-27 15:19:13.883 -05 [113536] LOG:  checkpoint starting: shutdown immediate
+2026-07-27 15:19:13.889 -05 [113536] LOG:  checkpoint complete: wrote 4 buffers (0.0%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.002 s, sync=0.002 s, total=0.007 s; sync files=3, longest=0.001 s, average=0.001 s; distance=6 kB, estimate=6 kB; lsn=0/1566270, redo lsn=0/1566270
+2026-07-27 15:19:13.893 -05 [113535] LOG:  database system is shut down
