@@ -30,7 +30,7 @@ from script import (  # noqa: F401  (re-export)
     generar_pdf,
     generar_pdf_persona,
 )
-from script_docx import generar_docx, generar_docx_persona  # noqa: F401  (re-export)
+from app.domain.report_docx import generar_docx, generar_docx_persona  # noqa: F401  (re-export)
 
 
 def parse_config(data: dict[str, Any]) -> dict[str, Any]:
