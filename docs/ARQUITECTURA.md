@@ -3,9 +3,19 @@ title: Arquitectura del Sistema Biométrico
 tags: [arquitectura, flask, modulos, blueprint, multitenant, postgres]
 status: active
 created: 2026-07-01
-updated: 2026-07-01
+updated: 2026-07-02
 authors: [arquitecto, documenter]
-related: ["[[ADR-0001-modularizacion-monolito-flask]]", "[[ADR-0000-use-markdown-for-adrs]]", "[[AUTENTICACION]]", "[[API]]", "[[ER]]", "[[README]]"]
+related:
+  - "[[ADR-0001-modularizacion-monolito-flask]]"
+  - "[[ADR-0002-sync-observable-y-backups]]"
+  - "[[ADR-0004-tests-integracion-pgserver]]"
+  - "[[ADR-0000-use-markdown-for-adrs]]"
+  - "[[AUTENTICACION]]"
+  - "[[API]]"
+  - "[[ER]]"
+  - "[[README]]"
+  - "[[OPERATIONS]]"
+  - "[[CHANGELOG]]"
 ---
 
 # Arquitectura del Sistema Biométrico
@@ -20,14 +30,10 @@ y un esquema por tenant (datos operativos: `personas`, `asistencias`, `justifica
 tenant antes de ejecutar SQL. La autenticación se apoya en sesión Flask + bcrypt + CSRF custom, con AES-256-GCM
 para cifrar las credenciales de los dispositivos biométricos en la BD.
 
-El estado actual del repositorio es de **monolito Flask**: 2 512 líneas en `app.py` con 81 rutas
-registradas y 61 decoradores de RBAC, módulos top-level (`script.py` 2 281 líneas, `analytics.py`,
-`sync.py`, `horarios.py`, `ia_report.py`, `script_docx.py`, `auth.py`, `decorators.py`,
-`email_utils.py`, `middleware.py`) conviven sin contrato claro entre "servicio de dominio" y "ruta HTTP".
-La capa de datos (`db/queries/*.py`) y los drivers (`drivers/` Strategy + Factory) sí están limpios y se
-respeta su organización. La arquitectura objetivo, detallada en [[ADR-0001-modularizacion-monolito-flask]],
-es migrar a **Application Factory + Blueprints por dominio + servicios en `app/domain/*`** para reducir
-riesgo de merge, habilitar tests aislados y mantener el deploy actual (`gunicorn --workers 1 --threads 4`).
+**Estado actual (post-refactor ADR-0001, 2026-07-02)**: el monolito `app.py` (2 512 líneas)
+fue reemplazado por **Application Factory + 13 Blueprints + 20 módulos de dominio** en `app/`.
+Ver `[[ADR-0001-modularizacion-monolito-flask]]` (status: completed) y `[[CHANGELOG]]` para el detalle
+de la migración física de los 11 módulos top-level a `app/domain/*`.
 
 El sistema se ejecuta en producción como un solo contenedor Docker con `gunicorn --workers 1 --threads 4`
 (dado el scheduler in-process basado en `schedule` y un dict `_jobs` en memoria), expone HTTP bajo el
@@ -953,11 +959,162 @@ actualizados en cada sub-fase.
 
 Extraído de [[ADR-0001-modularizacion-monolito-flask]] y de este análisis.
 
+### P1 (bloqueante)
+
+- **Fase −1 — Consolidar Alembic como única fuente de verdad** (DoD-13). El DDL
+  actualmente está duplicado entre `db/init.py::init_db()` (que crea DDL propio
+  en cada arranque) y las futuras migraciones Alembic. Migrar el DDL a
+  `alembic/versions/*.py` y dejar `init_db()` solo como sembrado de datos.
+
 ### P2 (importante, no urgente)
 
 - Migrar CSRF custom a Flask-WTF (ver sección CSRF).
-- Extraer o eliminar `middleware.py` huérfano: moverlo a `services/biometric_proxy/` con su propio
-  `Dockerfile` o eliminarlo si no se usa.
+- ~~Extraer o eliminar `middleware.py` huérfano~~ → **completado en Fase 4e.8**
+  (eliminado por no usarse; ver `[[CHANGELOG]]`).
+- Versionado explícito de la API (`/api/v1/*`) — actualmente no existe versionado.
+- Generar OpenAPI / Swagger automáticamente desde decoradores.
+- **Fase 7.4 — Subir cobertura al 60%** (DoD-8). Actual 31.90%; requiere tests
+  focalizados de `db/queries/*` y de los helpers de `app/domain/reports.py`.
+
+### P3 (futuro)
+
+- Evaluar Celery + multi-worker (Fase 6 del roadmap).
+
+---
+
+## Estado del refactor (post-ADR-0001, 2026-07-02)
+
+El ADR-0001 está **cerrado** (`status: completed`). Esta sección documenta
+cómo quedó la estructura real del repositorio.
+
+### Estructura final
+
+```
+biometric_sistem_reports/
+├── wsgi.py                            # entrypoint canónico (gunicorn:app)
+├── app/                               # paquete principal
+│   ├── __init__.py                    # create_app(config_name)
+│   ├── config.py                      # BaseConfig + DevelopmentConfig + ProductionConfig + TestingConfig
+│   ├── extensions.py                  # csrf, limiter (instances sin app, init_app en factory)
+│   ├── errors.py                      # handlers 401/403/404/429/500
+│   ├── security_headers.py            # CSP, X-Frame-Options, X-Content-Type-Options
+│   ├── context_processors.py          # inject_system_info, inject_user_info, inject_pending_counts
+│   ├── tenant.py                      # before_request: carga g.tenant_schema, g.tenant_tipos
+│   ├── cleanup.py                     # thread daemon de limpieza de archivos temporales
+│   ├── domain/                        # 20 módulos de dominio (servicios puros o con BD)
+│   │   ├── auth.py                    # hash_password, verificar_login, crear_usuario, etc.
+│   │   ├── rbac.py                    # decoradores @require_role, @require_tipo_persona
+│   │   ├── emailer.py                 # enviar_correo (smtplib + MIME)
+│   │   ├── admin.py                   # CRUD tenants, usuarios cross-tenant
+│   │   ├── people.py                  # CRUD personas (ZK + DB)
+│   │   ├── groups.py                  # CRUD grupos y categorías
+│   │   ├── periods.py                 # CRUD periodos_vigencia
+│   │   ├── devices.py                 # CRUD dispositivos ZK
+│   │   ├── breaks.py                  # categorización de breaks
+│   │   ├── dashboard.py               # datos del dashboard principal
+│   │   ├── system.py                  # funciones misceláneas
+│   │   ├── analytics.py               # load_data, calcular_risk_score, analizar, etc.
+│   │   ├── attendance.py              # parsear_csv, parsear_obd, get_info_dia
+│   │   ├── reports.py                 # DEFAULT_CONFIG, deduplicar, analizar_dia, generar_pdf
+│   │   ├── report_docx.py             # generar_docx, generar_docx_persona
+│   │   ├── ai_narrative.py            # generar_narrativo (DeepSeek + fallback regla-base)
+│   │   ├── schedule.py                # init_scheduler, sincronizar, get_job_status
+│   │   ├── scheduler.py               # registrar_corrida, listar_ultimas_corridas, proxima_corrida
+│   │   └── backup.py                  # generar_dump, purgar_backups_viejos
+│   └── web/                           # 13 Blueprints por dominio
+│       ├── auth_bp.py                 # /login, /logout, /admin/switch-tenant
+│       ├── dashboard_bp.py            # /, /configuracion
+│       ├── devices_bp.py              # /admin/dispositivos, /api/dispositivos, /api/sync/...
+│       ├── schedule_bp.py             # /api/horarios, /api/horarios/estado, etc.
+│       ├── attendance_bp.py           # /api/justificaciones, /api/feriados
+│       ├── breaks_bp.py               # /api/categorizar-break
+│       ├── reports_bp.py              # /api/generar-desde-db, /api/backup/...
+│       ├── periods_bp.py              # /periodos, /periodos/<id>/...
+│       ├── people_bp.py               # /api/personas-lista, /api/personas-db, etc.
+│       ├── groups_bp.py               # /admin/grupos, /admin/categorias
+│       ├── admin_bp.py                # /admin/tenants, /admin/usuarios, /admin/superadmin/...
+│       ├── analytics_bp.py            # /analytics, /api/analytics, /api/analytics/narrativo
+│       └── system_bp.py               # /api/scheduler/estado, /api/insertar-asistencias
+├── db/                                # capa de datos (intacta desde el inicio)
+│   ├── __init__.py                    # re-exports de todas las funciones
+│   ├── connection.py                  # get_connection, set_thread_tenant, clear_thread_tenant
+│   ├── init.py                        # init_db() — DDL + sembrado
+│   ├── schema.py                      # PUBLIC_DDL, get_tenant_ddl(slug)
+│   ├── tenant_provisioner.py          # provisionar_schema (multi-tenant)
+│   └── queries/                       # 15 módulos CRUD (SQL puro parametrizado)
+├── drivers/                           # Strategy + Factory para dispositivos (intacto)
+└── tests/
+    ├── conftest.py                    # fixtures base (app, client, admin_session)
+    ├── unit/                          # 192 tests, cobertura rápida
+    │   ├── test_factory.py            # 13 blueprints, 82 rutas, headers de seguridad
+    │   ├── test_arquitectura.py       # regla de capas (AST), no módulos top-level
+    │   ├── test_arquitectura.py       # DoD-7: no quedan .py de negocio en raíz
+    │   ├── test_auth.py               # hash_password, verificar_login, csrf, etc.
+    │   ├── test_rbac.py               # require_role, require_tipo_persona
+    │   ├── test_csrf.py               # generate_token, validate
+    │   ├── test_emailer.py            # enviar_correo
+    │   ├── test_schedule_migrado.py   # init_scheduler(app), no side-effects
+    │   ├── test_sync_logging.py       # logger + _registrar_corrida_sync + loop
+    │   ├── test_backup.py             # generar_dump, purgar_backups_viejos
+    │   ├── test_ai_narrative.py       # DeepSeek + fallback regla-base
+    │   ├── test_analytics_puro.py     # calcular_risk_score
+    │   ├── test_reports_puro.py       # parse_config, deduplicar, helpers
+    │   ├── test_emailer_puro.py       # enviar_correo con mocks
+    │   ├── test_schedule_bp_unit.py   # endpoints sin DB
+    │   └── test_scheduler_estado.py   # /api/scheduler/estado
+    └── integration/                   # 79 tests contra PostgreSQL (pgserver)
+        ├── conftest.py                # pgserver + init_db + fixtures
+        ├── test_auth_bp.py            # 6 tests
+        ├── test_dashboard_bp.py       # 3 tests
+        ├── test_devices_bp.py         # 4 tests
+        ├── test_devices_bp_full.py    # 6 tests
+        ├── test_schedule_bp.py        # 3 tests
+        ├── test_schedule_bp_full.py   # 4 tests
+        ├── test_attendance_bp.py      # 4 tests
+        ├── test_breaks_bp.py          # 3 tests
+        ├── test_reports_bp.py         # 3 tests
+        ├── test_periods_bp.py         # 2 tests
+        ├── test_people_bp.py          # 3 tests
+        ├── test_groups_bp.py          # 2 tests
+        ├── test_admin_bp.py           # 3 tests
+        ├── test_admin_bp_full.py      # 9 tests
+        ├── test_analytics_bp.py       # 2 tests
+        ├── test_analytics_attendance_full.py  # 8 tests
+        ├── test_system_bp.py          # 2 tests
+        ├── test_more_endpoints.py     # 15 tests (CRUD adicionales)
+        └── test_misc_bp.py            # 5 tests
+```
+
+### Solo quedan 3 archivos `.py` en la raíz
+
+- `wsgi.py` — entrypoint canónico para gunicorn (`wsgi:app`).
+- `deduplicar_personas.py` — script CLI de mantenimiento (no parte de la app).
+- `test_justificacion_rango_local.py` — script manual de QA (no parte de la app).
+
+Ver `tests/unit/test_arquitectura.py::test_no_quedan_modulos_top_level_de_negocio`
+para la validación automática (DoD-7).
+
+### Infraestructura de testing
+
+- **`pgserver`** (PostgreSQL 16 embebido vía Python) — ver `[[ADR-0004-tests-integracion-pgserver]]`.
+  Reemplaza el servicio Docker `postgres:16` que era la opción original.
+- **271 tests passing** en ~24s (192 unit + 79 integration).
+- **Cobertura 31.90%** (gate 30% pasa; DoD-8 60% sigue pendiente).
+
+### CI
+
+- `.github/workflows/ci.yml` con 2 jobs: `test` (pytest completo) y
+  `coverage-gate` (verifica `--cov-fail-under=30`).
+- Se ejecuta `pip install pgserver`; no requiere servicio Postgres externo.
+
+## Backlog anterior (legado)
+
+Esta sección se conserva por trazabilidad; ver arriba para el backlog actualizado.
+
+### P2 (importante, no urgente)
+
+- Migrar CSRF custom a Flask-WTF (ver sección CSRF).
+- ~~Extraer o eliminar `middleware.py` huérfano~~ → **completado en Fase 4e.8**.
 - Versionado explícito de la API (`/api/v1/*`) — actualmente no existe versionado.
 - Generar OpenAPI / Swagger automáticamente desde decoradores.
 

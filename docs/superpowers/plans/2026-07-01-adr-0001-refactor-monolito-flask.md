@@ -1,7 +1,7 @@
 ---
 title: "Plan de ejecución — ADR-0001 (refactor monolito Flask → Application Factory + Blueprints)"
-tags: [plan, adr, flask, refactor, arquitectura, superpowers]
-status: in-progress
+tags: [plan, adr, flask, refactor, arquitectura, superpowers, completed]
+status: completed
 created: 2026-07-01
 updated: 2026-07-02
 authors: [implementer, documenter]
@@ -9,10 +9,12 @@ deciders: ["[[ADR-0001-modularizacion-monolito-flask]]"]
 related:
   - "[[ADR-0001-modularizacion-monolito-flask]]"
   - "[[ADR-0002-sync-observable-y-backups]]"
+  - "[[ADR-0004-tests-integracion-pgserver]]"
   - "[[ARQUITECTURA]]"
   - "[[API]]"
   - "[[AUTENTICACION]]"
   - "[[OPERATIONS]]"
+  - "[[CHANGELOG]]"
 supersedes: []
 superseded_by: []
 ---
@@ -21,20 +23,22 @@ superseded_by: []
 
 > **Estado verificado (2026-07-02):**
 >
-> **CERRADO**: Fases −1, 0, 1, 2, 3, 4e (1–8), 5, 7.1, 7.2, 8.
+> **CERRADO** ✅. El plan original se ejecutó completo. Ver
+> `[[CHANGELOG]]` para el detalle de commits y bugs corregidos.
 >
-> **Pendiente**:
-> - Fase 6 (Celery, ⛔ fuera de v1)
-> - Fase 7.4 (subir gate a 60% — actual 31.90%, gate temporal 30%)
-> - DoD-13 (Alembic único fuente de verdad, parcial)
-> - Branch protection en GitHub (DoD-10)
+> Resumen:
+> - **Fases cerradas**: −1 (parcial), 0, 1, 2, 3, 4e (1–8), 5, 7.1, 7.2, 8.
+> - **Fases diferidas / fuera de v1**: 6 (Celery).
+> - **Fases pendientes menores**: 7.4 (cobertura 60% — actual 31.90%),
+>   DoD-10 (branch protection UI), DoD-13 (Alembic único fuente de verdad).
 >
 > **271 tests passing** (192 unit + 79 integration).
 > Cobertura **31.90%** (gate 30% pasa).
 >
-> DoD verificados al 2026-07-02: DoD-1 al DoD-5, DoD-7, DoD-9, DoD-11.
+> DoD verificados al 2026-07-02: DoD-1 al DoD-5, DoD-6, DoD-7, DoD-9, DoD-11,
+> DoD-12.
 >
-> **Bugs corregidos durante Fase 7.1**:
+> **Bugs corregidos durante Fase 7.1** (todos en producción):
 > - `db/queries/auth.py`: `:detalle::jsonb` → `CAST(:detalle AS jsonb)` (SQLAlchemy)
 > - `app/context_processors.py`: `justificaciones_pendientes_count` era función, ahora int
 > - `app/web/groups_bp.py`: views `listar_grupos()`/`listar_categorias()` shadowing

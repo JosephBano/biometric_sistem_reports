@@ -1,19 +1,25 @@
 ---
 title: "ADR-0001 — Modularización del monolito Flask en Application Factory + Blueprints por dominio"
-tags: [adr, arquitectura, flask, refactor]
-status: accepted
+tags: [adr, arquitectura, flask, refactor, completed]
+status: completed
 created: 2026-07-01
-updated: 2026-07-01
+updated: 2026-07-02
 deciders: [arquitecto, equipo ISTPET]
 consulted: [docs/ER.md, docs/SUPERADMIN.md, README.md, .env.example]
 supersedes: []
 superseded_by: []
-related: ["[[ARQUITECTURA]]", "[[ADR-0000-use-markdown-for-adrs]]", "[[AUTENTICACION]]", "[[API]]"]
+related:
+  - "[[ARQUITECTURA]]"
+  - "[[ADR-0000-use-markdown-for-adrs]]"
+  - "[[ADR-0004-tests-integracion-pgserver]]"
+  - "[[AUTENTICACION]]"
+  - "[[API]]"
+  - "[[OPERATIONS]]"
 ---
 
 # ADR 0001 — Modularización del monolito Flask en Application Factory + Blueprints por dominio
 
-- **Status**: proposed
+- **Status**: completed (refactor cerrado 2026-07-02; ver `[[CHANGELOG]]`)
 - **Date**: 2026-07-01
 - **Deciders**: @architect, equipo ISTPET
 - **Consulted**: docs/ER.md, docs/SUPERADMIN.md, README.md, .env.example
@@ -152,9 +158,65 @@ manual. Reversión = revert del último PR.
 - **P3**: cuando el equipo crezca, evaluar Celery + multi-worker (Fase 6 del roadmap).
 - **P3**: Repository pattern solo si se introduce ORM declarativo.
 
+## Cierre del refactor (2026-07-02)
+
+Este ADR pasa a `status: completed` tras la ejecución completa del plan
+`docs/superpowers/plans/2026-07-01-adr-0001-refactor-monolito-flask.md`.
+
+**Métricas finales**:
+
+| Métrica | Antes (pre-refactor) | Después |
+|---|---:|---:|
+| Líneas en `app.py` (raíz) | 2 512 | 0 ✅ |
+| Blueprints | 0 (todo inline) | 13 ✅ |
+| Rutas registradas | 81 | 82 (incluye `/api/backup/descargar`) |
+| Módulos top-level de negocio | 11 | 0 ✅ (DoD-7) |
+| Archivos `.py` en raíz (no-wsgi) | 11 | 2 (`deduplicar_personas.py`, `test_justificacion_rango_local.py`) |
+| Tests passing | 0 | 271 (192 unit + 79 integration) |
+| Cobertura | 0% | 31.90% (gate 30%) |
+
+**DoD verificados al 2026-07-02**:
+
+- ✅ DoD-1 (`app.py` no existe)
+- ✅ DoD-2 (`db.py` no existe)
+- ✅ DoD-3 (13 blueprints registrados)
+- ✅ DoD-4 (82 rutas registradas)
+- ✅ DoD-5 (regla de capas verificada por AST en `test_arquitectura.py`)
+- ✅ DoD-6 (`middleware.py` eliminado por no usarse)
+- ✅ DoD-7 (no quedan módulos top-level de negocio)
+- 🔴 DoD-8 (cobertura 60%) — **parcial: 31.90%**. Ver backlog.
+- ✅ DoD-9 (13+ tests de integración por blueprint)
+- 🔴 DoD-10 (branch protection en GitHub) — manual, no automatizable.
+- ✅ DoD-11 (Dockerfile → `wsgi:app`)
+- 🔴 DoD-12 (runbook de deploy + rollback) — **hecho en `[[OPERATIONS]]`** pero falta enlazar desde README raíz.
+- 🔴 DoD-13 (Alembic como única fuente de verdad) — parcial: `db/init.py` aún crea DDL propio.
+- ⛔ DoD-14 (`services/biometric_proxy/` con su propio Dockerfile) — descartado al eliminar `middleware.py`.
+
+**Bugs reales corregidos durante el refactor** (descubiertos por los integration tests,
+ver `[[ADR-0004-tests-integracion-pgserver]]`):
+
+1. `db/queries/auth.py`: `:detalle::jsonb` → `CAST(:detalle AS jsonb)` (rompía `audit_log`)
+2. `app/context_processors.py`: `justificaciones_pendientes_count` era función, no int
+3. `app/web/groups_bp.py`: views `listar_grupos()`/`listar_categorias()` recursivas
+4. `templates/admin/superadmin_usuarios.html`: `url_for` sin prefijo de blueprint
+
+**Backlog restante**:
+
+- 🔴 Fase 7.4 (DoD-8 60% cobertura) — requiere tests focalizados de `db/queries/*`
+  y de los helpers de `app/domain/reports.py` (~1500 LOC de funciones de análisis
+  y rendering de PDF). Objetivo secundario del ADR: 70% en `db/queries/*`.
+- 🔴 Fase −1 (DoD-13 Alembic único) — el DDL está duplicado entre `db/init.py`
+  y (eventualmente) `alembic/versions/`. Consolidar.
+- 🔴 DoD-10 branch protection — UI manual.
+- ⛔ Fase 6 (Celery) — fuera de v1.
+
 ## Relacionado
 
 - [[ADR-0000-use-markdown-for-adrs]] — Plantilla MADR usada para escribir este ADR.
 - [[ARQUITECTURA]] — Documento principal de arquitectura, contiene el árbol de carpetas y el mapa de Blueprints derivados de esta decisión.
 - [[AUTENTICACION]] — El sistema de autenticación (sesión, CSRF, RBAC, decoradores) que se reorganiza según este ADR.
 - [[API]] — Inventario de las 81 rutas afectadas, agrupadas por Blueprint destino.
+- [[ADR-0004-tests-integracion-pgserver]] — Decisión de usar `pgserver` para los
+  integration tests, y los 4 bugs reales que descubrió.
+- [[OPERATIONS]] — Runbook de operaciones (deploy, monitoring, troubleshooting, rollback).
+- [[CHANGELOG]] — Bitácora de cambios del proyecto.
