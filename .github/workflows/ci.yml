@@ -67,7 +67,7 @@ jobs:
           retention-days: 30
 
   coverage-gate:
-    name: Coverage gate (≥30%)
+    name: Coverage gate (≥43%)
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -88,10 +88,15 @@ jobs:
           pip install pgserver
 
       - name: Check coverage
-        # El umbral está en pyproject.toml (--cov-fail-under=30).
-        # DoD-8 del ADR-0001 pide 60%; se subirá tras añadir más tests
-        # (objetivo secundario: 70% de cobertura en db/queries/*).
+        # El umbral está en pyproject.toml (--cov-fail-under=43).
+        # DoD-8 del ADR-0001 pide 60%; el gap actual se debe a:
+        # - app/domain/reports.py (1244 stmts, 11%) — funciones de análisis
+        #   y rendering de PDF, requieren mocks pesados
+        # - app/domain/report_docx.py (451 stmts, 8%) — rendering DOCX
+        # - app/web/admin_bp.py / schedule_bp.py / periods_bp.py (38%)
+        # - db/queries/asistencia_periodo.py (24%) — requiere datos complejos
+        # Plan: tests focalizados por módulo en próximos PRs.
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test_ci
         run: |
-          pytest --cov=app --cov-fail-under=30 --cov-report=term-missing
+          pytest --cov=app --cov=db --cov-fail-under=43 --cov-report=term-missing
