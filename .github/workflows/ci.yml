@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main, development]
 
-# Cancela runs anteriores en el mismo PR si se pushea un nuevo commit.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -15,21 +14,6 @@ jobs:
   test:
     name: Tests (unit + integration)
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: test_user
-          POSTGRES_PASSWORD: test_pass
-          POSTGRES_DB: test_db
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U test_user"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     env:
       FLASK_ENV: testing
@@ -50,35 +34,25 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
+          # pgserver: trae binarios de PostgreSQL 16 embebidos para los tests
+          # de integración (no requiere servicio Docker postgres:16).
+          pip install pgserver
 
       - name: Lint (ruff)
         run: |
           ruff check . --output-format=github
 
-      - name: Run migrations
-        run: |
-          # Crea las tablas en la BD de test (las migraciones Alembic son la
-          # fuente de verdad; si no están, cae al init_db del paquete `db/`).
-          if [ -d "alembic/versions" ] && ls alembic/versions/*.py 2>/dev/null | head -1; then
-            alembic upgrade head
-          else
-            .venv/bin/python -c "from db import init_db; init_db()" || true
-          fi
-
-      - name: Run tests
+      - name: Run tests (unit + integration)
+        env:
+          # pgserver crea un socket Unix local, no necesita servicio Postgres.
+          # Forzamos un valor dummy para que `app.config` pase la salvaguarda
+          # de TestingConfig (que exige "test" en DATABASE_URL).
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_ci
         run: |
           pytest -v --tb=short --color=yes
 
@@ -92,9 +66,8 @@ jobs:
             .coverage
           retention-days: 30
 
-  # Job dedicado al gate de cobertura — falla si baja del umbral.
   coverage-gate:
-    name: Coverage gate (≥20%)
+    name: Coverage gate (≥30%)
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -112,9 +85,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
+          pip install pgserver
 
       - name: Check coverage
-        # El umbral está en pyproject.toml (--cov-fail-under=20).
-        # Subir a 60 en la Fase 7.4 tras añadir los tests de Fase 7.1.
+        # El umbral está en pyproject.toml (--cov-fail-under=30).
+        # DoD-8 del ADR-0001 pide 60%; se subirá tras añadir más tests
+        # (objetivo secundario: 70% de cobertura en db/queries/*).
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_ci
         run: |
-          pytest --cov=app --cov-fail-under=20 --cov-report=term-missing
+          pytest --cov=app --cov-fail-under=30 --cov-report=term-missing
