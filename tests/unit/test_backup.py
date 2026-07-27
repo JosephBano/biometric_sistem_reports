@@ -1,6 +1,7 @@
 """
-Tests del módulo `backup.py` (Fase 2 — Backups portables).
+Tests del módulo `app.domain.backup` (Fase 2 — Backups portables).
 
+Migrado desde tests sobre `backup.py` raíz en Fase 4e.7 del ADR-0001.
 Mockeamos subprocess y filesystem para no ejecutar pg_dump real.
 """
 from __future__ import annotations
@@ -11,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import backup as backup_module
+from app.domain import backup as backup_module
 
 
 class TestPurgarBackupsViejos:
@@ -71,7 +72,7 @@ class TestGenerarDump:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("backup.subprocess.run", return_value=mock_result) as mock_run:
+        with patch("app.domain.backup.subprocess.run", return_value=mock_result) as mock_run:
             # Crear el archivo destino para que el size() funcione
             destino.write_bytes(b"x" * 1024)
 
@@ -97,7 +98,7 @@ class TestGenerarDump:
             {"DATABASE_URL": "postgresql://user:secret@dbhost:5432/mydb"},
             clear=False,
         ):
-            with patch("backup.subprocess.run", return_value=mock_result) as mock_run:
+            with patch("app.domain.backup.subprocess.run", return_value=mock_result) as mock_run:
                 destino.write_bytes(b"x" * 1024)
                 backup_module.generar_dump(destino)
 
@@ -126,7 +127,7 @@ class TestGenerarDump:
         mock_result.returncode = 1
         mock_result.stderr = "pg_dump: error: connection failed"
 
-        with patch("backup.subprocess.run", return_value=mock_result):
+        with patch("app.domain.backup.subprocess.run", return_value=mock_result):
             with pytest.raises(RuntimeError) as exc_info:
                 backup_module.generar_dump(destino)
 
@@ -154,7 +155,7 @@ class TestGenerarDump:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("backup.subprocess.run", return_value=mock_result):
+        with patch("app.domain.backup.subprocess.run", return_value=mock_result):
             ruta = backup_module.generar_dump(destino)
 
         assert ruta.stat().st_size == 4096
@@ -168,7 +169,7 @@ class TestGenerarDump:
         mock_result.returncode = 0
         mock_result.stderr = ""
 
-        with patch("backup.subprocess.run", return_value=mock_result):
+        with patch("app.domain.backup.subprocess.run", return_value=mock_result):
             with pytest.raises(RuntimeError) as exc_info:
                 backup_module.generar_dump(destino)
 
@@ -178,7 +179,7 @@ class TestGenerarDump:
         """Si pg_dump no existe en PATH → FileNotFoundError → RuntimeError claro."""
         destino = tmp_path / "test.dump"
 
-        with patch("backup.subprocess.run", side_effect=FileNotFoundError("pg_dump no encontrado")):
+        with patch("app.domain.backup.subprocess.run", side_effect=FileNotFoundError("pg_dump no encontrado")):
             with pytest.raises(RuntimeError) as exc_info:
                 backup_module.generar_dump(destino)
 
