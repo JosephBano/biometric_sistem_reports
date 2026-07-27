@@ -2,12 +2,16 @@
 Tests que hacen cumplir las reglas de capas del ADR-0001 (`app/__init__.py`):
 
   - `app/web/*` solo importa de `app/domain/*` (nunca de `db`, `db.queries`
-    ni de los módulos legacy top-level como `script`, `analytics`, `horarios`).
+    ni de los módulos legacy top-level).
   - `app/domain/*` nunca importa de `app/web/*`.
   - `db/queries/*` nunca importa de `app/*` ni de Flask.
 
 Antes de este test la regla solo vivía en docstrings; una violación pasaba
 desapercibida en review (ver revisión ADR-0001 del 2026-07-02).
+
+Tras la migración de Fase 4e (commit a commit por módulo), los módulos
+legacy top-level fueron físicamente movidos a `app/domain/*`. Solo queda
+`middleware` (decisión pendiente — DoD-6 del ADR-0001).
 """
 from __future__ import annotations
 
@@ -18,11 +22,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# Módulos legacy top-level que `app/domain/*` puede envolver (Fase 4e
-# pendiente: migrarlos físicamente y retirar esta lista).
+# Módulos legacy top-level que `app/domain/*` puede envolver.
+# Tras Fase 4e completa (4e.1–4e.8) solo queda `middleware` (FastAPI/uvicorn
+# huérfano, ver DoD-6 del ADR-0001) y `db` (wrapper del paquete, eliminado
+# — el paquete eclipsó al archivo).
 LEGACY_TOP_LEVEL = {
-    "script", "analytics", "horarios", "ia_report", "script_docx",
-    "sync", "backup", "db",
+    "middleware",
+    # `db` se quitó de la lista: el archivo `db.py` raíz fue eliminado en
+    # commit 2026-07-02; ahora existe solo el paquete `db/`.
 }
 
 
@@ -97,3 +104,23 @@ def test_no_quedan_imports_locales_de_db_en_blueprints():
                             f"'{sub.module}' localmente; debe estar a nivel de módulo "
                             f"e ir por app.domain.*."
                         )
+
+
+def test_no_quedan_modulos_top_level_de_negocio():
+    """
+    Tras Fase 4e completa, los únicos archivos `.py` en la raíz deben ser
+    utilitarios (no de negocio). Esta es la verificación final del DoD-7.
+    """
+    permitidos = {
+        "wsgi.py",            # entrypoint canónico (gunicorn)
+        "deduplicar_personas.py",  # script CLI de mantenimiento
+        "test_justificacion_rango_local.py",  # script manual de QA
+    }
+    encontrados = sorted(
+        p.name for p in ROOT.glob("*.py")
+        if p.name not in permitidos
+    )
+    assert not encontrados, (
+        f"Quedan módulos top-level de negocio: {encontrados}. "
+        f"Migrar a app/domain/* (ver ADR-0001 DoD-7)."
+    )
