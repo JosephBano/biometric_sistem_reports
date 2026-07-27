@@ -6,10 +6,8 @@ Mockeamos el engine y los helpers para no tocar BD ni dispositivos reales.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
+from datetime import UTC, datetime
+from unittest.mock import patch
 
 
 class TestLoggerSync:
@@ -47,8 +45,8 @@ class TestRegistrarCorridaSync:
             sync._registrar_corrida_sync(
                 job="sync_incremental",
                 tenant_slug="istpet",
-                inicio=datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc),
-                fin=datetime(2026, 7, 2, 10, 5, tzinfo=timezone.utc),
+                inicio=datetime(2026, 7, 2, 10, 0, tzinfo=UTC),
+                fin=datetime(2026, 7, 2, 10, 5, tzinfo=UTC),
                 ok=True,
                 descargados=10,
                 insertados=8,
@@ -73,8 +71,8 @@ class TestRegistrarCorridaSync:
             sync._registrar_corrida_sync(
                 job="sync_incremental",
                 tenant_slug="istpet",
-                inicio=datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc),
-                fin=datetime(2026, 7, 2, 10, 5, tzinfo=timezone.utc),
+                inicio=datetime(2026, 7, 2, 10, 0, tzinfo=UTC),
+                fin=datetime(2026, 7, 2, 10, 5, tzinfo=UTC),
                 ok=True,
                 descargados=10,
                 insertados=8,
@@ -106,8 +104,8 @@ class TestSyncAutomaticaNoFallaEnSilencio:
             with patch.object(sync, "sincronizar", side_effect=fake_sincronizar), \
                  patch.object(sync, "_registrar_corrida_sync") as mock_reg, \
                  patch("db.queries.periodos.cerrar_periodos_vencidos"), \
-                 patch.object(sync.db_module, "set_thread_tenant") as mock_set, \
-                 patch.object(sync.db_module, "clear_thread_tenant") as mock_clear:
+                 patch.object(sync.db_module, "set_thread_tenant"), \
+                 patch.object(sync.db_module, "clear_thread_tenant"):
 
                 sync._sync_automatico()
 
@@ -136,6 +134,7 @@ class TestRunLoopInkillable:
         El comportamiento real se valida en staging (loop debe sobrevivir 24h).
         """
         import inspect
+
         import sync
         fuente = inspect.getsource(sync)
         # El loop `_run()` debe tener try/except envolviendo run_pending
@@ -151,7 +150,6 @@ class TestRunLoopInkillable:
     def test_iniciar_scheduler_no_duplica_hilos_con_singleton_guard(self):
         """Llamar iniciar_scheduler() dos veces no debe crear 2 hilos."""
         import sync
-        from unittest.mock import MagicMock
 
         # Forzar SYNC_AUTO=True para que intente iniciar
         with patch.object(sync, "SYNC_AUTO", True), \

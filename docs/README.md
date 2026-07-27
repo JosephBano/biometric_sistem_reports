@@ -6,10 +6,12 @@ Este directorio contiene la documentación técnica del sistema, organizada por 
 
 | Documento | Descripción |
 |-----------|-------------|
+| **[ARQUITECTURA.md](./ARQUITECTURA.md)** | Arquitectura completa del sistema: capas, Blueprints, servicios de dominio, multi-tenancy, scheduler, riesgos y roadmap de modularización |
 | **[ER.md](./ER.md)** | Diagrama ER completo de la base de datos PostgreSQL (schema público + tenant) con todas las tablas, columnas, tipos y relaciones |
 | **[SUPERADMIN.md](./SUPERADMIN.md)** | Guía del panel de superadmin: mover usuarios entre tenants, crear y eliminar gestores |
-| **[API.md](./API.md)** | Referencia completa de todas las rutas HTTP del sistema (web + API JSON) |
-| **[AUTENTICACION.md](./AUTENTICACION.md)** | Sistema de autenticación: login, roles, contraseñas, sesión |
+| **[AUTENTICACION.md](./AUTENTICACION.md)** | Sistema de autenticación: login, sesión, bcrypt, CSRF, RBAC, multi-tenant en auth, AES-GCM para credenciales de dispositivos |
+| **[API.md](./API.md)** | Referencia completa de las 81 rutas HTTP del sistema (HTML + JSON) con método, decoradores RBAC y descripción |
+| **[adr/](./adr/README.md)** | Índice de Architectural Decision Records (ADRs). Convención MADR ligero en español. |
 
 ## Generar documentación automáticamente
 
@@ -34,4 +36,4 @@ public.tenants ←─ public.usuarios  (cada usuario pertenece a un tenant)
                              └─ feriados ── breaks_categorizados
 ```
 
-Para contexto de arquitectura completo, ver `../AGENTS.md` (raíz del proyecto).
+Para la arquitectura completa y la propuesta de modularización (Application Factory + Blueprints por dominio), ver [[ARQUITECTURA]] y [[ADR-0001-modularizacion-monolito-flask]].

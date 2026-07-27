@@ -3,7 +3,7 @@ Tests del endpoint GET /api/scheduler/estado (`app.web.system_bp`).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
@@ -89,8 +89,8 @@ class TestSchedulerEstado:
             "id": 1,
             "job": "sync_incremental",
             "tenant_slug": "istpet",
-            "inicio": datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc),
-            "fin": datetime(2026, 7, 2, 10, 5, tzinfo=timezone.utc),
+            "inicio": datetime(2026, 7, 2, 10, 0, tzinfo=UTC),
+            "fin": datetime(2026, 7, 2, 10, 5, tzinfo=UTC),
             "ok": True,
             "descargados": 10,
             "insertados": 8,

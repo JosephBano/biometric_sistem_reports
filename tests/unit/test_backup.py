@@ -6,9 +6,7 @@ Mockeamos subprocess y filesystem para no ejecutar pg_dump real.
 from __future__ import annotations
 
 import os
-import subprocess
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest

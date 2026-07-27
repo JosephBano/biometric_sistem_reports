@@ -23,7 +23,7 @@
         </div>
         <div class="col-md-2 d-flex gap-2">
             <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
-            <a href="{{ url_for('admin_categorias') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+            <a href="{{ url_for('groups.listar_categorias') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
         </div>
     </form>
 </div>
@@ -80,7 +80,7 @@
                 <h5 class="modal-title">Nueva Categoría</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('admin_crear_categoria') }}">
+            <form method="POST" action="{{ url_for('groups.crear_categoria') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="mb-3">

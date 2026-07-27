@@ -9,7 +9,7 @@ import os
 import logging
 from sqlalchemy import text
 
-from db.connection import get_engine, get_connection
+from db.connection import get_engine, get_connection, validate_schema_name
 from db.schema import PUBLIC_DDL, get_tenant_ddl
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ def init_db():
     2. Crea el schema del tenant y sus tablas.
     3. Inserta datos de referencia iniciales (idempotente).
     """
-    tenant = os.environ.get("TENANT_DEFAULT", "istpet")
+    tenant = validate_schema_name(os.environ.get("TENANT_DEFAULT", "istpet"))
     engine = get_engine()
 
     with engine.connect() as conn:
@@ -39,6 +39,7 @@ def init_db():
         ).fetchall()] or [tenant]
 
         for slug in tenant_slugs:
+            validate_schema_name(slug)
             conn.execute(text(f"""
                 DO $$
                 BEGIN

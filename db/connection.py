@@ -64,16 +64,24 @@ def get_tenant_schema() -> str:
     return os.environ.get("TENANT_DEFAULT", "istpet")
 
 
+def validate_schema_name(schema: str) -> str:
+    """Valida que el nombre de schema solo tiene caracteres seguros (previene SQL injection).
+
+    Usar SIEMPRE antes de interpolar un nombre de schema en SQL, incluso si
+    proviene de la propia tabla public.tenants.
+    """
+    if not schema or not all(c.isalnum() or c == "_" for c in schema):
+        raise ValueError(f"Schema name inválido: {schema!r}")
+    return schema
+
+
 @contextmanager
 def get_connection(schema: str = None):
     """
     Context manager que entrega una conexión con el search_path correcto.
     Hace commit automático al salir sin excepción; rollback en error.
     """
-    schema = schema or get_tenant_schema()
-    # Validar que el slug solo tiene caracteres seguros (previene SQL injection)
-    if not all(c.isalnum() or c == "_" for c in schema):
-        raise ValueError(f"Schema name inválido: {schema!r}")
+    schema = validate_schema_name(schema or get_tenant_schema())
     with get_engine().connect() as conn:
         conn.execute(text(f"SET search_path TO {schema}, public"))
         try:

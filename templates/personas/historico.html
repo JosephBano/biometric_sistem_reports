@@ -4,7 +4,7 @@
 <div class="page-header mb-4">
     <h3>Historial por Identificación</h3>
     <p class="text-muted">Consulta todos los períodos de vigencia de una persona por su cédula o pasaporte.</p>
-    <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary mt-3 btn-sm d-flex align-items-center gap-1">
+    <a href="{{ url_for('people.lista') }}" class="btn btn-outline-secondary mt-3 btn-sm d-flex align-items-center gap-1">
         <span class="material-symbols-outlined fs-6">arrow_back</span> Volver
     </a>
 </div>
@@ -73,7 +73,7 @@
                         <td class="fw-bold">
                             {{ pv.nombre }}
                             {% if pv.grupo_periodo_id %}
-                            <a href="{{ url_for('periodo_detalle', id=pv.grupo_periodo_id) }}"
+                            <a href="{{ url_for('periods.detalle', id=pv.grupo_periodo_id) }}"
                                class="btn btn-sm btn-outline-primary ms-2" style="font-size:0.7rem;">
                                 Ver período
                             </a>

@@ -11,7 +11,7 @@
         <div class="status-card h-100">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="fw-bold mb-0">Dispositivos biométricos</h5>
-                <a href="{{ url_for('admin_dispositivos') }}" class="btn btn-outline-secondary btn-sm">
+                <a href="{{ url_for('admin.admin_dispositivos') }}" class="btn btn-outline-secondary btn-sm">
                     <span class="material-symbols-outlined" style="font-size:1rem;">settings</span>
                     Gestionar
                 </a>
@@ -82,7 +82,7 @@
                     Actualizado: <span id="stat-actualizado">—</span>
                 </div>
             </div>
-            <a href="{{ url_for('personas_lista') }}?tab=horarios" class="btn btn-outline-secondary btn-sm">Gestionar horarios</a>
+            <a href="{{ url_for('people.lista') }}?tab=horarios" class="btn btn-outline-secondary btn-sm">Gestionar horarios</a>
         </div>
     </div>
 </div>

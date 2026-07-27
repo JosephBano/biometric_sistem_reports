@@ -17,6 +17,7 @@ from werkzeug.utils import secure_filename
 
 from app.domain import scheduler as scheduler_svc
 from app.domain.rbac import require_role
+from app.domain.system import insertar_asistencias
 
 bp = Blueprint("system", __name__)
 
@@ -24,7 +25,6 @@ bp = Blueprint("system", __name__)
 @bp.post("/api/historicos/importar")
 @require_role("superadmin", "admin")
 def importar_historicos():
-    from db import insertar_asistencias
 
     if "archivo" not in request.files:
         return jsonify({"error": "No se envió ningún archivo"}), 400
@@ -64,7 +64,7 @@ def importar_historicos():
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 if not any(row):
                     continue
-                r_dict = dict(zip(headers, row))
+                r_dict = dict(zip(headers, row, strict=False))
                 f_h = r_dict.get("fecha_hora")
                 if hasattr(f_h, "isoformat"):
                     f_h = f_h.isoformat()
@@ -114,14 +114,9 @@ def scheduler_estado():
     except ValueError:
         intervalo = 2
 
-    # Próxima corrida (si el scheduler está cargado): consultamos `schedule` del módulo sync.
-    proxima = None
+    # Próxima corrida (si el scheduler está cargado).
     try:
-        import sync as sync_module
-        if sync_module.SCHEDULE_DISPONIBLE:
-            proximas = [j.next_run for j in sync_module.schedule.get_jobs() if j.next_run]
-            if proximas:
-                proxima = min(proximas).isoformat()
+        proxima = scheduler_svc.proxima_corrida()
     except Exception:  # noqa: BLE001
         proxima = None
 

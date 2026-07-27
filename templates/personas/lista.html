@@ -79,7 +79,7 @@
         </div>
         <div class="col-md-2 d-flex gap-2">
             <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
-            <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+            <a href="{{ url_for('people.lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
         </div>
     </form>
 </div>
@@ -87,7 +87,7 @@
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0">{{ personas|length }} persona(s)</h5>
-                <a href="{{ url_for('personas_historico') }}" class="btn btn-sm btn-outline-secondary">
+                <a href="{{ url_for('people.historico') }}" class="btn btn-sm btn-outline-secondary">
                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">history</span> Historial por Cédula
                 </a>
             </div>
@@ -258,7 +258,7 @@
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('personas_crear') }}">
+            <form method="POST" action="{{ url_for('people.crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body pt-3">
 
@@ -285,7 +285,7 @@
                             <div class="col-md-8">
                                 <p class="text-muted small mb-0">
                                     Número de usuario del dispositivo ZK. Se puede consultar en
-                                    <a href="{{ url_for('admin_dispositivos') }}" target="_blank">Dispositivos</a>
+                                    <a href="{{ url_for('admin.admin_dispositivos') }}" target="_blank">Dispositivos</a>
                                     o en la pantalla del reloj.
                                     <strong>Necesario para generar informes.</strong>
                                 </p>

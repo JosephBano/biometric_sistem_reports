@@ -1,0 +1,17 @@
+# ══════════════════════════════════════════════════════════════════════════
+# Dependencias de desarrollo — NO se instalan en producción
+# ══════════════════════════════════════════════════════════════════════════
+
+# Test runner
+pytest>=8.0
+pytest-cov>=5.0
+coverage[toml]>=7.5
+
+# HTTP request testing para Flask
+# (pytest-flask no es necesario: usamos `app.test_client()` directo)
+
+# Linter / formatter
+ruff>=0.5
+
+# Cobertura de tipos (opcional, dev-only)
+mypy>=1.10

@@ -23,15 +23,15 @@
 
             <ul class="nav flex-column sidebar-nav">
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}"
-                        href="{{ url_for('dashboard') }}">
+                    <a class="nav-link {% if active_page == 'dashboard.index' %}active{% endif %}"
+                        href="{{ url_for('dashboard.index') }}">
                         <span class="material-symbols-outlined nav-icon">dashboard</span>
                         <span>Panel</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'justificaciones' %}active{% endif %}"
-                        href="{{ url_for('justificaciones_vista') }}">
+                        href="{{ url_for('dashboard.justificaciones') }}">
                         <span class="material-symbols-outlined nav-icon">fact_check</span>
                         <span>Justificaciones</span>
                         {% if justificaciones_pendientes_count > 0 %}
@@ -41,79 +41,79 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}"
-                        href="{{ url_for('analytics_vista') }}">
+                        href="{{ url_for('analytics.vista') }}">
                         <span class="material-symbols-outlined nav-icon">monitoring</span>
                         <span>Analytics</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'reportes' %}active{% endif %}"
-                        href="{{ url_for('reportes_vista') }}">
+                        href="{{ url_for('dashboard.reportes') }}">
                         <span class="material-symbols-outlined nav-icon">description</span>
                         <span>Reportes</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'periodos' %}active{% endif %}"
-                        href="{{ url_for('periodos_lista') }}">
+                        href="{{ url_for('periods.lista') }}">
                         <span class="material-symbols-outlined nav-icon">event_repeat</span>
                         <span>Períodos</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'personas' %}active{% endif %}"
-                        href="{{ url_for('personas_lista') }}">
+                        href="{{ url_for('people.lista') }}">
                         <span class="material-symbols-outlined nav-icon">group</span>
                         <span>Personas</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'configuracion' %}active{% endif %}"
-                        href="{{ url_for('configuracion_vista') }}">
+                        href="{{ url_for('dashboard.configuracion') }}">
                         <span class="material-symbols-outlined nav-icon">settings</span>
                         <span>Configuración</span>
                     </a>
                 </li>
                 {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_dispositivos' %}active{% endif %}"
-                        href="{{ url_for('admin_dispositivos') }}">
+                    <a class="nav-link {% if active_page == 'admin.admin_dispositivos' %}active{% endif %}"
+                        href="{{ url_for('admin.admin_dispositivos') }}">
                         <span class="material-symbols-outlined nav-icon">router</span>
                         <span>Dispositivos</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_usuarios' %}active{% endif %}"
-                        href="{{ url_for('admin_usuarios') }}">
+                    <a class="nav-link {% if active_page == 'admin.listar_usuarios' %}active{% endif %}"
+                        href="{{ url_for('admin.listar_usuarios') }}">
                         <span class="material-symbols-outlined nav-icon">manage_accounts</span>
                         <span>Usuarios</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_grupos' %}active{% endif %}"
-                        href="{{ url_for('admin_grupos') }}">
+                    <a class="nav-link {% if active_page == 'groups.listar_grupos' %}active{% endif %}"
+                        href="{{ url_for('groups.listar_grupos') }}">
                         <span class="material-symbols-outlined nav-icon">workspaces</span>
                         <span>Grupos</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_categorias' %}active{% endif %}"
-                        href="{{ url_for('admin_categorias') }}">
+                    <a class="nav-link {% if active_page == 'groups.listar_categorias' %}active{% endif %}"
+                        href="{{ url_for('groups.listar_categorias') }}">
                         <span class="material-symbols-outlined nav-icon">label</span>
                         <span>Categorías</span>
                     </a>
                 </li>
                 {% if current_user_roles and 'superadmin' in current_user_roles %}
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'admin_tenants' %}active{% endif %}"
-                        href="{{ url_for('admin_tenants') }}">
+                    <a class="nav-link {% if active_page == 'admin.listar_tenants' %}active{% endif %}"
+                        href="{{ url_for('admin.listar_tenants') }}">
                         <span class="material-symbols-outlined nav-icon">domain</span>
                         <span>Tenants</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'superadmin_usuarios' %}active{% endif %}"
-                        href="{{ url_for('superadmin_usuarios') }}">
+                    <a class="nav-link {% if active_page == 'admin.superadmin_usuarios' %}active{% endif %}"
+                        href="{{ url_for('admin.superadmin_usuarios') }}">
                         <span class="material-symbols-outlined nav-icon">manage_accounts</span>
                         <span>Usuarios Global</span>
                     </a>
@@ -134,7 +134,7 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-                <form method="POST" action="{{ url_for('logout') }}" class="m-0">
+                <form method="POST" action="{{ url_for('auth.logout') }}" class="m-0">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-danger btn-sm w-100">
                         <span class="material-symbols-outlined" style="font-size: 1rem;">logout</span>

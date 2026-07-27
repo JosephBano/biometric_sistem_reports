@@ -65,12 +65,12 @@
                                     <span class="material-symbols-outlined">more_vert</span>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('periodo_detalle', id=p.id) }}">
+                                    <li><a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('periods.detalle', id=p.id) }}">
                                         <span class="material-symbols-outlined fs-6">visibility</span> Ver Detalle</a>
                                     </li>
                                     <li><hr class="dropdown-menu-divider"></li>
                                     <li>
-                                        <form method="POST" action="{{ url_for('cerrar_periodo_route', id=p.id) }}">
+                                        <form method="POST" action="{{ url_for('periods.cerrar', id=p.id) }}">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger">
                                                 <span class="material-symbols-outlined fs-6">lock</span> Cerrar Período
@@ -80,7 +80,7 @@
                                     {% if 'superadmin' in session.get('roles', []) %}
                                     <li><hr class="dropdown-menu-divider"></li>
                                     <li>
-                                        <form method="POST" action="{{ url_for('eliminar_periodo_route', id=p.id) }}"
+                                        <form method="POST" action="{{ url_for('periods.eliminar', id=p.id) }}"
                                               onsubmit="return confirm('¿Eliminar permanentemente el período «{{ p.nombre }}» y todas sus personas asociadas? Esta acción no se puede deshacer.')">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger fw-bold">
@@ -103,7 +103,7 @@
                         </p>
                     </div>
                     <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between">
-                        <a href="{{ url_for('periodo_detalle', id=p.id) }}" class="btn btn-sm btn-outline-primary w-100">Administrar</a>
+                        <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-outline-primary w-100">Administrar</a>
                     </div>
                 </div>
             </div>
@@ -122,7 +122,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between mb-3">
                             <span class="badge bg-secondary-subtle text-secondary">{{ p.estado | capitalize }}</span>
-                            <a href="{{ url_for('periodo_detalle', id=p.id) }}" class="btn btn-sm btn-icon"><span class="material-symbols-outlined">visibility</span></a>
+                            <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-icon"><span class="material-symbols-outlined">visibility</span></a>
                         </div>
                         <h5 class="card-title fw-bold text-truncate">{{ p.nombre }}</h5>
                         <p class="text-muted small mb-2">
@@ -143,7 +143,7 @@
 <div class="modal fade" id="modalCrearPeriodo" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('crear_periodo_route') }}">
+            <form method="POST" action="{{ url_for('periods.crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">Nuevo Período</h5>

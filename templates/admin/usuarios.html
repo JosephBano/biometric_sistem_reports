@@ -92,7 +92,7 @@
 <div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('admin_crear_usuario') }}" id="formCrear">
+            <form method="POST" action="{{ url_for('admin.crear_usuario') }}" id="formCrear">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalCrearLabel">Nuevo Usuario</h5>

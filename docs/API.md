@@ -103,6 +103,7 @@ decorador (rutas accesibles a cualquier usuario autenticado), se marca "?".
 | 28 | GET | `/api/backup/descargar` | `reports_bp` | `@require_role('superadmin', 'admin')` | Sí | N/A | **(Fase 2)** Descarga dump completo de la BD en formato `pg_dump -Fc` (`backup_completo_YYYYMMDD_HHMM.dump`). Registra en `audit_log`. |
 | 29 | GET | `/api/backup/csv` | `reports_bp` | `@require_role('superadmin', 'admin', 'gestor')` | Sí | N/A | Descarga CSV con todas las marcaciones (`asistencias_backup_YYYYMMDD.csv`). |
 | 30 | POST | `/api/historicos/importar` | `system_bp` | `@require_role('superadmin', 'admin')` | Sí | Exento | Importa histórico desde `.csv` o `.xlsx` con columnas `id_usuario`, `nombre`, `fecha_hora`. |
+| 30b | GET | `/api/scheduler/estado` | `system_bp` | `@require_role('superadmin', 'admin')` | Sí | N/A | **(Fase 1)** Estado del scheduler (activo/inactivo, hora, próxima corrida) + últimas 10 corridas de `public.scheduler_runs`. |
 | 31 | POST | `/api/horarios/importar` | `schedule_bp` | `@require_role('superadmin', 'admin', 'gestor')` | Sí | Exento | Importa horarios desde archivo `.csv`, `.obd` o `.ods`. |
 | 32 | GET | `/api/horarios/estado` | `schedule_bp` | ? | Sí | N/A | Estado actual de los horarios cargados (totales, fuente, fecha). |
 | 33 | GET | `/api/horarios` | `schedule_bp` | ? | Sí | N/A | Lista todos los horarios por persona. |
@@ -208,7 +209,7 @@ este inventario por ser fuente directa del código.
 | **409** | Conflicto (recurso duplicado). | `POST /api/horarios` cuando el `id_usuario` ya existe. `POST /api/superadmin/usuarios` cuando `email` ya registrado. |
 | **429** | Rate limit excedido. | `POST /login` (5 por IP en 15 min, configurable). También `Flask-Limiter` en otros endpoints si se les añade `@limiter.limit(...)`. |
 | **500** | Error interno (BD caída, excepción no capturada, dispositivo inalcanzable en sync). | Casi todos los endpoints tienen `except Exception → return jsonify({"error": str(e)}), 500`. |
-| **501** | No implementado. | `/api/backup/descargar` (`pg_dump` se hace externo). |
+| **501** | No implementado. | Reservado para stubs legacy. `/api/backup/descargar` ahora devuelve dump real (`pg_dump -Fc`). |
 
 ### Middleware 403 con tenant inactivo
 
@@ -534,7 +535,7 @@ Cada Blueprint es la unidad de ownership post-refactor (ver [[ADR-0001-modulariz
 |---|---|---|---|---|
 | 25 | POST | `/api/generar-desde-db` | sup, admin, gestor | Generar PDF/DOCX |
 | 26 | POST | `/api/reportes/enviar-email` | sup, admin, gestor | Enviar por email |
-| 28 | GET | `/api/backup/descargar` | sup, admin | (501) Usar `pg_dump` |
+| 28 | GET | `/api/backup/descargar` | sup, admin | **(Fase 2)** Dump `pg_dump -Fc` descargable |
 | 29 | GET | `/api/backup/csv` | sup, admin, gestor | CSV completo |
 
 ### `periods_bp` — Periodos de prácticas (8 rutas)
@@ -601,7 +602,57 @@ Cada Blueprint es la unidad de ownership post-refactor (ver [[ADR-0001-modulariz
 | 80 | POST | `/api/analytics/narrativo` | admin, sup, gestor | Narrativo IA |
 | 81 | GET | `/api/analytics` | admin, sup, gestor | Hallazgos completos |
 
-### `system_bp` — Ingesta histórica (1 ruta)
+### `system_bp` — Ingesta histórica + estado scheduler (2 rutas)
+
+- `POST /api/historicos/importar` — Importa CSV/XLSX histórico.
+- `GET /api/scheduler/estado` **(Fase 1)** — Estado del scheduler + últimas 10 corridas.
+
+#### `GET /api/scheduler/estado`
+
+Estado actual del scheduler y últimas 10 corridas registradas en `public.scheduler_runs`.
+
+- **Auth**: rol `superadmin` o `admin`.
+- **Response 200**:
+  ```json
+  {
+    "sync_activo": true,
+    "sync_hora_nocturna": "02:00",
+    "sync_intervalo_horas": 2,
+    "proxima_corrida": "2026-07-03T02:00:00-05:00",
+    "ultimas_corridas": [
+      {
+        "id": 42,
+        "job": "sync_incremental",
+        "tenant_slug": "istpet",
+        "inicio": "2026-07-02T10:00:00-05:00",
+        "fin": "2026-07-02T10:05:00-05:00",
+        "ok": true,
+        "descargados": 124,
+        "insertados": 98,
+        "detalle": null
+      }
+    ]
+  }
+  ```
+- **Errores**: `401` sin sesión, `403` sin rol suficiente.
+- **Uso**: alimenta la card "Sincronización automática" en `/configuracion`.
+
+#### `GET /api/backup/descargar` **(Fase 2)**
+
+Descarga un dump completo de la BD en formato `pg_dump -Fc` (custom comprimido).
+
+- **Auth**: rol `superadmin` o `admin`.
+- **Response 200**: archivo binario `application/octet-stream`,
+  filename `backup_completo_YYYYMMDD_HHMM.dump`. Registrado en `audit_log` con
+  `accion=backup_db_descargar`, `detalle={filename, size_bytes}`.
+- **Errores**:
+  - `401` sin sesión.
+  - `403` sin rol.
+  - `500` si `pg_dump` falla (mensaje claro + log).
+- **Restauración**: `pg_restore -d <db> backup_completo_*.dump` en cualquier PostgreSQL ≥ 16.
+- **Notas**: el archivo se guarda temporalmente en `REPORTS_FOLDER` y el cleanup thread
+  (15 min) lo purga automáticamente. Las credenciales de BD se pasan por env (`PGPASSWORD`),
+  nunca por argv (no aparecen en `ps aux`).
 
 | # | Método | Ruta | Decorador RBAC | Descripción corta |
 |---|---|---|---|---|

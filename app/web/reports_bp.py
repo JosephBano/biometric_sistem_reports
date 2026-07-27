@@ -20,14 +20,24 @@ from pathlib import Path
 
 from flask import Blueprint, Response, current_app, g, jsonify, request, send_file, url_for
 
+from app.domain import ai_narrative
+from app.domain import analytics as analytics_svc
+from app.domain.backup import generar_dump
+from app.domain.emailer import enviar_correo
 from app.domain.rbac import require_role
 from app.domain.reports import (
     DEFAULT_CONFIG,
     DEFAULT_FILTROS,
     analizar_por_persona,
     build_pdf,
+    consultar_asistencias,
     deduplicar,
+    get_breaks_categorizados_dict,
+    get_feriados_set,
+    get_horarios,
+    get_justificaciones_dict,
     parse_config,
+    registrar_audit,
 )
 from app.extensions import limiter
 
@@ -39,7 +49,6 @@ bp = Blueprint("reports", __name__)
 @bp.post("/api/generar-desde-db")
 @require_role("superadmin", "admin", "gestor")
 def generar_desde_db():
-    from db import consultar_asistencias, registrar_audit
 
     data = request.json
     try:
@@ -111,9 +120,6 @@ def enviar_reporte_email():
     """
     Genera el reporte de una persona y lo envía por correo electrónico.
     """
-    from db import consultar_asistencias
-    from app.domain.emailer import enviar_correo
-
     data = request.json or {}
     try:
         fecha_inicio = datetime.strptime(data["fecha_inicio"], "%Y-%m-%d").date()
@@ -193,8 +199,6 @@ def descargar_backup_db():
     la transferencia (security C-1: no dejamos dumps residuales en REPORTS_FOLDER).
     """
     import tempfile
-    from backup import generar_dump
-    from db import registrar_audit
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M")
     filename = f"backup_completo_{timestamp}.dump"
@@ -232,7 +236,7 @@ def descargar_backup_db():
             download_name=filename,
             mimetype="application/octet-stream",
         )
-    except RuntimeError as e:
+    except RuntimeError:
         # Loguear con stacktrace; al cliente devolver mensaje genérico (security B2).
         current_app.logger.exception("pg_dump falló al generar backup")
         return jsonify({
@@ -253,7 +257,6 @@ def descargar_backup_db():
 @require_role("superadmin", "admin", "gestor")
 def descargar_backup_csv():
     """Descarga CSV con todas las marcaciones."""
-    from db import consultar_asistencias
 
     registros = consultar_asistencias(date(2000, 1, 1), date.today())
     if not registros:
@@ -285,13 +288,6 @@ def descargar_backup_csv():
 @bp.get("/api/alertas/tardanzas-severas")
 def alertas_tardanzas_severas():
     """Personas con ≥3 tardanzas severas en el rango definido."""
-    from db import (
-        consultar_asistencias,
-        get_breaks_categorizados_dict,
-        get_feriados_set,
-        get_horarios,
-        get_justificaciones_dict,
-    )
     hoy = date.today()
     fi_str = request.args.get("fecha_inicio")
     ff_str = request.args.get("fecha_fin")
@@ -358,8 +354,6 @@ def alertas_tardanzas_severas():
 @require_role("admin", "superadmin", "gestor")
 def api_analytics():
     """Análisis combinado + narrativo IA (Fase 5)."""
-    from app.domain import ai_narrative, analytics as analytics_svc
-
     fecha_inicio_str = request.args.get("fecha_inicio")
     fecha_fin_str    = request.args.get("fecha_fin")
     tipo_persona_id  = request.args.get("tipo_persona_id")

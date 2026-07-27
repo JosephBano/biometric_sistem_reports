@@ -62,7 +62,7 @@ class BaseConfig:
     # ── Tenant ────────────────────────────────────────────────────────
     TENANT_DEFAULT = os.environ.get("TENANT_DEFAULT", "istpet")
 
-    def init_app(self, app: "Flask") -> None:
+    def init_app(self, app: Flask) -> None:
         """Hook para subclases; crea directorios y aplica defaults."""
         for folder in (app.config["UPLOAD_FOLDER"], app.config["REPORTS_FOLDER"]):
             try:
@@ -115,7 +115,7 @@ class TestingConfig(BaseConfig):
     # Nombre de la BD de test: forzar a que contenga "test"
     TEST_DB_NAME_HINT = "test"
 
-    def init_app(self, app: "Flask") -> None:
+    def init_app(self, app: Flask) -> None:
         # Salvaguarda #1: DATABASE_URL parece apuntar a BD de test
         db_url = os.environ.get("DATABASE_URL", "")
         if self.TEST_DB_NAME_HINT not in db_url.lower():

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-header mb-4">
     <div class="d-flex align-items-center gap-2 mb-1">
-        <a href="{{ url_for('periodos_lista') }}" class="btn btn-sm btn-link text-decoration-none p-0">
+        <a href="{{ url_for('periods.lista') }}" class="btn btn-sm btn-link text-decoration-none p-0">
             <span class="material-symbols-outlined fs-6">arrow_back</span>
         </a>
         <h3 class="fw-bold mb-0 d-flex align-items-center gap-2">
@@ -107,7 +107,7 @@
 <div class="modal fade" id="modalImportarMasivo" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('periodo_importar_personas_route', id=periodo.id) }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('periods.importar_personas', id=periodo.id) }}" enctype="multipart/form-data">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">Carga Masiva de Personas</h5>

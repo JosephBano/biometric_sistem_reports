@@ -14,7 +14,7 @@
         Contexto activo:
         <span class="badge bg-primary-subtle text-primary font-monospace">{{ session.get('tenant_schema', 'istpet') }}</span>
         {% if session.get('tenant_schema') != (config.TENANT_DEFAULT or 'istpet') %}
-        <form method="POST" action="{{ url_for('switch_tenant') }}" class="d-inline">
+        <form method="POST" action="{{ url_for('auth.switch_tenant') }}" class="d-inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="tenant_slug" value="{{ config.TENANT_DEFAULT or 'istpet' }}">
             <button type="submit" class="btn btn-link btn-sm p-0 ms-1 text-muted">(volver al principal)</button>
@@ -74,7 +74,7 @@
                                 Activo
                             </span>
                             {% else %}
-                            <form method="POST" action="{{ url_for('switch_tenant') }}">
+                            <form method="POST" action="{{ url_for('auth.switch_tenant') }}">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <input type="hidden" name="tenant_slug" value="{{ t.slug }}">
                                 <button type="submit" class="btn btn-sm btn-outline-primary"
@@ -110,7 +110,7 @@
 <div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('admin_crear_tenant') }}">
+            <form method="POST" action="{{ url_for('admin.crear_tenant') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h6 class="modal-title fw-bold" id="modalCrearLabel">Nueva Institución</h6>
