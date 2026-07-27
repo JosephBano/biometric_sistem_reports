@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+# Cancela runs anteriores en el mismo PR si se pushea un nuevo commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (unit + integration)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test_user"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      FLASK_ENV: testing
+      FLASK_SECRET_KEY: test-secret-key-for-ci-only-do-not-use-in-prod
+      DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+      DB_ENCRYPTION_KEY: ZGVjaWRpZG9wb3JjaGV0dGVzdGluZw==
+      SYNC_AUTO: "false"
+      BACKUP_AUTO: "false"
+      PYTHON_VERSION: "3.12"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: |
+          ruff check . --output-format=github
+
+      - name: Run migrations
+        run: |
+          # Crea las tablas en la BD de test (las migraciones Alembic son la
+          # fuente de verdad; si no están, cae al init_db del paquete `db/`).
+          if [ -d "alembic/versions" ] && ls alembic/versions/*.py 2>/dev/null | head -1; then
+            alembic upgrade head
+          else
+            .venv/bin/python -c "from db import init_db; init_db()" || true
+          fi
+
+      - name: Run tests
+        run: |
+          pytest -v --tb=short --color=yes
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            htmlcov/
+            .coverage
+          retention-days: 30
+
+  # Job dedicado al gate de cobertura — falla si baja del umbral.
+  coverage-gate:
+    name: Coverage gate (≥20%)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Check coverage
+        # El umbral está en pyproject.toml (--cov-fail-under=20).
+        # Subir a 60 en la Fase 7.4 tras añadir los tests de Fase 7.1.
+        run: |
+          pytest --cov=app --cov-fail-under=20 --cov-report=term-missing
