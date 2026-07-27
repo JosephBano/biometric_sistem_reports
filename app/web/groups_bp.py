@@ -18,8 +18,8 @@ from app.domain.groups import (
     actualizar_grupo,
     crear_categoria,
     crear_grupo,
-    listar_categorias,
 )
+from app.domain.groups import listar_categorias as svc_listar_categorias
 from app.domain.groups import listar_grupos as svc_listar_grupos
 from app.domain.rbac import require_role
 
@@ -78,7 +78,7 @@ def actualizar_grupo(id: str):
 @require_role("admin", "superadmin")
 def listar_categorias():
     tipo_persona_id = request.args.get("tipo_persona_id")
-    categorias = listar_categorias(tipo_persona_id=tipo_persona_id)
+    categorias = svc_listar_categorias(tipo_persona_id=tipo_persona_id)
     return render_template(
         "admin/categorias.html",
         active_page="admin_categorias",

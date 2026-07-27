@@ -28,6 +28,10 @@ htmlcov/
 *.db
 *.sqlite3
 instance/
+# pgserver data dirs (PostgreSQL embebido para tests de integración)
+biometrico_test/
+biometrico_test_int/
+biometrico_test_unit/
 
 # --- IDEs / Editors ---
 .vscode/

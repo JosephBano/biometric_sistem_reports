@@ -222,7 +222,7 @@ document.getElementById('btnConfirmarMover').addEventListener('click', async fun
     if (!generarPass) body.password = passManual;
 
     try {
-        const resp = await fetch('{{ url_for("api_superadmin_mover_usuario") }}', {
+        const resp = await fetch('{{ url_for("admin.api_superadmin_mover_usuario") }}', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token() }}'},
             body: JSON.stringify(body),
@@ -260,7 +260,7 @@ document.getElementById('btnConfirmarEliminar').addEventListener('click', async 
     this.disabled = true;
     this.textContent = 'Eliminando...';
     try {
-        const resp = await fetch('{{ url_for("api_superadmin_eliminar_usuario", usuario_id="") }}' + usuarioId, {
+        const resp = await fetch('{{ url_for("admin.api_superadmin_eliminar_usuario", usuario_id="") }}' + usuarioId, {
             method: 'DELETE',
             headers: {'X-CSRF-Token': '{{ csrf_token() }}'},
         });
