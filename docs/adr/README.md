@@ -3,9 +3,9 @@ title: Índice de ADRs — Decisiones Arquitectónicas
 tags: [adr, indice, documentacion]
 status: active
 created: 2026-07-01
-updated: 2026-07-01
+updated: 2026-07-27
 authors: [documenter]
-related: ["[[ARQUITECTURA]]", "[[ADR-0000-use-markdown-for-adrs]]", "[[ADR-0001-modularizacion-monolito-flask]]"]
+related: ["[[ARQUITECTURA]]", "[[ADR-0000-use-markdown-for-adrs]]", "[[ADR-0001-modularizacion-monolito-flask]]", "[[ADR-0002-sync-observable-y-backups]]", "[[ADR-0003-horarios-por-rol-funcional]]"]
 ---
 
 # Architectural Decision Records (ADRs)
@@ -37,6 +37,8 @@ Cada ADR:
 |---|---|---|---|---|
 | [0000](./0000-use-markdown-for-adrs.md) | Adoptar MADR ligero en Markdown para ADRs | accepted | 2026-07-01 | Plantilla y convención de nombrado, estados y formato de los ADRs. |
 | [0001](./0001-modularizacion-monolito-flask.md) | Modularización del monolito Flask en Application Factory + Blueprints por dominio | proposed | 2026-07-01 | Migrar `app.py` (2 512 líneas, 81 rutas) a `app/` con Application Factory + Blueprints + servicios en `app/domain/*`. Ver [[ARQUITECTURA]]. |
+| [0002](./0002-sync-observable-y-backups.md) | Sync automática observable + Backups portables | accepted | 2026-07-02 | Reforzar scheduler in-process con `public.scheduler_runs` + backups `pg_dump -Fc` con retención. |
+| [0003](./0003-horarios-por-rol-funcional.md) | Horarios por rol funcional con override individual, precedencia explícita y compatibilidad hacia atrás | proposed | 2026-07-27 | Introduce `roles_funcionales` + `persona_roles_funcionales` + `horarios_default_rol` + `overrides_horario_persona` con feature flag por tenant. Resuelve la ambigüedad entre `public.usuarios.roles` (auth) y `tenant.tipos_persona` (UI). |
 
 ---
 

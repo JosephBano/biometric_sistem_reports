@@ -19,8 +19,8 @@ from app.domain.groups import (
     crear_categoria,
     crear_grupo,
     listar_categorias,
-    listar_grupos,
 )
+from app.domain.groups import listar_grupos as svc_listar_grupos
 from app.domain.rbac import require_role
 
 bp = Blueprint("groups", __name__)
@@ -31,7 +31,7 @@ bp = Blueprint("groups", __name__)
 @bp.get("/admin/grupos")
 @require_role("admin", "superadmin")
 def listar_grupos():
-    grupos = listar_grupos()
+    grupos = svc_listar_grupos()
     return render_template(
         "admin/grupos.html", active_page="admin_grupos", grupos=grupos,
     )

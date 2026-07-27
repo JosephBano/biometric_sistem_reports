@@ -43,12 +43,11 @@ def register_context_processors(app: Flask) -> None:
     @app.context_processor
     def inject_pending_counts():
         """Inyecta contadores que el layout usa en el menú."""
-        def _get_pending_count():
-            # Importación perezosa: la conexión a BD puede no estar disponible en build/sync.
-            try:
-                from db import get_justificaciones_pendientes
-                return len(get_justificaciones_pendientes())
-            except Exception:
-                return 0
+        # Importación perezosa: la conexión a BD puede no estar disponible en build/sync.
+        try:
+            from db import get_justificaciones_pendientes
+            count = len(get_justificaciones_pendientes())
+        except Exception:
+            count = 0
 
-        return dict(justificaciones_pendientes_count=_get_pending_count)
+        return dict(justificaciones_pendientes_count=count)

@@ -218,7 +218,7 @@ def registrar_audit(tenant_id, usuario_id, accion: str,
                     (tenant_id, usuario_id, accion, entidad, entidad_id, detalle, ip)
                 VALUES
                     (:tenant_id, :usuario_id, :accion,
-                     :entidad, :entidad_id, :detalle::jsonb, :ip)
+                     :entidad, :entidad_id, CAST(:detalle AS jsonb), :ip)
             """),
             {
                 "tenant_id": tenant_id,
