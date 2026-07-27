@@ -55,7 +55,7 @@ addopts = """
     --cov=app
     --cov=db
     --cov-report=term-missing:skip-covered
-    --cov-fail-under=35
+    --cov-fail-under=40
 """
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
