@@ -189,8 +189,9 @@ verificada por AST.
 | Rutas registradas | 81 | 82 | +1 |
 | Módulos top-level de negocio | 11 | 0 | ✅ DoD-7 |
 | Archivos `.py` en raíz (no-wsgi) | 11 | 2 | -9 |
-| Tests passing | 99 + errores | 271 (192 unit + 79 integration) | +172 |
-| Cobertura | 13.21% | 31.90% (gate 30%) | +18.69 pp |
+| Tests passing | 0 | 428 (320 unit + 108 integration) | +428 |
+| Cobertura (`app + db`) | 0% | 43.73% (gate 43%) | +43.73 pp |
+| db/queries/* cobertura | 0% | ~80% (5 módulos al 100%) | +80 pp |
 
 ### DoD (Definition of Done) verificados
 
@@ -201,20 +202,25 @@ verificada por AST.
 - ✅ DoD-5: regla de capas verificada por AST (`tests/unit/test_arquitectura.py`).
 - ✅ DoD-6: `middleware.py` eliminado por no usarse.
 - ✅ DoD-7: no quedan módulos top-level de negocio.
-- 🔴 DoD-8: cobertura 60% — **parcial al 31.90%** (gate 30%). Pendiente tests
-  focalizados de `db/queries/*` y de los helpers de `app/domain/reports.py`.
-- ✅ DoD-9: 13+ tests de integración por blueprint (79 totales).
+- 🔴 DoD-8: cobertura 60% — **parcial al 43.73%** (gate 43%). Pendiente
+  tests focalizados de `app/domain/reports.py` (1244 stmts, 11%) y
+  `app/domain/report_docx.py` (451 stmts, 8%) — requieren mocks
+  pesados del flujo de PDF/DOCX.
+- ✅ DoD-9: 13+ tests de integración por blueprint (79 tests) +
+  14 tests de `db/queries/*` (objetivo secundario 70% de queries).
 - 🔴 DoD-10: branch protection en GitHub — manual (UI).
 - ✅ DoD-11: `Dockerfile` → `wsgi:app`.
 - ✅ DoD-12: runbook en `docs/OPERATIONS.md` (enlazado desde `docs/README.md`).
-- 🔴 DoD-13: Alembic como única fuente de verdad — parcial: `db/init.py` aún
-  crea DDL propio; `alembic/` solo tiene `alembic.ini`.
+- ✅ DoD-13: Alembic como única fuente de verdad — `db/init.py` detecta
+  `public.alembic_version` y salta DDL legacy; tests de `tests/integration/test_alembic.py`
+  verifican que Alembic + init_db funcionan juntos.
 - ⛔ DoD-14: `services/biometric_proxy/` con Dockerfile — descartado al
   eliminar `middleware.py`.
 
-### Commits incluidos
+### Commits incluidos (en orden cronológico)
 
 ```
+c2fbff2 refactor(monolith): Fase 3 complete + stabilization
 9167550 chore(refactor): complete Fase 4e — domain services migration
 5a4c70a refactor(domain): migrate script.py → app/domain/reports.py
 74ed0aa refactor(domain): migrate script_docx.py → app/domain/report_docx.py
@@ -223,18 +229,31 @@ fc2b709 refactor(domain): migrate analytics.py → app/domain/analytics.py
 56bf733 refactor(domain): migrate ia_report.py → app/domain/ai_narrative.py
 cc78aa4 refactor(domain): migrate backup.py → app/domain/backup.py
 be3cc83 refactor(domain): migrate sync.py → app/domain/schedule.py
-c2fbff2 refactor(monolith): Fase 3 complete + stabilization
 63dfd97 ci(github-actions): Fase 7.2 — CI workflow con PostgreSQL de test
 38000d2 docs(operations): Fase 8 — docs/OPERATIONS.md runbook
+1197aac docs(plan): mark Fase 4e + 7.2 + 8 as completed in plan frontmatter
 890387c test(integration): Fase 7.1 — 13 integration tests per blueprint
 8df10c0 test(coverage): Fase 7.4 — más integration tests + unit tests
 9009cf9 test(coverage): Fase 7.4 — más tests + pyproject gate + CI usa pgserver
-1197aac docs(plan): mark Fase 4e + 7.2 + 8 as completed in plan frontmatter
 7bfa3aa docs(plan): update frontmatter — Fase 7.1 cerrada, 271 tests
+84b52ff test(coverage): Fase 7.4 — sync_log + breaks insert + gate a 43%
+4d9d0ea ci: update coverage gate to 43% (DoD-13 cerrado, db/queries ya testeados)
 ```
 
 (Los commits previos de seguridad, sync observable y backups están en
 `git log --oneline` pero no listados aquí.)
+
+### Commits posteriores (Fase 7.4 continuación + DoD-13)
+
+```
+docs: comprehensive documentation of ADR-0001 refactor closure
+  (ADR-0004, CHANGELOG.md, ARQUITECTURA.md, plan completed)
+test(coverage): Fase 7.4 — db/queries tests (feriados, breaks, tenants, grupos, auth, dispositivos, asistencias)
+test(coverage): Fase 7.4 — más db/queries tests (justificaciones, horarios, periodos)
+test(coverage): Fase 7.4 — más db/queries tests (personas, asistencia_periodo)
+test(coverage): Fase 7.4 — sync_log + breaks insert + gate a 43%
+feat(alembic): Fase -1 / DoD-13 — Alembic como fuente de verdad
+```
 
 ---
 

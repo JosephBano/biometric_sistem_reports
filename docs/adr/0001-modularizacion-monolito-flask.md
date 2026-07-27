@@ -184,12 +184,13 @@ Este ADR pasa a `status: completed` tras la ejecución completa del plan
 - ✅ DoD-5 (regla de capas verificada por AST en `test_arquitectura.py`)
 - ✅ DoD-6 (`middleware.py` eliminado por no usarse)
 - ✅ DoD-7 (no quedan módulos top-level de negocio)
-- 🔴 DoD-8 (cobertura 60%) — **parcial: 31.90%**. Ver backlog.
+- 🔴 DoD-8 (cobertura 60%) — **parcial: 43.73%**. Ver backlog.
 - ✅ DoD-9 (13+ tests de integración por blueprint)
-- 🔴 DoD-10 (branch protection en GitHub) — manual, no automatizable.
+- 🔴 DoD-10 (branch protection en GitHub) — manual (UI).
 - ✅ DoD-11 (Dockerfile → `wsgi:app`)
-- 🔴 DoD-12 (runbook de deploy + rollback) — **hecho en `[[OPERATIONS]]`** pero falta enlazar desde README raíz.
-- 🔴 DoD-13 (Alembic como única fuente de verdad) — parcial: `db/init.py` aún crea DDL propio.
+- ✅ DoD-12 (runbook de deploy + rollback) — `[[OPERATIONS]]`.
+- ✅ DoD-13 (Alembic como única fuente de verdad) — `db/init.py` detecta
+  `public.alembic_version` y salta DDL legacy; tests en `test_alembic.py`.
 - ⛔ DoD-14 (`services/biometric_proxy/` con su propio Dockerfile) — descartado al eliminar `middleware.py`.
 
 **Bugs reales corregidos durante el refactor** (descubiertos por los integration tests,
@@ -202,11 +203,13 @@ ver `[[ADR-0004-tests-integracion-pgserver]]`):
 
 **Backlog restante**:
 
-- 🔴 Fase 7.4 (DoD-8 60% cobertura) — requiere tests focalizados de `db/queries/*`
-  y de los helpers de `app/domain/reports.py` (~1500 LOC de funciones de análisis
-  y rendering de PDF). Objetivo secundario del ADR: 70% en `db/queries/*`.
-- 🔴 Fase −1 (DoD-13 Alembic único) — el DDL está duplicado entre `db/init.py`
-  y (eventualmente) `alembic/versions/`. Consolidar.
+- 🔴 DoD-8 (60% cobertura) — actual 43.73%. El gap se debe a:
+  - `app/domain/reports.py` (1244 stmts, 11%) — funciones de análisis
+    y rendering de PDF, requieren mocks pesados.
+  - `app/domain/report_docx.py` (451 stmts, 8%) — rendering DOCX.
+  - `app/web/admin_bp.py` / `schedule_bp.py` / `periods_bp.py` (~38% cada uno).
+  - `db/queries/asistencia_periodo.py` (24%) — requiere fixtures de
+    personas + marcaciones.
 - 🔴 DoD-10 branch protection — UI manual.
 - ⛔ Fase 6 (Celery) — fuera de v1.
 
