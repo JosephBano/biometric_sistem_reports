@@ -37,3 +37,7 @@ public.tenants ←─ public.usuarios  (cada usuario pertenece a un tenant)
 ```
 
 Para la arquitectura completa y la propuesta de modularización (Application Factory + Blueprints por dominio), ver [[ARQUITECTURA]] y [[ADR-0001-modularizacion-monolito-flask]].
+
+## Operaciones y troubleshooting
+
+Para el runbook de operaciones (deploy, monitoring, troubleshooting, rollback), ver [[OPERATIONS]]. Para instalación inicial paso a paso, ver `../DEPLOYMENT.md` (en la raíz del repo).
