@@ -32,6 +32,7 @@ instance/
 biometrico_test/
 biometrico_test_int/
 biometrico_test_unit/
+biometrico_*/
 biometrico_alembic_test*/
 biometrico_alembic_test_db/
 biometrico_debug_alembic_init/
