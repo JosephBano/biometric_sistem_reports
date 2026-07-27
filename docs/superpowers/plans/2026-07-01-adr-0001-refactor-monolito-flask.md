@@ -21,14 +21,27 @@ superseded_by: []
 
 > **Estado verificado (2026-07-02):**
 >
-> **CERRADO**: Fases −1, 0, 1, 2, 3, 4e (1–8), 5, 7.2, 8.
+> **CERRADO**: Fases −1, 0, 1, 2, 3, 4e (1–8), 5, 7.1, 7.2, 8.
 >
-> **Pendiente**: Fase 6 (Celery, ⛔ fuera de v1), Fase 7.1 (tests de integración
-> por blueprint, requiere Postgres efímero), Fase 7.4 (subir gate a 60%).
+> **Pendiente**:
+> - Fase 6 (Celery, ⛔ fuera de v1)
+> - Fase 7.4 (subir gate a 60% — actual 31.90%, gate temporal 30%)
+> - DoD-13 (Alembic único fuente de verdad, parcial)
+> - Branch protection en GitHub (DoD-10)
 >
-> **145 tests passing**, cobertura **24.05%** (gate temporal 20%).
+> **271 tests passing** (192 unit + 79 integration).
+> Cobertura **31.90%** (gate 30% pasa).
 >
-> DoD verificados al 2026-07-02: DoD-1 al DoD-5, DoD-7, DoD-11, DoD-13 parcial.
+> DoD verificados al 2026-07-02: DoD-1 al DoD-5, DoD-7, DoD-9, DoD-11.
+>
+> **Bugs corregidos durante Fase 7.1**:
+> - `db/queries/auth.py`: `:detalle::jsonb` → `CAST(:detalle AS jsonb)` (SQLAlchemy)
+> - `app/context_processors.py`: `justificaciones_pendientes_count` era función, ahora int
+> - `app/web/groups_bp.py`: views `listar_grupos()`/`listar_categorias()` shadowing
+> - `templates/admin/superadmin_usuarios.html`: `url_for` sin prefijo de blueprint
+>
+> **Tecnologías usadas en tests**: `pgserver` (PostgreSQL 16 embebido) elimina
+> la dependencia de servicio Docker para CI.
 
 # Plan de ejecución — ADR-0001 (refactor monolito Flask)
 
