@@ -99,7 +99,7 @@ class TestAlembicMigraciones:
         # Tablas de negocio esperadas
         esperadas = {
             "personas", "asistencias", "justificaciones", "feriados",
-            "grupos", "categorias", "tipos_persona", "dispositivos",
+            "grupos", "grupos_funcionales", "tipos_persona", "dispositivos",
             "periodos_vigencia", "sync_log", "breaks_categorizados",
         }
         assert esperadas.issubset(tablas), (

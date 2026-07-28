@@ -40,15 +40,24 @@ target_metadata = None  # usamos SQL crudo, no ORM metadata
 
 
 def _get_tenant_slugs(connection) -> list[str]:
-    """Retorna la lista de slugs de tenants activos."""
+    """Retorna la lista de slugs de tenants activos.
+
+    Si `public.tenants` no existe o está vacía, cae a `TENANT_DEFAULT`,
+    igual que la migración 0001. Esa simetría es obligatoria: 0001 crea el
+    schema de `TENANT_DEFAULT` con ese mismo fallback, así que si aquí
+    devolviéramos una lista vacía, ese schema quedaría creado pero sin
+    `alembic_version` y el paso 2 no lo migraría nunca. Ese desfase es
+    justo el que dejó a `istpet` estancado en producción mientras los
+    tenants registrados después sí avanzaban.
+    """
     try:
         rows = connection.execute(
             text("SELECT slug FROM public.tenants WHERE activo = true ORDER BY slug")
         ).fetchall()
-        return [row[0] for row in rows]
+        slugs = [row[0] for row in rows]
     except Exception:
-        # Si la tabla tenants aún no existe, usar solo TENANT_DEFAULT
-        return [os.environ.get("TENANT_DEFAULT", "istpet")]
+        slugs = []
+    return slugs or [os.environ.get("TENANT_DEFAULT", "istpet")]
 
 
 def run_migrations_offline() -> None:
@@ -82,6 +91,9 @@ def run_migrations_online() -> None:
         )
         with context.begin_transaction():
             context.run_migrations()
+        # SQLAlchemy 2.x usa "commit as you go": sin este commit explícito,
+        # el `with connectable.connect()` hace ROLLBACK al salir del bloque.
+        connection.commit()
 
         # Paso 2: migraciones para cada tenant
         tenant_slugs = _get_tenant_slugs(connection)
@@ -102,6 +114,12 @@ def run_migrations_online() -> None:
             )
             with context.begin_transaction():
                 context.run_migrations()
+            # Imprescindible: el `SET search_path` de arriba ya abrió una
+            # transacción implícita, por lo que `context.begin_transaction()`
+            # de Alembic es no-op y NO commitea. Sin este commit las
+            # migraciones del tenant se ejecutan y se revierten en silencio
+            # (Alembic loguea "Running upgrade" pero nada persiste).
+            connection.commit()
 
 
 if context.is_offline_mode():

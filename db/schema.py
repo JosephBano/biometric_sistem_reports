@@ -167,39 +167,11 @@ CREATE TABLE IF NOT EXISTS grupos_funcionales (
     creado_en        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS grupos_funcionales_personas (
-    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    persona_id         UUID        NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
-    grupo_funcional_id UUID        NOT NULL REFERENCES grupos_funcionales(id) ON DELETE CASCADE,
-    fecha_inicio       DATE        NOT NULL,
-    fecha_fin          DATE,
-    es_principal       BOOLEAN     NOT NULL DEFAULT false,
-    creado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (persona_id, grupo_funcional_id, fecha_inicio)
-);
-
-CREATE TABLE IF NOT EXISTS horarios_default_grupo (
-    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    grupo_funcional_id UUID        NOT NULL REFERENCES grupos_funcionales(id) ON DELETE CASCADE,
-    plantilla_id       UUID        NOT NULL REFERENCES plantillas_horario(id) ON DELETE RESTRICT,
-    fecha_inicio       DATE        NOT NULL,
-    fecha_fin          DATE,
-    prioridad          INTEGER     NOT NULL DEFAULT 0,
-    notas              TEXT,
-    creado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (grupo_funcional_id, plantilla_id, fecha_inicio)
-);
-
-CREATE TABLE IF NOT EXISTS overrides_horario_persona (
-    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    persona_id   UUID        NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
-    plantilla_id UUID        NOT NULL REFERENCES plantillas_horario(id) ON DELETE RESTRICT,
-    fecha_inicio DATE        NOT NULL,
-    fecha_fin    DATE,
-    notas        TEXT,
-    creado_en    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (persona_id, plantilla_id, fecha_inicio)
-);
+-- NOTA: las tablas del modelo de horarios por grupo funcional
+-- (`grupos_funcionales_personas`, `horarios_default_grupo`,
+-- `overrides_horario_persona`) viven en el BLOQUE 5, después de
+-- `personas` y `plantillas_horario`, porque las referencian por FK.
+-- Declararlas aquí rompía cualquier instalación nueva.
 
 -- ╔══════════════════════════════════════════════════╗
 -- ║  BLOQUE 3: PERSONAS Y VINCULACIÓN BIOMÉTRICA     ║
@@ -325,6 +297,45 @@ CREATE TABLE IF NOT EXISTS asignaciones_horario (
     notas           TEXT,
     creado_en       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (persona_id, plantilla_id, fecha_inicio, posicion_ciclo)
+);
+
+-- Modelo de horarios por grupo funcional (ADR-0003, Fase 1).
+-- Deben declararse aquí y no junto a `grupos_funcionales` (BLOQUE 2):
+-- referencian `personas` y `plantillas_horario`, que se crean más arriba
+-- en este mismo bloque.
+
+CREATE TABLE IF NOT EXISTS grupos_funcionales_personas (
+    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    persona_id         UUID        NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+    grupo_funcional_id UUID        NOT NULL REFERENCES grupos_funcionales(id) ON DELETE CASCADE,
+    fecha_inicio       DATE        NOT NULL,
+    fecha_fin          DATE,
+    es_principal       BOOLEAN     NOT NULL DEFAULT false,
+    creado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (persona_id, grupo_funcional_id, fecha_inicio)
+);
+
+CREATE TABLE IF NOT EXISTS horarios_default_grupo (
+    id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    grupo_funcional_id UUID        NOT NULL REFERENCES grupos_funcionales(id) ON DELETE CASCADE,
+    plantilla_id       UUID        NOT NULL REFERENCES plantillas_horario(id) ON DELETE RESTRICT,
+    fecha_inicio       DATE        NOT NULL,
+    fecha_fin          DATE,
+    prioridad          INTEGER     NOT NULL DEFAULT 0,
+    notas              TEXT,
+    creado_en          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (grupo_funcional_id, plantilla_id, fecha_inicio)
+);
+
+CREATE TABLE IF NOT EXISTS overrides_horario_persona (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    persona_id   UUID        NOT NULL REFERENCES personas(id) ON DELETE CASCADE,
+    plantilla_id UUID        NOT NULL REFERENCES plantillas_horario(id) ON DELETE RESTRICT,
+    fecha_inicio DATE        NOT NULL,
+    fecha_fin    DATE,
+    notas        TEXT,
+    creado_en    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (persona_id, plantilla_id, fecha_inicio)
 );
 
 -- ╔══════════════════════════════════════════════════╗
