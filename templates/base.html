@@ -40,7 +40,7 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'analytics' %}active{% endif %}"
+                    <a class="nav-link {% if active_page == 'analytics' or active_page == 'analytics_entradas_salidas' %}active{% endif %}"
                         href="{{ url_for('analytics.vista') }}">
                         <span class="material-symbols-outlined nav-icon">monitoring</span>
                         <span>Analytics</span>

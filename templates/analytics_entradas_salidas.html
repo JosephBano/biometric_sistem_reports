@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h3>Analitica de Entradas y Salidas</h3>
+    <p class="text-muted">Consulta las marcaciones de una persona en un rango de fechas. Pagina server-side (50 por pagina).</p>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form class="row g-3 align-items-end" method="GET" id="formEntradasSalidas">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-muted mb-2">Persona (UUID)</label>
+                <input type="text" class="form-control" name="persona_id" id="inputPersonaId"
+                       value="{{ persona_id }}" placeholder="UUID de la persona (obligatorio)">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-2">Fecha inicio</label>
+                <input type="date" class="form-control" name="fecha_inicio" id="inputFechaInicio"
+                       value="{{ fecha_inicio }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-2">Fecha fin</label>
+                <input type="date" class="form-control" name="fecha_fin" id="inputFechaFin"
+                       value="{{ fecha_fin }}">
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Consultar</button>
+                <button type="button" class="btn btn-outline-secondary" id="btnLimpiar" style="height: 38px;">X</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0">Resultados</h5>
+        <span class="badge bg-primary bg-opacity-10 text-primary" id="badgeTotal">Total: 0</span>
+    </div>
+    <div class="card-body p-0">
+        <div id="resultadosContainer" class="p-3 text-muted small">
+            Ingresa el UUID de una persona y un rango de fechas para consultar sus marcaciones.
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="paginationFooter" style="display:none !important;">
+        <small class="text-muted" id="paginationInfo"></small>
+        <div>
+            <button class="btn btn-sm btn-outline-secondary" id="btnPrev">Anterior</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" id="btnNext">Siguiente</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const form = document.getElementById('formEntradasSalidas');
+    const container = document.getElementById('resultadosContainer');
+    const badgeTotal = document.getElementById('badgeTotal');
+    const paginationFooter = document.getElementById('paginationFooter');
+    const paginationInfo = document.getElementById('paginationInfo');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+    let currentPage = 1;
+    let currentPersonaId = '';
+    let currentFechaInicio = '';
+    let currentFechaFin = '';
+
+    function renderTabla(data) {
+        badgeTotal.textContent = 'Total: ' + (data.total || 0);
+        if (!data.marcaciones || data.marcaciones.length === 0) {
+            container.className = 'p-3 text-muted small';
+            container.innerHTML = 'No se encontraron marcaciones para los criterios indicados.';
+            paginationFooter.style.display = 'none';
+            return;
+        }
+        paginationFooter.style.display = 'flex';
+        paginationInfo.textContent = 'Pagina ' + data.page + ' de ' + data.total_pages + ' (' + data.total + ' marcaciones totales)';
+        btnPrev.disabled = data.page <= 1;
+        btnNext.disabled = data.page >= data.total_pages;
+
+        const rows = data.marcaciones.map(function(m) {
+            const tipoBadge = m.tipo === 'entrada'
+                ? '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Entrada</span>'
+                : (m.tipo === 'salida'
+                    ? '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Salida</span>'
+                    : '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">' + (m.tipo_raw || m.tipo) + '</span>');
+            return '<tr>'
+                + '<td class="text-nowrap">' + m.fecha + '</td>'
+                + '<td class="text-nowrap fw-bold">' + m.hora + '</td>'
+                + '<td>' + tipoBadge + '</td>'
+                + '<td class="text-muted small">' + (m.tipo_raw || '') + '</td>'
+                + '<td class="text-muted small">' + (m.fuente || '') + '</td>'
+                + '</tr>';
+        }).join('');
+
+        container.className = '';
+        container.innerHTML =
+            '<div class="table-responsive"><table class="table table-hover align-middle mb-0">'
+            + '<thead class="bg-light"><tr>'
+            + '<th>Fecha</th><th>Hora</th><th>Tipo</th><th>Dato crudo</th><th>Fuente</th>'
+            + '</tr></thead>'
+            + '<tbody>' + rows + '</tbody>'
+            + '</table></div>';
+    }
+
+    function consultar(pagina) {
+        const personaId = document.getElementById('inputPersonaId').value.trim();
+        const fechaInicio = document.getElementById('inputFechaInicio').value;
+        const fechaFin = document.getElementById('inputFechaFin').value;
+        if (!personaId) {
+            container.className = 'p-3 text-warning small';
+            container.textContent = 'Ingresa el UUID de la persona.';
+            paginationFooter.style.display = 'none';
+            return;
+        }
+        if (!fechaInicio || !fechaFin) {
+            container.className = 'p-3 text-warning small';
+            container.textContent = 'Selecciona rango de fechas valido.';
+            paginationFooter.style.display = 'none';
+            return;
+        }
+        currentPersonaId = personaId;
+        currentFechaInicio = fechaInicio;
+        currentFechaFin = fechaFin;
+        currentPage = pagina || 1;
+        const params = new URLSearchParams({
+            persona_id: personaId,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            page: String(currentPage),
+            per_page: '50',
+        });
+        container.className = 'p-3 text-muted small';
+        container.textContent = 'Cargando...';
+        fetch(_BASE + '/api/analytics/entradas-salidas?' + params.toString())
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.json().then(function(e) {
+                        throw new Error(e.error || 'Error ' + r.status);
+                    });
+                }
+                return r.json();
+            })
+            .then(renderTabla)
+            .catch(function(err) {
+                container.className = 'p-3 text-danger small';
+                container.textContent = 'Error: ' + err.message;
+                paginationFooter.style.display = 'none';
+            });
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        consultar(1);
+    });
+    btnPrev.addEventListener('click', function() { if (currentPage > 1) consultar(currentPage - 1); });
+    btnNext.addEventListener('click', function() { if (currentPage < 999) consultar(currentPage + 1); });
+    btnLimpiar.addEventListener('click', function() {
+        document.getElementById('inputPersonaId').value = '';
+        document.getElementById('inputFechaInicio').value = '';
+        document.getElementById('inputFechaFin').value = '';
+        container.className = 'p-3 text-muted small';
+        container.innerHTML = 'Ingresa el UUID de una persona y un rango de fechas para consultar sus marcaciones.';
+        paginationFooter.style.display = 'none';
+    });
+
+    // Si el usuario llega con persona_id + fechas en la URL, consultar automaticamente.
+    if (new URLSearchParams(window.location.search).get('persona_id')) {
+        consultar(1);
+    }
+})();
+</script>
+{% endblock %}
