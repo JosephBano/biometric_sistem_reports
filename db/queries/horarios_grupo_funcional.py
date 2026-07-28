@@ -48,7 +48,6 @@ def listar_grupos_funcionales_de_persona(
     Para resolver el horario vigente en una fecha, use
     `listar_grupos_funcionales_vigentes_para_persona`.
     """
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -77,7 +76,6 @@ def listar_grupos_funcionales_vigentes_para_persona(
     usar como predicado de índice parcial porque `>= CURRENT_DATE` no es
     inmutable).
     """
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -113,7 +111,6 @@ def asignar_persona_a_grupo_funcional(
     Si `es_principal=True`, desmarca cualquier otro principal vigente de
     la misma persona (manteniendo la regla "1 principal activo").
     """
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         if es_principal:
             conn.execute(
@@ -153,7 +150,6 @@ def cerrar_vinculo_persona_grupo_funcional(
     schema: str | None = None,
 ) -> bool:
     """Cierra la asignación poniendo `fecha_fin` (no DELETE: conserva histórico)."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         result = conn.execute(
             text("""
@@ -172,7 +168,6 @@ def listar_personas_en_grupo_funcional(
     grupo_funcional_id: str, fecha: date, schema: str | None = None,
 ) -> list[str]:
     """Retorna los `persona_id` con un grupo funcional vigente en la fecha."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -196,7 +191,6 @@ def listar_horarios_default_grupo(
     grupo_funcional_id: str, schema: str | None = None,
 ) -> list[dict]:
     """Lista TODOS los defaults (vigentes o no) de un grupo funcional."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -221,7 +215,6 @@ def listar_horarios_vigentes_para_grupo_funcional(
     grupo_funcional_id: str, fecha: date, schema: str | None = None,
 ) -> list[dict]:
     """Lista los defaults vigentes de un grupo funcional en una fecha."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -252,7 +245,6 @@ def resolver_default_para_grupos_funcionales(
     """
     if not grupo_funcional_ids:
         return None
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -281,7 +273,6 @@ def crear_horario_default_grupo(
     schema: str | None = None,
 ) -> dict | None:
     """Crea un default para un grupo funcional. Idempotente por UNIQUE compuesto."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         row = conn.execute(
             text("""
@@ -309,7 +300,6 @@ def cerrar_horario_default_grupo(
     hdg_id: str, fecha_fin: date, schema: str | None = None,
 ) -> bool:
     """Cierra un default poniendo `fecha_fin` (no DELETE: conserva histórico)."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         result = conn.execute(
             text("""
@@ -332,7 +322,6 @@ def listar_overrides_por_persona(
     persona_id: str, schema: str | None = None,
 ) -> list[dict]:
     """Lista TODOS los overrides (vigentes o no) de una persona."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         rows = conn.execute(
             text("""
@@ -355,7 +344,6 @@ def obtener_override_vigente_para_persona(
     persona_id: str, fecha: date, schema: str | None = None,
 ) -> dict | None:
     """Retorna el override vigente de una persona en una fecha, o None."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         row = conn.execute(
             text("""
@@ -385,7 +373,6 @@ def crear_override_horario(
     schema: str | None = None,
 ) -> dict:
     """Crea un override por persona. Idempotente por UNIQUE compuesto."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         row = conn.execute(
             text("""
@@ -413,7 +400,6 @@ def cerrar_override_horario(
     ohp_id: str, fecha_fin: date, schema: str | None = None,
 ) -> bool:
     """Cierra el override poniendo `fecha_fin` (no DELETE)."""
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         result = conn.execute(
             text("""
@@ -441,7 +427,6 @@ def obtener_asignacion_legacy_vigente(
     (INDIVIDUAL_LEGACY). NO crea nuevas asignaciones aquí — esa es
     responsabilidad del importador `.obd/.csv`.
     """
-    schema = schema or _tenant_default()
     with get_connection(schema) as conn:
         row = conn.execute(
             text("""
@@ -495,7 +480,6 @@ def resolver_horario_vigente(
           - regla_desempate:     str | None ('es_principal' | 'prioridad'
                                               | 'orden_grupo')
     """
-    schema = schema or _tenant_default()
 
     def _vacio(origen_: str, **extras) -> dict:
         base = {
@@ -576,25 +560,6 @@ def resolver_horario_vigente(
 # ═════════════════════════════════════════════════════════════════════════
 
 
-def _tenant_default() -> str:
-    """Schema por defecto del tenant actual.
-
-    Si hay contexto Flask (`g.tenant_schema`), usa ese; si no, usa
-    `os.environ['TENANT_DEFAULT']`. Esto permite llamadas fuera de
-    request (background jobs, scripts) sin necesidad de pasar
-    `schema` explícito.
-    """
-    import os
-    try:
-        from flask import g  # type: ignore
-        schema = getattr(g, "tenant_schema", None)
-        if schema:
-            return schema
-    except RuntimeError:
-        pass
-    return os.environ.get("TENANT_DEFAULT", "istpet")
-
-
 def _cargar_plantilla(plantilla_id: str, schema: str) -> dict | None:
     """Carga la fila de `plantillas_horario` por ID y la convierte a dict.
 
@@ -662,3 +627,21 @@ listar_overrides_horario_persona = listar_overrides_por_persona
 __all__ = list(__all__) + [
     "listar_overrides_horario_persona",
 ]
+
+
+def _default_tenant_schema() -> str:
+    """Schema por defecto del tenant actual.
+
+    Solo consulta `os.environ['TENANT_DEFAULT']`. NO toca Flask
+    (regla arquitectónica del ADR-0001: `db/queries/*` es capa pura
+    sin dependencias de `app/*` ni de Flask).
+
+    Los llamadores dentro de contexto Flask pasan `schema` explícito
+    (vía `app.tenant.cargar_contexto_usuario()`).
+    """
+    import os
+    return os.environ.get("TENANT_DEFAULT", "istpet")
+
+
+# Alias de compatibilidad con código antiguo que llamara `_tenant_default()`.
+_tenant_default = _default_tenant_schema

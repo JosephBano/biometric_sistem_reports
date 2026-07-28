@@ -355,3 +355,99 @@ docker system df -v | grep biometrico
 | 2026-07-02 | Creación inicial (cierre Fase 8 del ADR-0001). | documenter |
 | 2026-07-27 | Pre-check ADR-0003 (Tar. 0.2 del plan): backup reciente OK, restore probado contra BD temporal, runbook actualizado. | implementer |
 | 2026-07-27-r2 | Pre-Fase 1 ADR-0003 (Tar. 0.4 del plan): Alembic único, init_db=seed, runbook actualizado. | arquitecto |
+
+
+---
+
+## 8. Pilot: Horarios por grupo funcional (`istpet`)
+
+Feature flag per-tenant para activar el modelo de horarios por grupo
+funcional (ADR-0003) sin redeploy. Activación gradual, rollback trivial.
+
+### 8.1 Activar en `istpet`
+
+```bash
+# Backup completo antes del cambio.
+docker compose exec -T db pg_dump -U $PGUSER -d $PGDB -Fc \
+    > /data/backups/pre-horarios-grupo-$(date +%Y%m%d_%H%M).dump
+
+# Activar flag en `istpet`.
+psql $DATABASE_URL -c "
+UPDATE public.tenants
+SET configuracion = configuracion || '{\"horario_por_grupo\": true, \"horario_desempate\": \"prioridad\"}'::jsonb
+WHERE slug = 'istpet';
+"
+```
+
+> Hoy no existe una vista de administración para este flag; la única
+> forma de activarlo/consultarlo es vía SQL directo (arriba) o el API
+> `GET/PUT /api/configuracion/horario-por-grupo` (rol: admin, ver 8.2).
+
+### 8.2 Comparación A/B de reportes
+
+Genera el mismo reporte con flag on y off (en diferentes momentos del
+mismo período):
+
+```bash
+# Flag off (legacy)
+curl -X PUT http://localhost:5000/api/configuracion/horario-por-grupo \
+  -H 'Content-Type: application/json' -d '{"horario_por_grupo": false}' \
+  -b cookies.txt | jq .
+# Generar reporte → /tmp/reporte_off.pdf
+
+# Flag on
+curl -X PUT http://localhost:5000/api/configuracion/horario-por-grupo \
+  -H 'Content-Type: application/json' -d '{"horario_por_grupo": true}' \
+  -b cookies.txt | jq .
+# Generar reporte → /tmp/reporte_on.pdf
+
+# Comparar
+python scripts/comparar_reportes_horario.py \
+  --con-flag-on /tmp/reporte_on.pdf \
+  --con-flag-off /tmp/reporte_off.pdf
+```
+
+### 8.3 Rollback del feature flag (sin tocar BD)
+
+```bash
+psql $DATABASE_URL -c "
+UPDATE public.tenants
+SET configuracion = configuracion || '{\"horario_por_grupo\": false}'::jsonb
+WHERE slug = 'istpet';
+"
+```
+
+El resolver inmediatamente consulta el legacy. NO requiere reinicio
+de la app. Verificar con `GET /api/configuracion/horario-por-grupo`
+que el flag quedó en `false`.
+
+### 8.4 Si la migración Alembic 0010/0011 debe revertirse (caso extremo)
+
+```bash
+docker compose exec -T db alembic -c /app/alembic.ini downgrade -1
+```
+
+> **No hay gate automático** que bloquee este downgrade (no existe hoy
+> ninguna variable de entorno que lo condicione). La única protección
+> es operativa: seguir el "Pre-requisito operacional" del ADR-0003
+> (backup verificado + ensayo de downgrade en staging con diff de
+> schema) antes de ejecutarlo contra producción.
+>
+> Las 4 tablas y 2 columnas aditivas se borran. Esto **rompe el flag
+> `horario_por_grupo`**: desactivarlo antes de hacer downgrade.
+
+### 8.5 Propuesta de migración de legacy → defaults (CSV)
+
+Si quieres aprovechar el modelo nuevo también para los horarios 1:1
+existentes (importador `.obd/.csv`), genera primero la propuesta
+para revisión manual:
+
+```bash
+python scripts/migrar_asignaciones_a_defaults.py \
+  --tenant istpet \
+  --out /tmp/propuesta_migracion_horarios.csv
+```
+
+El CSV contiene 1 fila por persona con asignación 1:1 vigente y los
+campos que el admin necesitará para agrupar y crear
+`horarios_default_grupo` + `personas_grupos_funcionales` masivamente.

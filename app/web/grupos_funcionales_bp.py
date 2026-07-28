@@ -25,6 +25,7 @@ from app.domain import (
     horarios_override as overrides_svc,
     persona_grupo_funcional as memberships_svc,
 )
+from app.domain.admin import registrar_audit  # noqa: E402  (capa de dominio)
 from app.domain.rbac import require_role
 from app.domain.horarios_resolucion import resolver_horario_vigente_para_persona
 
@@ -47,8 +48,7 @@ def _audit(accion: str, entidad: str, entidad_id: str | None,
            antes: dict | None, despues: dict | None) -> None:
     """Persiste cambio en `public.audit_log`. Fallo silencioso."""
     try:
-        from db import registrar_audit
-        registrar_audit(
+        registrar_audit(  # desde app.domain.admin
             tenant_id=g.get("tenant_id"),
             usuario_id=g.get("usuario_id"),
             accion=accion,
@@ -265,11 +265,9 @@ def cerrar_grupo_de_persona(persona_id: str, pgf_id: str):
 @require_role(*WRITE_ROLES)
 def preview_masiva():
     """Calcula cuántos y cuáles personas serán afectadas, SIN escribir."""
-    from db.queries.personas import listar_personas_para_filtros
-
     data = _json()
     filtros = data.get("filtros", {})
-    persona_ids = listar_personas_para_filtros(
+    persona_ids = masiva_svc.listar_personas_para_filtros(
         grupo_id=filtros.get("grupo_id"),
         tipo_persona_id=filtros.get("tipo_persona_id"),
         categoria_id=filtros.get("categoria_id"),
