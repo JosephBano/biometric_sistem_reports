@@ -269,6 +269,20 @@ def get_horarios() -> dict:
     return {"by_id": by_id, "by_nombre": by_nombre}
 
 
+def listar_horarios() -> list[dict]:
+    """Lista todas las plantillas de horario activas (id + nombre)."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            text("""
+                SELECT id::text, nombre, activo
+                FROM plantillas_horario
+                WHERE activo = true
+                ORDER BY nombre
+            """)
+        ).fetchall()
+        return [dict(r._mapping) for r in rows]
+
+
 def get_horario(id_usuario: str) -> dict | None:
     """Retorna el horario activo de una persona por su id_usuario, o None si no existe."""
     with get_connection() as conn:

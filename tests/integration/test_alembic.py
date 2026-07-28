@@ -121,7 +121,7 @@ class TestAlembicMigraciones:
                 sa.text("SELECT version_num FROM public.alembic_version")
             ).scalar()
 
-        assert version == "0009", f"Versión Alembic esperada 0009, obtuve {version}"
+        assert version == "0011", f"Versión Alembic esperada 0011, obtuve {version}"
 
 
 class TestInitDbConAlembic:

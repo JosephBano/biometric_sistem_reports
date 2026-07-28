@@ -35,20 +35,51 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Renombra la tabla `categorias` a `grupos_funcionales` y la columna FK."""
+    """Renombra la tabla `categorias` a `grupos_funcionales` y la columna FK.
+
+    Idempotente: si la tabla/columna ya tienen el nombre nuevo (caso de
+    tenants donde init_db() ya aplico el rename antes de correr alembic),
+    la operacion se omite.
+    """
     conn = op.get_bind()
 
-    # Verificar que la tabla existe (alembic-aware: si no existe, ya fue renombrada)
-    existe_tabla = conn.execute(text("""
+    existe_tabla_vieja = conn.execute(text("""
         SELECT EXISTS (
             SELECT 1 FROM information_schema.tables
             WHERE table_schema = current_schema()
               AND table_name = 'categorias'
         )
     """)).scalar()
+    existe_tabla_nueva = conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = 'grupos_funcionales'
+        )
+    """)).scalar()
 
-    if existe_tabla:
+    # Solo renombrar si `categorias` existe y `grupos_funcionales` NO.
+    if existe_tabla_vieja and not existe_tabla_nueva:
         conn.execute(text("ALTER TABLE categorias RENAME TO grupos_funcionales"))
+
+    existe_columna_vieja = conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'personas'
+              AND column_name = 'categoria_id'
+        )
+    """)).scalar()
+    existe_columna_nueva = conn.execute(text("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'personas'
+              AND column_name = 'grupo_funcional_id'
+        )
+    """)).scalar()
+
+    if existe_columna_vieja and not existe_columna_nueva:
         conn.execute(text("""
             ALTER TABLE personas
             RENAME COLUMN categoria_id TO grupo_funcional_id

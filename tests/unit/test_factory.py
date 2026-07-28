@@ -61,10 +61,10 @@ class TestTestingConfigSafeguard:
 class TestBlueprintsRegistrados:
 
     def test_contamos_los_blueprints_esperados(self):
-        """Debe haber exactamente 13 blueprints."""
+        """Debe haber exactamente 14 blueprints (incluido horarios_gf)."""
         from app.web import all_blueprints
-        assert len(all_blueprints) == 13, (
-            f"Esperado 13 blueprints, encontrados {len(all_blueprints)}: "
+        assert len(all_blueprints) == 14, (
+            f"Esperado 14 blueprints, encontrados {len(all_blueprints)}: "
             f"{[bp.name for bp in all_blueprints]}"
         )
 
@@ -74,7 +74,7 @@ class TestBlueprintsRegistrados:
         expected = {
             "auth", "dashboard", "devices", "schedule", "attendance",
             "breaks", "reports", "periods", "people", "groups",
-            "admin", "analytics", "system",
+            "horarios_gf", "admin", "analytics", "system",
         }
         assert nombres == expected, f"Faltan o sobran: {nombres ^ expected}"
 

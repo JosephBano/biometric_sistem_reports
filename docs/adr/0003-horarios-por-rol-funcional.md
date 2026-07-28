@@ -1,9 +1,9 @@
 ---
 title: "ADR-0003 — Horarios por grupo funcional con override individual, precedencia explícita y compatibilidad hacia atrás"
 tags: [adr, arquitectura, horarios, multi-tenant, grupos-funcionales, grupos-laborales]
-status: proposed
+status: accepted
 created: 2026-07-27
-updated: 2026-07-27
+updated: 2026-07-28
 deciders: [arquitecto, equipo ISTPET]
 consulted: [docs/ER.md, docs/AUTENTICACION.md, docs/ARQUITECTURA.md, app/domain/schedule.py, db/queries/horarios.py, db/queries/personas.py, db/queries/grupos.py, db/schema.py, app/web/schedule_bp.py]
 supersedes: []
@@ -12,6 +12,10 @@ related: ["[[ARQUITECTURA]]", "[[AUTENTICACION]]", "[[ER]]", "[[ADR-0000-use-mar
 ---
 
 # ADR-0003 — Horarios por grupo funcional con override individual, precedencia explícita y compatibilidad hacia atrás
+
+> **Status**: `accepted` (2026-07-28).
+> **Implementación Fase 1**: commit `0390925` (rename categorias → grupos_funcionales) + commits subsiguientes con las 3 tablas nuevas y CRUD.
+> **Feature flag**: `horario_por_grupo` queda **off por defecto** en producción. La estructura existe pero el resolver canónico (`resolver_horario_vigente`) no se invoca desde `analizar_por_persona` ni desde el motor de reportes hasta que se apruebe Fase 2 (piloto en un tenant).
 
 > **Nota de nomenclatura (2026-07-27)**: este ADR originalmente se tituló
 > "rol funcional". Por confirmación explícita del usuario, **se abandona el
