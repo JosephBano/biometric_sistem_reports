@@ -10,9 +10,10 @@
     <div class="card-body">
         <form class="row g-3 align-items-end" method="GET" id="formEntradasSalidas">
             <div class="col-md-4">
-                <label class="form-label small fw-bold text-muted mb-2">Persona (UUID)</label>
-                <input type="text" class="form-control" name="persona_id" id="inputPersonaId"
-                       value="{{ persona_id }}" placeholder="UUID de la persona (obligatorio)">
+                <label class="form-label small fw-bold text-muted mb-2">Persona</label>
+                <select name="persona_id" id="inputPersonaId" placeholder="Nombre, cedula o ID biometrico...">
+                    <option value="">Selecciona una persona...</option>
+                </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted mb-2">Fecha inicio</label>
@@ -68,6 +69,62 @@
     let currentFechaInicio = '';
     let currentFechaFin = '';
 
+    // ── Selector de persona ────────────────────────────────────────────
+    // El endpoint expone el UUID; el operador busca por nombre, cedula o
+    // ID del biometrico, que son los datos que si conoce.
+    const PERSONA_PRESELECCIONADA = {{ persona_id | tojson }};
+
+    const tsPersona = new TomSelect('#inputPersonaId', {
+        valueField: 'id',
+        labelField: 'nombre',
+        searchField: ['nombre', 'identificacion', 'id_usuario_zk'],
+        maxOptions: 1000,
+        create: false,
+        placeholder: 'Nombre, cedula o ID biometrico...',
+        render: {
+            option: function(d, escape) {
+                const meta = [
+                    d.identificacion ? 'CI ' + escape(d.identificacion) : '',
+                    d.id_usuario_zk ? 'ZK ' + escape(d.id_usuario_zk) : '',
+                    d.activo ? '' : 'inactivo',
+                ].filter(Boolean).join(' &middot; ');
+                return '<div class="py-1">'
+                    + '<div class="fw-bold">' + escape(d.nombre) + '</div>'
+                    + (meta ? '<div class="text-muted small">' + meta + '</div>' : '')
+                    + '</div>';
+            },
+            item: function(d, escape) {
+                const zk = d.id_usuario_zk ? ' (ZK ' + escape(d.id_usuario_zk) + ')' : '';
+                return '<div>' + escape(d.nombre) + zk + '</div>';
+            },
+            no_results: function() {
+                return '<div class="p-2 text-muted small">Sin coincidencias.</div>';
+            },
+        },
+    });
+
+    tsPersona.on('change', function() {
+        // Limpiar el aviso de "selecciona una persona" al elegir.
+        if (tsPersona.getValue() && container.classList.contains('text-warning')) {
+            container.className = 'p-3 text-muted small';
+            container.textContent = 'Pulsa Consultar para ver las marcaciones.';
+        }
+    });
+
+    fetch(_BASE + '/api/personas/buscar')
+        .then(function(r) { return r.ok ? r.json() : { personas: [] }; })
+        .then(function(data) {
+            tsPersona.addOptions(data.personas || []);
+            if (PERSONA_PRESELECCIONADA) {
+                tsPersona.setValue(PERSONA_PRESELECCIONADA, true);
+                consultar(1);
+            }
+        })
+        .catch(function() {
+            container.className = 'p-3 text-danger small';
+            container.textContent = 'No se pudo cargar el listado de personas.';
+        });
+
     function renderTabla(data) {
         badgeTotal.textContent = 'Total: ' + (data.total || 0);
         if (!data.marcaciones || data.marcaciones.length === 0) {
@@ -107,12 +164,12 @@
     }
 
     function consultar(pagina) {
-        const personaId = document.getElementById('inputPersonaId').value.trim();
+        const personaId = tsPersona.getValue();
         const fechaInicio = document.getElementById('inputFechaInicio').value;
         const fechaFin = document.getElementById('inputFechaFin').value;
         if (!personaId) {
             container.className = 'p-3 text-warning small';
-            container.textContent = 'Ingresa el UUID de la persona.';
+            container.textContent = 'Selecciona una persona.';
             paginationFooter.style.display = 'none';
             return;
         }
@@ -159,18 +216,17 @@
     btnPrev.addEventListener('click', function() { if (currentPage > 1) consultar(currentPage - 1); });
     btnNext.addEventListener('click', function() { if (currentPage < 999) consultar(currentPage + 1); });
     btnLimpiar.addEventListener('click', function() {
-        document.getElementById('inputPersonaId').value = '';
+        tsPersona.clear();
         document.getElementById('inputFechaInicio').value = '';
         document.getElementById('inputFechaFin').value = '';
         container.className = 'p-3 text-muted small';
-        container.innerHTML = 'Ingresa el UUID de una persona y un rango de fechas para consultar sus marcaciones.';
+        container.innerHTML = 'Selecciona una persona y un rango de fechas para consultar sus marcaciones.';
         paginationFooter.style.display = 'none';
     });
 
-    // Si el usuario llega con persona_id + fechas en la URL, consultar automaticamente.
-    if (new URLSearchParams(window.location.search).get('persona_id')) {
-        consultar(1);
-    }
+    // La consulta automatica al llegar con ?persona_id=... se dispara al
+    // terminar de cargar el catalogo (ver el fetch de arriba), no aqui:
+    // antes de eso `tsPersona.getValue()` estaria vacio.
 })();
 </script>
 {% endblock %}

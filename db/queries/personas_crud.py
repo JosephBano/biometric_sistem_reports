@@ -38,7 +38,13 @@ def listar_personas(tipo_persona_id: str = None, grupo_id: str = None,
         q += " AND p.grupo_id = CAST(:grupo_id AS uuid)"
         params["grupo_id"] = grupo_id
     if busqueda:
-        q += " AND (UPPER(p.nombre) LIKE UPPER(:busq) OR p.identificacion LIKE :busq)"
+        # También por ID del biométrico: es el identificador que el operador
+        # tiene a mano cuando mira el dispositivo o un reporte.
+        q += (
+            " AND (UPPER(p.nombre) LIKE UPPER(:busq)"
+            " OR p.identificacion LIKE :busq"
+            " OR pd.id_en_dispositivo LIKE :busq)"
+        )
         params["busq"] = f"%{busqueda}%"
     q += " ORDER BY p.nombre"
     with get_connection() as conn:

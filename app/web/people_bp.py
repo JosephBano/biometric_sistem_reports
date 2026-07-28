@@ -9,7 +9,9 @@ Rutas (4):
 """
 from __future__ import annotations
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint, flash, jsonify, redirect, render_template, request, url_for,
+)
 
 from app.domain.people import (
     actualizar_persona,
@@ -93,6 +95,34 @@ def editar(id: str):
     except Exception as e:  # noqa: BLE001
         flash(f"Error al actualizar persona: {e}", "danger")
     return redirect(url_for("people.lista"))
+
+
+@bp.get("/api/personas/buscar")
+@require_role("admin", "superadmin", "gestor", "supervisor_grupo", "readonly")
+def buscar():
+    """Catálogo de personas para selectores (devuelve el UUID).
+
+    Existe para que ninguna vista tenga que pedirle al operador que
+    escriba un UUID a mano: el selector busca por nombre, cédula o ID del
+    biométrico y envía el `id` por detrás.
+
+    Los roles de solo lectura también la consumen (la usa la vista de
+    analítica de entradas/salidas).
+    """
+    q = request.args.get("q", "").strip() or None
+    personas = listar_personas(activo=None, busqueda=q)
+    return jsonify({
+        "personas": [
+            {
+                "id": p["id"],
+                "nombre": p["nombre"],
+                "identificacion": p["identificacion"] or "",
+                "id_usuario_zk": p["id_usuario_zk"] or "",
+                "activo": p["activo"],
+            }
+            for p in personas
+        ]
+    })
 
 
 @bp.get("/personas/historico")
