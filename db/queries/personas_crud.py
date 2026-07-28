@@ -74,14 +74,35 @@ def get_persona(id: str) -> dict | None:
 
 def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
     """Inserta o actualiza el ID del biométrico para la persona.
-    Si id_usuario_zk es None o vacío, desactiva la entrada principal existente."""
+    Si id_usuario_zk es None o vacío, desactiva la entrada principal existente.
+
+    Notas de integridad:
+      - El par (dispositivo_id, id_en_dispositivo) es UNIQUE globalmente
+        (ver `db/schema.py::personas_dispositivos`). Si OTRA persona ya
+        ocupa ese id_en_dispositivo en el dispositivo, la cláusula
+        ON CONFLICT reasignará el vínculo a la persona actual.
+      - El historial de marcaciones NO se ve afectado porque
+        `asistencias.persona_id` es FK directa a `personas.id` y se
+        resuelve en el momento de insertar la marcación.
+      - Por seguridad evitamos reasignar vínculos que difieren solo
+        en espacios: el id se pasa por `str(id_usuario_zk).strip()`
+        y se descarta si queda vacío.
+    """
     if id_usuario_zk:
+        zk_norm = str(id_usuario_zk).strip()
+        if not zk_norm:
+            # Tratar valor solo-espacios como "sin asignar"
+            conn.execute(
+                text("UPDATE personas_dispositivos SET activo = false, es_principal = false WHERE persona_id = CAST(:pid AS uuid) AND es_principal = true"),
+                {"pid": persona_id},
+            )
+            return
         dev = conn.execute(
             text("SELECT id::text FROM dispositivos WHERE activo = true ORDER BY prioridad ASC LIMIT 1")
         ).fetchone()
         if not dev:
             return
-        # Desactivar entrada principal previa de ESTA persona (para evitar dos principales)
+        # Desactivar entradas principales previas de ESTA persona (evita dos principales)
         conn.execute(
             text("UPDATE personas_dispositivos SET es_principal = false WHERE persona_id = CAST(:pid AS uuid) AND es_principal = true"),
             {"pid": persona_id},
@@ -95,7 +116,7 @@ def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
                               es_principal = true,
                               activo = true
             """),
-            {"pid": persona_id, "did": dev[0], "zk_id": str(id_usuario_zk)},
+            {"pid": persona_id, "did": dev[0], "zk_id": zk_norm},
         )
     else:
         conn.execute(
@@ -139,7 +160,14 @@ def actualizar_persona(id: str, datos: dict) -> dict | None:
     sets, params = [], {"id": id}
     for k, v in datos_persona.items():
         if k in allowed:
-            sets.append(f"{k} = :{k}")
+            # Cast explícito para `activo` para evitar ambigüedad de tipo
+            # en serialización (psycopg2 ya mapea bool<->boolean, pero
+            # CAST lo hace inequívoco en logs de Postgres y protege contra
+            # drivers que serialicen distinto).
+            if k == "activo":
+                sets.append(f"{k} = CAST(:{k} AS boolean)")
+            else:
+                sets.append(f"{k} = :{k}")
             params[k] = v
         elif k in uuid_fields:
             sets.append(f"{k} = CAST(:{k} AS uuid)")
