@@ -3,11 +3,15 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # Instalar dependencias del sistema:
-# - libpq-dev: requerido por psycopg2-binary en runtime
-# - postgresql-client-16: provee `pg_dump` para backups portables (Fase 2)
+# - libpq-dev: requerido por psycopg2-binary en runtime.
+# - postgresql-client: provee `pg_dump` para backups portables (Fase 2).
+#   usamos el meta-paquete (no fijamos versión) porque la imagen base
+#   es Debian y su repo solo trae la 15; `pg_dump` v15 es retro-compat
+#   hacia servidores v16 sin ningún problema. Fijar v16 forzaba añadir
+#   el repo apt.postgresql.org que era la causa del fallo de build.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
-    postgresql-client-16 \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Instalar dependencias Python primero (aprovecha cache de capas Docker)
