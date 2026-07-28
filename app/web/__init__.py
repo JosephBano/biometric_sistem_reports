@@ -22,6 +22,7 @@ def _collect_blueprints() -> list:
     from app.web.dashboard_bp import bp as dashboard_bp
     from app.web.devices_bp import bp as devices_bp
     from app.web.groups_bp import bp as groups_bp
+    from app.web.grupos_funcionales_bp import bp as functional_groups_bp
     from app.web.horarios_gf_bp import bp as horarios_gf_bp
     from app.web.people_bp import bp as people_bp
     from app.web.periods_bp import bp as periods_bp
@@ -40,6 +41,7 @@ def _collect_blueprints() -> list:
         periods_bp,
         people_bp,
         groups_bp,
+        functional_groups_bp,
         horarios_gf_bp,
         admin_bp,
         analytics_bp,

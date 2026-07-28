@@ -14,11 +14,17 @@ from db.connection import get_engine, get_connection
 
 
 def get_tenant_by_slug(slug: str) -> dict | None:
-    """Busca un tenant por su slug en la tabla global public.tenants."""
+    """Busca un tenant por su slug en la tabla global public.tenants.
+
+    Incluye `configuracion` (JSONB) para que el feature flag
+    `horario_por_grupo` (ADR-0003) sea accesible vía
+    `g.tenant.configuracion['horario_por_grupo']`.
+    """
     with get_engine().connect() as conn:
         row = conn.execute(
             text("""
-                SELECT id::text, nombre, nombre_corto, slug, zona_horaria, activo, creado_en
+                SELECT id::text, nombre, nombre_corto, slug, zona_horaria,
+                       activo, configuracion, creado_en
                 FROM public.tenants
                 WHERE slug = :slug
             """),
