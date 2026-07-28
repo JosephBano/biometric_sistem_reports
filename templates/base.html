@@ -110,6 +110,13 @@
                         <span>Horarios x Grupo</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if active_page == 'functional_groups' %}active{% endif %}"
+                        href="{{ url_for('functional_groups.vista_grupos') }}">
+                        <span class="material-symbols-outlined nav-icon">workspaces</span>
+                        <span>Grupos Funcionales API</span>
+                    </a>
+                </li>
                 {% if current_user_roles and 'superadmin' in current_user_roles %}
                 <li class="nav-item">
                     <a class="nav-link {% if active_page == 'admin.listar_tenants' %}active{% endif %}"

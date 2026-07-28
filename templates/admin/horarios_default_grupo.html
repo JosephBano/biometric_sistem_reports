@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header mb-4">
+    <h3>Horarios por defecto de grupo funcional</h3>
+    <p class="text-muted">Plantilla vigente para un grupo funcional con prioridad y rango de fechas. ADR-0003.</p>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-transparent py-3">
+        <h5 class="fw-bold mb-0">Crear default</h5>
+    </div>
+    <div class="card-body">
+        <form id="form-default-grupo" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-4">
+                <label class="form-label">Grupo funcional <span class="text-danger">*</span></label>
+                <select class="form-select" name="grupo_funcional_id" required>
+                    <option value="">Cargando…</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Plantilla <span class="text-danger">*</span></label>
+                <select class="form-select" name="plantilla_id" required>
+                    <option value="">Cargando…</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Prioridad</label>
+                <input type="number" class="form-control" name="prioridad" value="0">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha inicio <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="fecha_inicio" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha fin (opcional)</label>
+                <input type="date" class="form-control" name="fecha_fin">
+            </div>
+            <div class="col-md-8 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary">Crear default</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th>Grupo</th>
+                    <th>Plantilla</th>
+                    <th>Prioridad</th>
+                    <th>Desde</th>
+                    <th>Hasta</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="tabla-defaults-grupo">
+                <tr><td colspan="6" class="text-center py-4 text-muted">Cargando…</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/horarios_default_grupo.js') }}"></script>
+{% endblock %}

@@ -98,10 +98,54 @@ def editar(id: str):
 @bp.get("/personas/historico")
 @require_role("admin", "superadmin", "gestor")
 def historico():
+    from datetime import date as _date
+
     identificacion = request.args.get("identificacion", "").strip()
     historico_data = None
     if identificacion:
         historico_data = get_historico_persona(identificacion)
+
+        # Tarea 6.5 (plan): enriquecer cada periodo con `horario_origen`
+        # calculado por el resolver canónico del ADR-0003 (P11).
+        # Solo se calcula si los registros tienen `fecha_inicio` (date o
+        # string ISO); si no, no enriquecemos esa fila.
+        if historico_data:
+            try:
+                from app.domain.horarios_resolucion import (
+                    resolver_horario_vigente_para_persona,
+                )
+                persona_id = historico_data.get("id")
+                if persona_id:
+                    for periodo in (
+                        historico_data.get("periodos") or []
+                    ):
+                        fecha_inicio = periodo.get("fecha_inicio")
+                        if not fecha_inicio:
+                            periodo["horario_origen"] = None
+                            continue
+                        if isinstance(fecha_inicio, str):
+                            try:
+                                fecha_dt = _date.fromisoformat(
+                                    fecha_inicio
+                                )
+                            except ValueError:
+                                periodo["horario_origen"] = None
+                                continue
+                        else:
+                            fecha_dt = fecha_inicio
+                        try:
+                            resultado = resolver_horario_vigente_para_persona(
+                                persona_id, fecha_dt,
+                            )
+                            periodo["horario_origen"] = resultado.get(
+                                "origen"
+                            )
+                        except Exception:  # noqa: BLE001
+                            periodo["horario_origen"] = None
+            except Exception:  # noqa: BLE001
+                # Enriquecimiento opcional; nunca debe romper la vista.
+                pass
+
     return render_template(
         "personas/historico.html",
         active_page="personas",

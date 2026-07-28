@@ -64,6 +64,7 @@
                         <th>Período</th>
                         <th>Fecha Inicio</th>
                         <th>Fecha Fin</th>
+                        <th>Origen horario</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
@@ -82,6 +83,19 @@
                         <td>{{ pv.fecha_inicio }}</td>
                         <td>{{ pv.fecha_fin or 'Abierto' }}</td>
                         <td>
+                            {% if pv.horario_origen == 'personalizado' %}
+                            <span class="badge bg-info-subtle text-info-emphasis">Personalizado</span>
+                            {% elif pv.horario_origen == 'individual_legacy' %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis">Individual legacy</span>
+                            {% elif pv.horario_origen == 'default_grupo' %}
+                            <span class="badge bg-primary-subtle text-primary-emphasis">Default de grupo</span>
+                            {% elif pv.horario_origen == 'sin_horario' %}
+                            <span class="badge bg-secondary">Sin horario</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <span class="badge {% if pv.estado == 'activo' %}bg-success{% elif pv.estado == 'cerrado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
                                 {{ pv.estado|capitalize }}
                             </span>
@@ -89,7 +103,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="text-center py-4 text-muted">Sin períodos registrados.</td>
+                        <td colspan="5" class="text-center py-4 text-muted">Sin períodos registrados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

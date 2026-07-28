@@ -2433,6 +2433,14 @@ def build_pdf(
                     "Ninguna de las personas seleccionadas tiene registros en el período."
                 )
 
+        # Tarea 6.3: enriquecer con `origen` del resolver canónico.
+        # Mapea nombre → registros originales para extraer persona_id.
+        registros_por_nombre = {}
+        for r in registros:
+            n = r["nombre"]
+            registros_por_nombre.setdefault(n, []).append(r)
+        enriquecer_analisis_con_origen(analisis, registros_por_nombre)
+
         if formato == "docx":
             generar_docx_persona(pdf_path, analisis, config, nombre_origen,
                                  filtros=filtros, sin_horario=sin_horario)
@@ -2477,6 +2485,7 @@ __all__ = [
     "get_feriados_set",
     "get_horarios",
     "get_justificaciones_dict",
+    "enriquecer_analisis_con_origen",
     "registrar_audit",
 ]
 
@@ -2501,3 +2510,72 @@ __all__ = [
     "generar_pdf",
     "generar_pdf_persona",
 ]
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Enriquecer con `origen` del resolver canónico (ADR-0003, Tarea 6.3)
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def _persona_id_para_marcacion(registro: dict) -> str | None:
+    """Extrae el `persona_id` de un registro si el motor lo expone.
+
+    Los registros que arma `consultar_asistencias` (db.queries.asistencias)
+    no llevan `persona_id` por defecto. Esta función es defensiva: si
+    el BP que llama al motor añadió ese campo por un JOIN, lo retorna;
+    si no, retorna None.
+    """
+    return registro.get("persona_id")
+
+
+def enriquecer_analisis_con_origen(
+    analisis: dict,
+    registros_por_persona: dict[str, list[dict]] | None = None,
+) -> dict:
+    """Para cada (persona, día) en `analisis`, añade `horario_origen`.
+
+    Args:
+        analisis: resultado de `analizar_por_persona` (dict
+                  `nombre -> {"dias": [...], "resumen": {...}}`).
+        registros_por_persona: opcional. Mapping `nombre -> lista de
+                                registros (cada uno con `persona_id`).
+                                Si se omite, no se puede llamar al
+                                resolver y se omite la columna "Origen".
+
+    Returns:
+        El mismo dict `analisis` mutado, donde cada item en `dias` tiene
+        el campo extra `horario_origen` ∈ {personalizado, individual_legacy,
+        default_grupo, sin_horario}.
+    """
+    if not registros_por_persona:
+        return analisis
+
+    # Importación local para evitar ciclos.
+    from app.domain.horarios_resolucion import (
+        resolver_horario_vigente_para_persona,
+    )
+
+    for nombre, por_fecha_registros in registros_por_persona.items():
+        if nombre not in analisis:
+            continue
+        persona_id = _persona_id_para_marcacion(por_fecha_registros[0])
+        if not persona_id:
+            continue
+        for dia in analisis[nombre].get("dias", []):
+            fecha_dia = dia.get("fecha")
+            if not fecha_dia:
+                continue
+            try:
+                if isinstance(fecha_dia, str):
+                    from datetime import date as _date
+                    fecha_dia = _date.fromisoformat(fecha_dia)
+                resuelto = resolver_horario_vigente_para_persona(
+                    persona_id, fecha_dia,
+                )
+                dia["horario_origen"] = resuelto.get("origen")
+                if not dia.get("plantilla_id") and resuelto.get("plantilla_id"):
+                    dia["plantilla_id"] = resuelto["plantilla_id"]
+            except Exception:  # noqa: BLE001
+                dia["horario_origen"] = None
+
+    return analisis

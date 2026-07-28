@@ -34,7 +34,6 @@ def load_data_asistencia_dataframe(fecha_inicio: date, fecha_fin: date, grupo_id
     Consulta personas activas directamente y hace batch-fetch de asistencias para el rango.
     """
     from db.queries.feriados import get_feriados_set
-    from db.queries.horarios import get_horario_en_fecha
 
     WEEKDAYS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 
@@ -96,8 +95,19 @@ def load_data_asistencia_dataframe(fecha_inicio: date, fecha_fin: date, grupo_id
             p_dict = dict(p._mapping)
             persona_id = p_dict["persona_id"]
 
-            # ciclo_semanas=1 → horario fijo; una sola query por persona es suficiente
-            horario = get_horario_en_fecha(conn, persona_id, fecha_inicio)
+            # ADR-0003 Tarea 6.4: usar el resolver canónico en lugar de
+            # leer directamente `asignaciones_horario`. El resolver aplica
+            # la precedencia personalizada > legacy > default_grupo.
+            from app.domain.horarios_resolucion import (
+                resolver_horario_vigente_para_persona,
+            )
+            try:
+                resuelto_inicio = resolver_horario_vigente_para_persona(
+                    persona_id, fecha_inicio,
+                )
+                horario = resuelto_inicio.get("plantilla")
+            except Exception:  # noqa: BLE001
+                horario = None
             p_asist = asist_map.get(persona_id, {})
 
             current_date = fecha_inicio
