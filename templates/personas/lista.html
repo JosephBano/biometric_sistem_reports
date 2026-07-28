@@ -560,7 +560,7 @@ const _modalEditar = document.getElementById('modalEditarPersona');
 if (_modalEditar) {
     _modalEditar.addEventListener('show.bs.modal', function(e) {
         const btn = e.relatedTarget;
-        document.getElementById('formEditarPersona').action = '/personas/' + btn.dataset.id;
+        document.getElementById('formEditarPersona').action = (window.APP_BASE || '') + '/personas/' + btn.dataset.id;
         document.getElementById('edit_subtitulo').textContent = btn.dataset.nombre || '';
         document.getElementById('edit_nombre').value         = btn.dataset.nombre || '';
         document.getElementById('edit_identificacion').value = btn.dataset.identificacion || '';

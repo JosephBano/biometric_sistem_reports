@@ -194,7 +194,7 @@ document.getElementById('modalEstado').addEventListener('show.bs.modal', functio
     const nuevoActivo = activo ? '0' : '1';
     const accion = activo ? 'desactivar' : 'activar';
 
-    document.getElementById('formEstado').action = '/admin/tenants/' + tenantId;
+    document.getElementById('formEstado').action = (window.APP_BASE || '') + '/admin/tenants/' + tenantId;
     document.getElementById('inputActivo').value = nuevoActivo;
     document.getElementById('modalEstadoTexto').textContent =
         '¿Deseas ' + accion + ' la institución "' + tenantNombre + '"?';

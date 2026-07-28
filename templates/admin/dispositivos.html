@@ -113,7 +113,7 @@
             <div class="modal-body">
                 <div class="alert alert-light border small mb-3 py-2">
                     Selecciona la persona del catálogo que corresponde a este usuario del reloj.
-                    Si aún no existe, créala primero en <a href="/personas">Personas</a>.
+                    Si aún no existe, créala primero en <a href="{{ url_for('people.lista') }}">Personas</a>.
                 </div>
                 <input type="text" class="form-control form-control-sm mb-2" id="vincular-search-persona"
                        placeholder="Buscar por nombre o cédula..." oninput="filtrarPersonasVincular();">

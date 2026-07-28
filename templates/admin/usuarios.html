@@ -242,7 +242,7 @@ function toggleScopeFields(prefix, checkbox) {
 
 function abrirEditar(usuarioId, datos) {
     // Configurar acción del form
-    document.getElementById('formEditar').action = '/admin/usuarios/' + usuarioId;
+    document.getElementById('formEditar').action = (window.APP_BASE || '') + '/admin/usuarios/' + usuarioId;
 
     // Nombre (solo lectura)
     document.getElementById('editar-nombre').value = datos.nombre || '';

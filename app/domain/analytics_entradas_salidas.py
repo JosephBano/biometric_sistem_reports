@@ -7,6 +7,7 @@ auditoria y serializacion a JSON.
 """
 from __future__ import annotations
 
+import uuid as _uuid
 from datetime import date
 from typing import Optional
 
@@ -44,6 +45,17 @@ def consultar_entradas_salidas(
     """
     if not persona_id:
         raise ValueError("persona_id es requerido")
+    # `persona_id` se interpola como uuid en SQL: sin esta validación, un
+    # valor no-UUID (p. ej. el ID del biométrico, "30") llega a Postgres y
+    # revienta con DataError → 500. Validando aquí, el blueprint lo
+    # traduce a un 400 con mensaje útil.
+    try:
+        _uuid.UUID(str(persona_id))
+    except (ValueError, AttributeError, TypeError):
+        raise ValueError(
+            f"persona_id debe ser un UUID; se recibió {persona_id!r}. "
+            "Si tienes el ID del biométrico, búscalo primero en Personas."
+        ) from None
     if fecha_inicio > fecha_fin:
         raise ValueError("fecha_inicio debe ser <= fecha_fin")
     if (fecha_fin - fecha_inicio).days > 366:

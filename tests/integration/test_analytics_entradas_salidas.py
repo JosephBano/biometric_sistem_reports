@@ -179,6 +179,29 @@ class TestAnalyticsEntradasSalidas:
         )
         assert r.status_code == 400
 
+    def test_persona_id_no_uuid_retorna_400(self, admin_client, tenant_id):
+        """Un persona_id no-UUID debe dar 400, no 500.
+
+        Regresión de producción (2026-07-28): el campo es texto libre y un
+        operador escribió el ID del biométrico ("30"). Al interpolarse como
+        uuid en SQL, Postgres lanzaba DataError y el endpoint devolvía 500.
+        """
+        r = admin_client.get(
+            "/api/analytics/entradas-salidas"
+            "?persona_id=30&fecha_inicio=2026-07-21&fecha_fin=2026-07-28"
+        )
+        assert r.status_code == 400, (
+            f"Esperado 400, obtuve {r.status_code}: {r.get_data(as_text=True)[:400]}"
+        )
+        assert "error" in r.get_json()
+
+    def test_persona_id_texto_arbitrario_retorna_400(self, admin_client, tenant_id):
+        r = admin_client.get(
+            "/api/analytics/entradas-salidas"
+            "?persona_id=no-soy-un-uuid&fecha_inicio=2026-07-21&fecha_fin=2026-07-28"
+        )
+        assert r.status_code == 400
+
     def test_vista_entradas_salidas_200(self, admin_client, tenant_id):
         r = admin_client.get("/analytics/entradas-salidas")
         assert r.status_code == 200

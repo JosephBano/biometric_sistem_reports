@@ -135,7 +135,7 @@
 document.getElementById('modalEditarGrupo').addEventListener('show.bs.modal', function(e) {
     const btn = e.relatedTarget;
     const form = document.getElementById('formEditarGrupo');
-    form.action = '/admin/grupos/' + btn.dataset.id;
+    form.action = (window.APP_BASE || '') + '/admin/grupos/' + btn.dataset.id;
     document.getElementById('edit_g_nombre').value = btn.dataset.nombre || '';
     document.getElementById('edit_g_tipo').value   = btn.dataset.tipo || 'general';
     document.getElementById('edit_g_activo').value = btn.dataset.activo || '1';
