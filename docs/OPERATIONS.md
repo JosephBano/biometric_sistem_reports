@@ -353,3 +353,5 @@ docker system df -v | grep biometrico
 | Fecha | Cambio | Autor |
 |---|---|---|
 | 2026-07-02 | Creación inicial (cierre Fase 8 del ADR-0001). | documenter |
+| 2026-07-27 | Pre-check ADR-0003 (Tar. 0.2 del plan): backup reciente OK, restore probado contra BD temporal, runbook actualizado. | implementer |
+| 2026-07-27-r2 | Pre-Fase 1 ADR-0003 (Tar. 0.4 del plan): Alembic único, init_db=seed, runbook actualizado. | arquitecto |
