@@ -154,29 +154,48 @@ Añadir `configuracion JSONB` a `tipos_persona` y guardar la plantilla por defec
 **Precedencia canónica** de resolución (de mayor a menor prioridad) para una persona P en una fecha D:
 
 ```
-1. OVERRIDE: ¿Existe fila en overrides_horario_persona
+1. PERSONALIZADO (override): ¿Existe fila en overrides_horario_persona
    con persona_id=P, fecha_inicio<=D, (fecha_fin IS NULL OR fecha_fin>=D)?
-   → Sí: usar la plantilla de esa fila. origen='override'.
-2. DEFAULT_GRUPO: ¿Cuántos grupos_funcionales activos tiene P en D
+   → Sí: usar la plantilla de esa fila. origen='personalizado'.
+
+2. INDIVIDUAL LEGACY: ¿Existe fila en asignaciones_horario con persona_id=P,
+   ciclo_semanas=1, fecha_inicio<=D, (fecha_fin IS NULL OR fecha_fin>=D),
+   y origen='historico_legacy' (o cualquier origen de legacy migrado)?
+   → Sí: usar la plantilla de esa fila. origen='individual_legacy'.
+
+3. DEFAULT_GRUPO: ¿Cuántos grupos_funcionales activos tiene P en D
    (filas en persona_grupos_funcionales con es_principal=true o
     sin es_principal + desempate por tenant.configuracion['horario_desempate'])?
    → Si hay 1 o más: para cada grupo funcional activo, buscar el default
      vigente en horarios_default_grupo (prioridad DESC, fecha_inicio DESC).
      El de mayor prioridad global gana. origen='default_grupo',
      y se registra grupo_funcional_id usado.
-3. LEGACY: ¿Existe fila en asignaciones_horario con persona_id=P,
-   ciclo_semanas=1, fecha_inicio<=D, (fecha_fin IS NULL OR fecha_fin>=D),
-   y origen='historico_legacy' (o cualquier origen que no sea override/default)?
-   → Sí: usar la plantilla de esa fila. origen='legacy_1a1'.
+   → Si hay varios grupos y ninguno tiene es_principal=true: desempate
+     según tenant.configuracion['horario_desempate']
+     ∈ {`prioridad`, `orden_grupo`, `error`}. Default: `prioridad`.
+
 4. SIN_HORARIO: no hay match. origen='sin_horario'.
    El motor de reportes trata a la persona como "sin horario definido"
    (mismo comportamiento que hoy cuando una persona no está en
    asignaciones_horario).
 ```
 
-Regla de **desempate** (paso 2 con varios grupos funcionales) configurable en
-`tenant.configuracion['horario_desempate']` ∈ {`prioridad`, `orden_grupo`, `error`}.
-Default sugerido: `prioridad` con fallback a `orden_grupo` en empate.
+> **Cambio respecto a versiones anteriores del ADR (2026-07-27, P11)**: la
+> precedencia se alinea con la decisión confirmada por el usuario: el
+> horario **individual legacy** (asignaciones_horario 1:1 sembrado por el
+> importador `.obd/.csv`) tiene prioridad sobre el **default del grupo
+> funcional**. La razón: el operador que cargó `.obd` lo hizo pensando
+> que ese era "el horario de la persona"; degradarlo a un default de
+> grupo sería una regresión operativa. El override (ahora llamado
+> `personalizado`) sigue siendo la cima. Renombre también: la etiqueta
+> en la respuesta del resolver y en la UI es **`personalizado`** (P13) —
+> consistente con la vista de gestión que dice "horario personalizado".
+
+Regla de **desempate** (paso 3 con varios grupos funcionales sin `es_principal`)
+configurable en `tenant.configuracion['horario_desempate']` ∈
+{`prioridad`, `orden_grupo`, `error`}. Default: `prioridad` con fallback a
+`orden_grupo` en empate. Si la política es `error`, la función lanza
+`RuntimeError` para que el admin resuelva la ambigüedad explícitamente.
 
 ### Modelo de datos (resumen)
 
@@ -212,9 +231,6 @@ CREATE TABLE persona_grupos_funcionales (
     actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (persona_id, grupo_funcional_id, fecha_inicio)
 );
-CREATE INDEX idx_pgf_persona_vigente
-    ON persona_grupos_funcionales (persona_id, fecha_inicio DESC)
-    WHERE fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE;
 
 -- Horario por defecto por grupo funcional (con prioridad y vigencia).
 CREATE TABLE horarios_default_grupo (
@@ -229,9 +245,6 @@ CREATE TABLE horarios_default_grupo (
     actualizado_en      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (grupo_funcional_id, plantilla_id, fecha_inicio)
 );
-CREATE INDEX idx_hdg_grupo_vigente
-    ON horarios_default_grupo (grupo_funcional_id, prioridad DESC, fecha_inicio DESC)
-    WHERE fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE;
 
 -- Override individual: esta persona usa esta plantilla, ignorando el default
 -- del grupo funcional. fecha_inicio y fecha_fin son obligatorios para cierre
@@ -247,9 +260,39 @@ CREATE TABLE overrides_horario_persona (
     creado_en     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (persona_id, plantilla_id, fecha_inicio)
 );
-CREATE INDEX idx_ohp_persona_vigente
-    ON overrides_horario_persona (persona_id, fecha_inicio DESC)
-    WHERE fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE;
+```
+
+#### Índices (B-tree completos con predicados **inmutables** — P12)
+
+PostgreSQL requiere que el predicado de un índice parcial sea **inmutable**.
+`fecha_fin IS NULL` lo es (literal); `fecha_fin >= CURRENT_DATE` **no** lo
+es — el resultado cambia con el tiempo, por lo que el planificador no puede
+reusar el índice de forma estable. Por eso el ADR original proponía
+índices parciales que eran **inválidos**; la versión corregida usa
+índices B-tree completos con `WHERE` solo cuando el predicado es
+inmutable (`es_principal = true`). El filtro `fecha_fin` se aplica en
+el `WHERE` del query, no en el índice.
+
+```sql
+-- persona_grupos_funcionales: encontrar el/los grupos activos de una persona
+-- (el filtro "fecha_fin IS NULL OR fecha_fin >= :fecha" va en el WHERE del query).
+CREATE INDEX idx_pgf_persona_inicio
+    ON persona_grupos_funcionales (persona_id, fecha_inicio DESC);
+CREATE INDEX idx_pgf_grupo_inicio
+    ON persona_grupos_funcionales (grupo_funcional_id, fecha_inicio DESC);
+-- es_principal = true sí es inmutable como predicado parcial:
+CREATE INDEX idx_pgf_principal
+    ON persona_grupos_funcionales (persona_id)
+    WHERE es_principal = true;
+
+-- horarios_default_grupo: resolver el default vigente por grupo funcional
+-- ordenado por prioridad DESC y luego fecha_inicio DESC.
+CREATE INDEX idx_hdg_grupo_prioridad
+    ON horarios_default_grupo (grupo_funcional_id, prioridad DESC, fecha_inicio DESC);
+
+-- overrides_horario_persona: encontrar el override vigente de una persona.
+CREATE INDEX idx_ohp_persona_inicio
+    ON overrides_horario_persona (persona_id, fecha_inicio DESC);
 ```
 
 #### Columnas aditivas (compatibilidad):
@@ -354,6 +397,9 @@ Estas preguntas estaban abiertas en versiones anteriores del ADR. Quedan **confi
 | **P8** | ¿Reportes deben mostrar la "fuente del horario"? | **Sí**, como columna "Origen" en PDF/DOCX y en UI de histórico. | "Decision Outcome" (función canónica) |
 | **P9** | ¿Dónde vive el feature flag `horario_por_grupo`? | **`tenant.configuracion` JSONB** (per-tenant). | R10 |
 | **P10** | ¿El decorador `@require_grupo_funcional(nombre)` es necesario en v1? | **No** en v1. Se evalúa en P3 si surge necesidad. | "Consequences — Neutrales" |
+| **P11** | Precedencia confirmada | `personalizado > individual_legacy > default_grupo > sin_horario` (no la del draft original `override > default > legacy`). El horario histórico 1:1 sembrado por el importador `.obd/.csv` gana sobre el default de grupo. | "Decision Outcome" |
+| **P12** | Índices parciales del draft | Inválidos en PostgreSQL (`fecha_fin >= CURRENT_DATE` no es inmutable). Se reemplazan por B-tree completos sobre `(persona_id, fecha_inicio DESC)` etc., más un índice parcial de `es_principal = true` (predicado inmutable). El filtro `fecha_fin` se aplica en el `WHERE` del query. | "Nuevas tablas" / "Índices" |
+| **P13** | Renombre `override` → `personalizado` | El campo `origen` en `resolver_horario_vigente` retorna `'personalizado'` (no `'override'`). Coherente con la UI que dice "horario personalizado". | "Decision Outcome", función canónica |
 
 **Recomendaciones de seguridad, auditoría, feature flag y rollout gradual**: **aceptadas** (R8, R9, R10, feature flag por tenant, rollout piloto en `istpet` — ver "Implementation Plan" Fase 6).
 
