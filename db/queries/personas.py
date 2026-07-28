@@ -160,3 +160,88 @@ def get_ids_usuarios_zk() -> set:
     with get_connection() as conn:
         rows = conn.execute(text("SELECT id_usuario FROM usuarios_zk")).fetchall()
     return {row[0] for row in rows}
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# Asignación masiva con filtros (ADR-0003, Tarea 4.2)
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def listar_personas_para_filtros(
+    *,
+    grupo_id: str | None = None,
+    tipo_persona_id: str | None = None,
+    categoria_id: str | None = None,
+    sede_id: str | None = None,
+    grupo_funcional_id: str | None = None,
+    activo: bool = True,
+) -> list[str]:
+    """Retorna persona_id de personas que matchean los filtros combinables.
+
+    Filtros:
+      - grupo_id            → persona.grupo_id (operativo/departamental)
+      - tipo_persona_id     → persona.tipo_persona_id
+      - categoria_id        → persona.categoria_id (compat legado)
+      - sede_id             → persona.sede_id
+      - grupo_funcional_id  → la persona tiene un gf vigente (hoy)
+      - activo             → filtra por estado de la persona
+
+    Si no se pasa ningún filtro (todos None), retorna TODAS las
+    personas activas (uso de admin para "aplicar a todos").
+
+    Returns:
+        Lista de `persona_id` (TEXT, uuid como string) ordenadas por nombre.
+    """
+    from datetime import date as _date
+
+    where_clauses = ["p.activo = :activo"]
+    params: dict = {"activo": activo}
+
+    if grupo_id:
+        where_clauses.append("p.grupo_id = CAST(:grupo_id AS uuid)")
+        params["grupo_id"] = grupo_id
+    if tipo_persona_id:
+        where_clauses.append("p.tipo_persona_id = CAST(:tipo_persona_id AS uuid)")
+        params["tipo_persona_id"] = tipo_persona_id
+    if categoria_id:
+        where_clauses.append("p.categoria_id = CAST(:categoria_id AS uuid)")
+        params["categoria_id"] = categoria_id
+    if sede_id:
+        where_clauses.append("p.sede_id = CAST(:sede_id AS uuid)")
+        params["sede_id"] = sede_id
+
+    where_sql = " AND ".join(where_clauses)
+    hoy = _date.today().isoformat()
+
+    if grupo_funcional_id:
+        where_sql += """
+            AND EXISTS (
+                SELECT 1 FROM grupos_funcionales_personas pgf
+                WHERE pgf.persona_id = p.id
+                  AND pgf.grupo_funcional_id = CAST(:gf_id AS uuid)
+                  AND pgf.fecha_inicio <= :hoy
+                  AND (pgf.fecha_fin IS NULL OR pgf.fecha_fin >= :hoy)
+            )
+        """
+        params["gf_id"] = grupo_funcional_id
+        params["hoy"] = hoy
+
+    sql = f"""
+        SELECT p.id::text
+        FROM personas p
+        WHERE {where_sql}
+        ORDER BY p.nombre, p.id
+    """
+
+    with get_connection() as conn:
+        rows = conn.execute(text(sql), params).fetchall()
+    return [r[0] for r in rows]
+
+
+__all__ = [
+    "resolver_persona_id",
+    "id_usuario_from_persona",
+    "upsert_usuarios",
+    "get_ids_usuarios_zk",
+    "listar_personas_para_filtros",
+]
