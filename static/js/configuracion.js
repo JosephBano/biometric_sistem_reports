@@ -269,7 +269,19 @@ function guardarHorario() {
         }
     }
 
-    if (countActivos === 0) return errMh("Debe configurar al menos un día laborable.");
+    if (countActivos === 0) {
+        // Antes era un bloqueo duro que impedía dejar a una persona sin
+        // ningún día laborable (caso: "sábado excepcional", personal sin
+        // jornada fija). Ahora se permite guardar pero se pide confirmación
+        // si se venía de un horario con días activos.
+        const modo = document.getElementById('mh-modo').value;
+        const teniaDiasActivos = modo === 'editar'; // en modo 'crear' ya estaba vacío
+        if (teniaDiasActivos) {
+            if (!confirm("Vas a dejar a esta persona sin ningún día laborable configurado. ¿Continuar?")) {
+                return;
+            }
+        }
+    }
 
     const url = modo === 'crear' ? '/api/horarios' : `/api/horarios/${idUsuario}`;
     const method = modo === 'crear' ? 'POST' : 'PUT';
