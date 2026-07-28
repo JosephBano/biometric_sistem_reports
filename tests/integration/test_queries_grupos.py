@@ -74,8 +74,13 @@ class TestGrupos:
             crear_grupo(n)
         result = listar_grupos()
         lista_nombres = [g["nombre"] for g in result]
-        # Verificar ordenamiento
-        assert lista_nombres == sorted(lista_nombres)
+        # Verificar que nuestros 2 grupos aparecen en orden alfabético entre sí.
+        # No comparamos la lista completa contra `sorted()`: la tabla es
+        # compartida entre tests y la collation de Postgres (locale-aware)
+        # no siempre coincide con el orden por codepoint de Python para
+        # nombres arbitrarios creados por otros tests.
+        propios = [n for n in lista_nombres if n in nombres]
+        assert propios == sorted(nombres)
 
     def test_actualizar_grupo_nombre(self):
         """actualizar_grupo cambia el nombre."""

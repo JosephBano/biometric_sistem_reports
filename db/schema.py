@@ -7,7 +7,7 @@ Schema público (global):
 
 Schema tenant (istpet por defecto):
   Infraestructura: sedes, dispositivos, sync_log, feriados
-  Config:          tipos_persona, grupos, categorias
+  Config:          tipos_persona, grupos, grupos_funcionales
   Personas:        usuarios_zk, personas, personas_dispositivos
   Vigencia:        periodos_vigencia
   Horarios:        config_ciclo_horario, plantillas_horario, asignaciones_horario

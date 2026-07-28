@@ -45,7 +45,7 @@ def load_data_asistencia_dataframe(fecha_inicio: date, fecha_fin: date, grupo_id
                    COALESCE(c.nombre, 'Sin Categoría') AS categoria
             FROM personas p
             LEFT JOIN grupos g ON p.grupo_id = g.id
-            LEFT JOIN categorias c ON p.categoria_id = c.id
+            LEFT JOIN grupos_funcionales c ON p.grupo_funcional_id = c.id
             WHERE p.activo = TRUE
         """
         params = {}

@@ -52,7 +52,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 FROM periodos_vigencia pv
                 JOIN personas p ON pv.persona_id = p.id
                 LEFT JOIN grupos g ON p.grupo_id = g.id
-                LEFT JOIN categorias c ON p.categoria_id = c.id
+                LEFT JOIN grupos_funcionales c ON p.grupo_funcional_id = c.id
                 WHERE pv.nombre = :nombre
                   AND pv.fecha_inicio = :fecha_inicio
                   AND (pv.fecha_fin = :fecha_fin OR (:fecha_fin IS NULL AND pv.fecha_fin IS NULL))

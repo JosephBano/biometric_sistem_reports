@@ -61,6 +61,7 @@ def persona_test(tenant_id, dispositivo_test):
         nombre=f"Test-{uuid.uuid4().hex[:6]}",
         identificacion=str(uuid.uuid4().int)[:10],
         id_usuario_zk=str(id_zk),
+        dispositivo_id=dispositivo_test,
     )
     yield {"id": p["id"], "id_zk": id_zk, "data": p}
     # No hay DELETE para personas; queda como dato

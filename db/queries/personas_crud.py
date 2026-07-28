@@ -72,9 +72,17 @@ def get_persona(id: str) -> dict | None:
         return dict(row._mapping) if row else None
 
 
-def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
+def _upsert_zk_id(
+    conn, persona_id: str, id_usuario_zk: str | None, dispositivo_id: str | None = None,
+) -> None:
     """Inserta o actualiza el ID del biométrico para la persona.
     Si id_usuario_zk es None o vacío, desactiva la entrada principal existente.
+
+    Si no se pasa `dispositivo_id`, usa el dispositivo activo de mayor
+    prioridad (comportamiento legado para instalaciones de un solo
+    dispositivo). En instalaciones con varios dispositivos, el llamador
+    debe pasar `dispositivo_id` explícito para no vincular el ZK id al
+    dispositivo equivocado.
 
     Notas de integridad:
       - El par (dispositivo_id, id_en_dispositivo) es UNIQUE globalmente
@@ -97,9 +105,12 @@ def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
                 {"pid": persona_id},
             )
             return
-        dev = conn.execute(
-            text("SELECT id::text FROM dispositivos WHERE activo = true ORDER BY prioridad ASC LIMIT 1")
-        ).fetchone()
+        if dispositivo_id:
+            dev = (dispositivo_id,)
+        else:
+            dev = conn.execute(
+                text("SELECT id::text FROM dispositivos WHERE activo = true ORDER BY prioridad ASC LIMIT 1")
+            ).fetchone()
         if not dev:
             return
         # Desactivar entradas principales previas de ESTA persona (evita dos principales)
@@ -128,7 +139,7 @@ def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
 def crear_persona(nombre: str, identificacion: str = None, tipo_persona_id: str = None,
                   grupo_id: str = None, grupo_funcional_id: str = None,
                   email: str = None, telefono: str = None, notas: str = None,
-                  id_usuario_zk: str = None) -> dict:
+                  id_usuario_zk: str = None, dispositivo_id: str = None) -> dict:
     with get_connection() as conn:
         row = conn.execute(
             text("""
@@ -146,7 +157,7 @@ def crear_persona(nombre: str, identificacion: str = None, tipo_persona_id: str 
         ).fetchone()
         persona = dict(row._mapping)
         if id_usuario_zk:
-            _upsert_zk_id(conn, persona["id"], id_usuario_zk)
+            _upsert_zk_id(conn, persona["id"], id_usuario_zk, dispositivo_id)
         return persona
 
 

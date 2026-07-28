@@ -204,7 +204,7 @@ def listar_personas_para_filtros(
         where_clauses.append("p.tipo_persona_id = CAST(:tipo_persona_id AS uuid)")
         params["tipo_persona_id"] = tipo_persona_id
     if categoria_id:
-        where_clauses.append("p.categoria_id = CAST(:categoria_id AS uuid)")
+        where_clauses.append("p.grupo_funcional_id = CAST(:categoria_id AS uuid)")
         params["categoria_id"] = categoria_id
     if sede_id:
         where_clauses.append("p.sede_id = CAST(:sede_id AS uuid)")

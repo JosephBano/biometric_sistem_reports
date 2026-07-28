@@ -46,7 +46,10 @@ def _seed_basico(e):
     return {"tipo_id": tipo_id, "grupo_id": grupo_id, "sede_id": sede_id, "dev_id": dev_id}
 
 
-def _seed_persona_con_horario(e, base, id_zk):
+def _seed_persona_con_horario(e, base, id_zk=None):
+    # id_zk unico por ejecucion para evitar choques UNIQUE en re-runs.
+    if id_zk is None:
+        id_zk = str(uuid.uuid4().int % 1000000 + 100000)
     identificacion = f"P-{uuid.uuid4().hex[:8]}"
     pid = str(uuid.uuid4())
     plantilla_id = str(uuid.uuid4())
@@ -92,7 +95,7 @@ class TestBug2QuitarHorario:
         from db.connection import get_engine
         e = get_engine()
         base = _seed_basico(e)
-        pid, id_zk = _seed_persona_con_horario(e, base, "70")
+        pid, id_zk = _seed_persona_con_horario(e, base)
 
         r = admin_client.put(f"/api/horarios/{id_zk}", json=_payload_sin_dias(id_zk))
         assert r.status_code == 200, f"Status inesperado: {r.status_code}, body: {r.get_data(as_text=True)}"
@@ -114,7 +117,7 @@ class TestBug2QuitarHorario:
         from db.connection import get_engine
         e = get_engine()
         base = _seed_basico(e)
-        pid, id_zk = _seed_persona_con_horario(e, base, "71")
+        pid, id_zk = _seed_persona_con_horario(e, base)
 
         payload = {
             "id_usuario": id_zk,
@@ -145,7 +148,7 @@ class TestBug2QuitarHorario:
         from db.connection import get_engine
         e = get_engine()
         base = _seed_basico(e)
-        pid, id_zk = _seed_persona_con_horario(e, base, "72")
+        pid, id_zk = _seed_persona_con_horario(e, base)
 
         r = admin_client.delete(f"/api/horarios/{id_zk}")
         assert r.status_code == 200
@@ -164,7 +167,7 @@ class TestBug2QuitarHorario:
         from db.connection import get_engine
         e = get_engine()
         base = _seed_basico(e)
-        pid, id_zk = _seed_persona_con_horario(e, base, "73")
+        pid, id_zk = _seed_persona_con_horario(e, base)
 
         # Quitar horario via PUT
         r = admin_client.put(f"/api/horarios/{id_zk}", json=_payload_sin_dias(id_zk))

@@ -34,7 +34,17 @@ from typing import Optional
 from sqlalchemy import text
 
 from db.connection import get_connection
-from db.queries.personas import listar_personas_para_filtros
+from db.queries.personas import listar_personas_para_filtros as _listar_personas_para_filtros
+
+
+def listar_personas_para_filtros(**kwargs):
+    """Re-export de `db.queries.personas.listar_personas_para_filtros`.
+
+    Permite que `app/web/grupos_funcionales_bp.py` (preview de asignación
+    masiva) consulte los filtros sin importar `db.queries` directamente
+    (regla de capas del ADR-0001).
+    """
+    return _listar_personas_para_filtros(**kwargs)
 
 
 def aplicar_grupo_funcional_masivo(
@@ -261,4 +271,4 @@ def aplicar_grupo_funcional_masivo(
     }
 
 
-__all__ = ["aplicar_grupo_funcional_masivo"]
+__all__ = ["aplicar_grupo_funcional_masivo", "listar_personas_para_filtros"]
