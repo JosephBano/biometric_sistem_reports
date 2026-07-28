@@ -42,7 +42,6 @@ biometrico_test_alembic_version/
 biometrico_test_init_con_alembic/
 biometrico_test_init_idempotente/
 biometrico_test_init_sin_alembic/
-db/
 
 # --- IDEs / Editors ---
 .vscode/
