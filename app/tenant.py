@@ -94,3 +94,71 @@ def cargar_contexto_usuario():
         g.tenant_tipos = []
 
     return None
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# Feature flag per-tenant: `horario_por_grupo`
+# ══════════════════════════════════════════════════════════════════════════
+# ADR-0003 Tarea 3.1 — el feature flag vive en `public.tenants.configuracion`
+# (JSONB). Permite activar la resolución por grupo funcional tenant por
+# tenant, sin redeploy. Default: `False` (modo seguro, comportamiento
+# legacy).
+
+
+def get_horario_por_grupo_enabled() -> bool:
+    """Lee `g.tenant.configuracion['horario_por_grupo']` (per-tenant feature flag).
+
+    Returns:
+        `True` si el tenant activó el feature flag, `False` en caso
+        contrario (incluyendo ausencia de contexto Flask, sin sesión,
+        tenant=None, o clave faltante). El resolver cae al camino
+        legacy cuando retorna `False`.
+
+    Esta función encapsula el acceso al flag para que el resolver
+    (`app/domain/horarios_grupo_funcional.resolver_horario_vigente`)
+    pueda consultarlo de forma agnóstica: dentro de un request, fuera
+    de un request (CLI/scripts), o en tests con mock.
+    """
+    # Usa `g` del módulo (que ya está importado arriba). Esto permite
+    # mockearlo en tests con `patch("app.tenant.g")`.
+    try:
+        tenant = getattr(g, "tenant", None)
+        if not tenant:
+            return False
+        cfg = tenant.get("configuracion") or {}
+        return bool(cfg.get("horario_por_grupo", False))
+    except RuntimeError:
+        # Fuera de contexto Flask (scheduler en background, CLI, scripts).
+        return False
+
+
+def get_horario_desempate() -> str:
+    """Lee `g.tenant.configuracion['horario_desempate']` (per-tenant).
+
+    Política de desempate cuando una persona tiene varios grupos
+    funcionales sin `es_principal`. Uno de:
+      - 'prioridad'    — usa la `prioridad` del default (default).
+      - 'orden_grupo'  — usa el `orden` del grupo funcional.
+      - 'error'        — lanza RuntimeError para forzar resolución admin.
+
+    Returns:
+        String con la política (`'prioridad'` por defecto).
+    """
+    try:
+        tenant = getattr(g, "tenant", None)
+        if not tenant:
+            return "prioridad"
+        cfg = tenant.get("configuracion") or {}
+        val = cfg.get("horario_desempate", "prioridad")
+        if val not in ("prioridad", "orden_grupo", "error"):
+            return "prioridad"
+        return val
+    except RuntimeError:
+        return "prioridad"
+
+
+__all__ = [
+    "cargar_contexto_usuario",
+    "get_horario_por_grupo_enabled",
+    "get_horario_desempate",
+]
