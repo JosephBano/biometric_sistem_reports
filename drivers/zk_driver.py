@@ -22,7 +22,7 @@ class ZKDriver(BiometricDriver):
         
         # Desencriptar la contraseña del dispositivo
         # Asume que si password_enc está vacío, usa 0 (default pyzk)
-        from auth import decrypt_device_password
+        from app.domain.auth import decrypt_device_password
         pwd_enc = dispositivo.get('password_enc')
         
         # Retro-compatibilidad con la variable de entorno si pwd_enc es None (Fase 1/2)

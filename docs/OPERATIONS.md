@@ -424,7 +424,9 @@ que el flag quedó en `false`.
 ### 8.4 Si la migración Alembic 0010/0011 debe revertirse (caso extremo)
 
 ```bash
-docker compose exec -T db alembic -c /app/alembic.ini downgrade -1
+# OJO: alembic corre en el contenedor de la APP (`biometrico-app`), no en
+# `db` (que es postgres:16-alpine y no tiene ni alembic ni el código).
+docker compose exec -T biometrico-app alembic -c /app/alembic.ini downgrade -1
 ```
 
 > **No hay gate automático** que bloquee este downgrade (no existe hoy
