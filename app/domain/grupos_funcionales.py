@@ -16,7 +16,7 @@ from db.queries.grupos import (
 
 def listar(solo_activos: bool = True):
     """Lista grupos funcionales (catálogo del tenant)."""
-    return listar_grupos_funcionales()
+    return listar_grupos_funcionales(activo=True if solo_activos else None)
 
 
 def crear(codigo: str, nombre: str, **kwargs):

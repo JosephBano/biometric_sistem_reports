@@ -57,7 +57,14 @@ def actualizar_grupo(id: str, datos: dict) -> dict | None:
 
 # ── Grupos Funcionales (rol laboral / horario por defecto) ────────────────────
 
-def listar_grupos_funcionales(tipo_persona_id: str = None) -> list[dict]:
+def listar_grupos_funcionales(
+    tipo_persona_id: str = None, activo: bool = None,
+) -> list[dict]:
+    """Lista los grupos funcionales del tenant.
+
+    `activo=None` (default) devuelve activos e inactivos, igual que
+    `listar_grupos`.
+    """
     with get_connection() as conn:
         q = """
             SELECT gf.id::text, gf.nombre, gf.activo, gf.tipo_persona_id::text,
@@ -65,10 +72,15 @@ def listar_grupos_funcionales(tipo_persona_id: str = None) -> list[dict]:
             FROM grupos_funcionales gf
             LEFT JOIN tipos_persona t ON gf.tipo_persona_id = t.id
         """
-        params = {}
+        where, params = [], {}
         if tipo_persona_id:
-            q += " WHERE gf.tipo_persona_id = CAST(:tipo_persona_id AS uuid)"
+            where.append("gf.tipo_persona_id = CAST(:tipo_persona_id AS uuid)")
             params["tipo_persona_id"] = tipo_persona_id
+        if activo is not None:
+            where.append("gf.activo = :activo")
+            params["activo"] = activo
+        if where:
+            q += " WHERE " + " AND ".join(where)
         q += " ORDER BY gf.nombre"
         rows = conn.execute(text(q), params).fetchall()
         return [dict(r._mapping) for r in rows]
