@@ -581,11 +581,24 @@ def analizar_por_persona(
             dia_info["hora_programada"] = info["hora_entrada"]
 
             if not info["trabaja"]:
-                dia_info["estado"] = "libre"
-                dia_info["observaciones"].append("Día libre según horario")
-                if marcaciones[0]["tipo"] == "Entrada":
-                    dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
+                # Marcaciones en día libre — la persona está trabajando
+                # excepcionalmente. Mostrar TODAS las marcaciones, no solo la
+                # primera entrada, y marcarlas como 'extra' para distinguirlas
+                # de un día normal.
+                dia_info["estado"] = "extra"
+                if marcaciones:
+                    if marcaciones[0]["tipo"] == "Entrada":
+                        dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
+                    if marcaciones[-1]["tipo"] == "Salida":
+                        dia_info["salida"] = marcaciones[-1]["hora"].strftime("%H:%M")
+                dia_info["detalle_registros"] = " / ".join(
+                    f"{m['tipo']} {m['hora'].strftime('%H:%M')}" for m in marcaciones
+                )
+                dia_info["observaciones"].append("Día libre según horario (trabajo excepcional)")
                 dias_list.append(dia_info)
+                # Sumar al total_dias para que el guard final no descarte
+                # a esta persona (fix bug 3: sabado excepcional no aparecia).
+                resumen["total_dias"] += 1
                 continue
 
             hora_prog        = info["hora_entrada"]
