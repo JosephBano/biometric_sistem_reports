@@ -16,6 +16,7 @@ from app.domain.people import (
     crear_persona,
     get_historico_persona,
     listar_grupos,
+    listar_grupos_funcionales,
     listar_personas,
 )
 from app.domain.rbac import require_role
@@ -34,11 +35,13 @@ def lista():
         activo=None, busqueda=busqueda,
     )
     grupos = listar_grupos(activo=True)
+    grupos_funcionales = listar_grupos_funcionales(activo=True)
     return render_template(
         "personas/lista.html",
         active_page="personas",
         personas=personas,
         grupos=grupos,
+        grupos_funcionales=grupos_funcionales,
         tipo_persona_id=tipo_persona_id,
         grupo_id=grupo_id,
         busqueda=busqueda or "",
@@ -58,7 +61,7 @@ def crear():
             identificacion=request.form.get("identificacion") or None,
             tipo_persona_id=request.form.get("tipo_persona_id") or None,
             grupo_id=request.form.get("grupo_id") or None,
-            categoria_id=request.form.get("categoria_id") or None,
+            grupo_funcional_id=request.form.get("grupo_funcional_id") or None,
             email=request.form.get("email") or None,
             telefono=request.form.get("telefono") or None,
             notas=request.form.get("notas") or None,
@@ -75,7 +78,7 @@ def crear():
 def editar(id: str):
     datos: dict = {}
     for campo in ("nombre", "identificacion", "email", "telefono", "notas",
-                  "tipo_persona_id", "grupo_id", "categoria_id"):
+                  "tipo_persona_id", "grupo_id", "grupo_funcional_id"):
         v = request.form.get(campo)
         if v is not None:
             datos[campo] = v or None

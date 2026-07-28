@@ -119,18 +119,18 @@ class TestGroupsEndpoints:
         )
         assert r.status_code in (200, 400, 403, 404)
 
-    def test_get_admin_categorias(self, admin_client):
-        """GET /admin/categorias → 200."""
-        r = admin_client.get("/admin/categorias")
+    def test_get_admin_grupos_funcionales(self, admin_client):
+        """GET /admin/grupos-funcionales → 200."""
+        r = admin_client.get("/admin/grupos-funcionales")
         assert r.status_code == 200
 
-    def test_post_categorias_crear(self, admin_client, csrf_token):
-        """POST /admin/categorias → 200/201/400/403/422."""
+    def test_post_grupos_funcionales_crear(self, admin_client, csrf_token):
+        """POST /admin/grupos-funcionales → 200/201/400/403/422."""
         r = admin_client.post(
-            "/admin/categorias",
+            "/admin/grupos-funcionales",
             json={
                 "csrf_token": csrf_token,
-                "nombre": "Categoria Test",
+                "nombre": "Grupo Funcional Test",
             },
         )
         assert r.status_code in (200, 201, 400, 403, 422)

@@ -8,19 +8,19 @@ no importe `db` directamente, cumpliendo la regla de capas del ADR-0001
 from __future__ import annotations
 
 from db import (
-    actualizar_categoria,
     actualizar_grupo,
-    crear_categoria,
+    actualizar_grupo_funcional,
     crear_grupo,
-    listar_categorias,
+    crear_grupo_funcional,
     listar_grupos,
+    listar_grupos_funcionales,
 )
 
 __all__ = [
-    "actualizar_categoria",
     "actualizar_grupo",
-    "crear_categoria",
+    "actualizar_grupo_funcional",
     "crear_grupo",
-    "listar_categorias",
+    "crear_grupo_funcional",
     "listar_grupos",
+    "listar_grupos_funcionales",
 ]

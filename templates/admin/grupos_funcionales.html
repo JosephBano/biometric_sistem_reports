@@ -2,10 +2,10 @@
 
 {% block content %}
 <div class="page-header mb-4">
-    <h3>Gestión de Categorías</h3>
-    <p class="text-muted">Subcategorías o niveles de personas (ej: Docente TC, Docente MT, Personal Administrativo).</p>
-    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrearCategoria">
-        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">label</span> Nueva Categoría
+    <h3>Gestión de Grupos Funcionales</h3>
+    <p class="text-muted">Rol laboral de cada persona (ej: Profesor, Administrativo, Trabajador). Define el horario por defecto del grupo.</p>
+    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrearGrupoFuncional">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">label</span> Nuevo Grupo Funcional
     </button>
 </div>
 
@@ -23,7 +23,7 @@
         </div>
         <div class="col-md-2 d-flex gap-2">
             <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
-            <a href="{{ url_for('groups.listar_categorias') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+            <a href="{{ url_for('groups.listar_grupos_funcionales') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
         </div>
     </form>
 </div>
@@ -40,29 +40,29 @@
                 </tr>
             </thead>
             <tbody>
-                {% for c in categorias %}
+                {% for gf in grupos_funcionales %}
                 <tr>
-                    <td class="fw-bold">{{ c.nombre }}</td>
-                    <td>{{ c.tipo_persona_nombre or '—' }}</td>
+                    <td class="fw-bold">{{ gf.nombre }}</td>
+                    <td>{{ gf.tipo_persona_nombre or '—' }}</td>
                     <td>
-                        <span class="badge {% if c.activo %}bg-success{% else %}bg-secondary{% endif %}">
-                            {% if c.activo %}Activa{% else %}Inactiva{% endif %}
+                        <span class="badge {% if gf.activo %}bg-success{% else %}bg-secondary{% endif %}">
+                            {% if gf.activo %}Activo{% else %}Inactivo{% endif %}
                         </span>
                     </td>
                     <td>
                         <button class="btn btn-sm btn-outline-secondary"
                                 data-bs-toggle="modal"
-                                data-bs-target="#modalEditarCategoria"
-                                data-id="{{ c.id }}"
-                                data-nombre="{{ c.nombre }}"
-                                data-activo="{{ '1' if c.activo else '0' }}">
+                                data-bs-target="#modalEditarGrupoFuncional"
+                                data-id="{{ gf.id }}"
+                                data-nombre="{{ gf.nombre }}"
+                                data-activo="{{ '1' if gf.activo else '0' }}">
                             Editar
                         </button>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" class="text-center py-5 text-muted">No hay categorías creadas.</td>
+                    <td colspan="4" class="text-center py-5 text-muted">No hay grupos funcionales creados.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -72,15 +72,15 @@
 {% endblock %}
 
 {% block modals %}
-<!-- Modal Crear Categoría -->
-<div class="modal fade" id="modalCrearCategoria" tabindex="-1">
+<!-- Modal Crear Grupo Funcional -->
+<div class="modal fade" id="modalCrearGrupoFuncional" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Nueva Categoría</h5>
+                <h5 class="modal-title">Nuevo Grupo Funcional</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('groups.crear_categoria') }}">
+            <form method="POST" action="{{ url_for('groups.crear_grupo_funcional') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="mb-3">
@@ -99,33 +99,33 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Crear Categoría</button>
+                    <button type="submit" class="btn btn-primary">Crear</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Modal Editar Categoría -->
-<div class="modal fade" id="modalEditarCategoria" tabindex="-1">
+<!-- Modal Editar Grupo Funcional -->
+<div class="modal fade" id="modalEditarGrupoFuncional" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Editar Categoría</h5>
+                <h5 class="modal-title">Editar Grupo Funcional</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" id="formEditarCategoria" action="">
+            <form method="POST" id="formEditarGrupoFuncional" action="">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Nombre</label>
-                        <input type="text" class="form-control" name="nombre" id="edit_c_nombre">
+                        <input type="text" class="form-control" name="nombre" id="edit_gf_nombre">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Estado</label>
-                        <select class="form-select" name="activo" id="edit_c_activo">
-                            <option value="1">Activa</option>
-                            <option value="0">Inactiva</option>
+                        <select class="form-select" name="activo" id="edit_gf_activo">
+                            <option value="1">Activo</option>
+                            <option value="0">Inactivo</option>
                         </select>
                     </div>
                 </div>
@@ -141,12 +141,12 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('modalEditarCategoria').addEventListener('show.bs.modal', function(e) {
+document.getElementById('modalEditarGrupoFuncional').addEventListener('show.bs.modal', function(e) {
     const btn = e.relatedTarget;
-    const form = document.getElementById('formEditarCategoria');
-    form.action = '/admin/categorias/' + btn.dataset.id;
-    document.getElementById('edit_c_nombre').value  = btn.dataset.nombre || '';
-    document.getElementById('edit_c_activo').value  = btn.dataset.activo || '1';
+    const form = document.getElementById('formEditarGrupoFuncional');
+    form.action = '/admin/grupos-funcionales/' + btn.dataset.id;
+    document.getElementById('edit_gf_nombre').value = btn.dataset.nombre || '';
+    document.getElementById('edit_gf_activo').value = btn.dataset.activo || '1';
 });
 </script>
 {% endblock %}

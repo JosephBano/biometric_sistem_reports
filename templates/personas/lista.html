@@ -136,7 +136,8 @@
                                     data-identificacion="{{ p.identificacion or '' }}"
                                     data-tipo="{{ p.tipo_persona_id or '' }}"
                                     data-grupo="{{ p.grupo_id or '' }}"
-                                    data-categoria="{{ p.categoria_id or '' }}"
+                                    data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
+                                    data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
                                     data-email="{{ p.email or '' }}"
                                     data-telefono="{{ p.telefono or '' }}"
                                     data-notas="{{ p.notas or '' }}"
@@ -399,6 +400,15 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Grupo Funcional</label>
+                            <select class="form-select" name="grupo_funcional_id" id="edit_grupo_funcional">
+                                <option value="">Sin grupo funcional</option>
+                                {% for gf in grupos_funcionales %}
+                                <option value="{{ gf.id }}">{{ gf.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -556,6 +566,7 @@ if (_modalEditar) {
         document.getElementById('edit_identificacion').value = btn.dataset.identificacion || '';
         document.getElementById('edit_tipo').value           = btn.dataset.tipo || '';
         document.getElementById('edit_grupo').value          = btn.dataset.grupo || '';
+        document.getElementById('edit_grupo_funcional').value = btn.dataset.grupoFuncional || '';
         document.getElementById('edit_email').value          = btn.dataset.email || '';
         document.getElementById('edit_activo').value         = btn.dataset.activo || '1';
         document.getElementById('edit_notas').value          = btn.dataset.notas || '';

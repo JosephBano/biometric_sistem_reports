@@ -97,10 +97,10 @@
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link {% if active_page == 'groups.listar_categorias' %}active{% endif %}"
-                        href="{{ url_for('groups.listar_categorias') }}">
+                    <a class="nav-link {% if active_page == 'groups.listar_grupos_funcionales' %}active{% endif %}"
+                        href="{{ url_for('groups.listar_grupos_funcionales') }}">
                         <span class="material-symbols-outlined nav-icon">label</span>
-                        <span>Categorías</span>
+                        <span>Grupos Funcionales</span>
                     </a>
                 </li>
                 {% if current_user_roles and 'superadmin' in current_user_roles %}

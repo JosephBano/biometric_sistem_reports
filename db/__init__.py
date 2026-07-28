@@ -121,9 +121,9 @@ from db.queries.grupos import (
     listar_grupos,
     crear_grupo,
     actualizar_grupo,
-    listar_categorias,
-    crear_categoria,
-    actualizar_categoria,
+    listar_grupos_funcionales,
+    crear_grupo_funcional,
+    actualizar_grupo_funcional,
 )
 
 from db.queries.personas_crud import (
@@ -232,13 +232,13 @@ __all__ = [
     "cerrar_periodos_vencidos",
     "procesar_csv_personas_periodo",
     "calcular_asistencia_periodo",
-    # grupos y categorías
+    # grupos y grupos funcionales
     "listar_grupos",
     "crear_grupo",
     "actualizar_grupo",
-    "listar_categorias",
-    "crear_categoria",
-    "actualizar_categoria",
+    "listar_grupos_funcionales",
+    "crear_grupo_funcional",
+    "actualizar_grupo_funcional",
     # personas CRUD
     "listar_personas",
     "get_persona",

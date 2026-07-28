@@ -11,13 +11,13 @@ def listar_personas(tipo_persona_id: str = None, grupo_id: str = None,
                p.email, p.telefono, p.notas,
                t.nombre as tipo_persona, t.id::text as tipo_persona_id,
                g.nombre as grupo, g.id::text as grupo_id,
-               c.nombre as categoria, c.id::text as categoria_id,
+               gf.nombre as grupo_funcional, gf.id::text as grupo_funcional_id,
                pd.id_en_dispositivo as id_usuario_zk,
                pd.dispositivo_id::text as dispositivo_id_principal
         FROM personas p
         LEFT JOIN tipos_persona t ON p.tipo_persona_id = t.id
         LEFT JOIN grupos g ON p.grupo_id = g.id
-        LEFT JOIN categorias c ON p.categoria_id = c.id
+        LEFT JOIN grupos_funcionales gf ON p.grupo_funcional_id = gf.id
         LEFT JOIN LATERAL (
             SELECT id_en_dispositivo, dispositivo_id
             FROM personas_dispositivos
@@ -54,12 +54,12 @@ def get_persona(id: str) -> dict | None:
                        p.email, p.telefono, p.notas,
                        t.nombre as tipo_persona, t.id::text as tipo_persona_id,
                        g.nombre as grupo, g.id::text as grupo_id,
-                       c.nombre as categoria, c.id::text as categoria_id,
+                       gf.nombre as grupo_funcional, gf.id::text as grupo_funcional_id,
                        pd.id_en_dispositivo as id_usuario_zk
                 FROM personas p
                 LEFT JOIN tipos_persona t ON p.tipo_persona_id = t.id
                 LEFT JOIN grupos g ON p.grupo_id = g.id
-                LEFT JOIN categorias c ON p.categoria_id = c.id
+                LEFT JOIN grupos_funcionales gf ON p.grupo_funcional_id = gf.id
                 LEFT JOIN LATERAL (
                     SELECT id_en_dispositivo FROM personas_dispositivos
                     WHERE persona_id = p.id AND activo = true
@@ -126,22 +126,22 @@ def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
 
 
 def crear_persona(nombre: str, identificacion: str = None, tipo_persona_id: str = None,
-                  grupo_id: str = None, categoria_id: str = None,
+                  grupo_id: str = None, grupo_funcional_id: str = None,
                   email: str = None, telefono: str = None, notas: str = None,
                   id_usuario_zk: str = None) -> dict:
     with get_connection() as conn:
         row = conn.execute(
             text("""
                 INSERT INTO personas (nombre, identificacion, tipo_persona_id,
-                    grupo_id, categoria_id, email, telefono, notas)
+                    grupo_id, grupo_funcional_id, email, telefono, notas)
                 VALUES (:nombre, :identificacion, CAST(:tipo_persona_id AS uuid),
-                        CAST(:grupo_id AS uuid), CAST(:categoria_id AS uuid),
+                        CAST(:grupo_id AS uuid), CAST(:grupo_funcional_id AS uuid),
                         :email, :telefono, :notas)
                 RETURNING id::text, nombre, identificacion, activo
             """),
             {"nombre": nombre, "identificacion": identificacion or None,
              "tipo_persona_id": tipo_persona_id, "grupo_id": grupo_id,
-             "categoria_id": categoria_id, "email": email,
+             "grupo_funcional_id": grupo_funcional_id, "email": email,
              "telefono": telefono, "notas": notas},
         ).fetchone()
         persona = dict(row._mapping)
@@ -156,7 +156,7 @@ def actualizar_persona(id: str, datos: dict) -> dict | None:
     datos_persona = {k: v for k, v in datos.items() if k != "id_usuario_zk"}
 
     allowed = {"nombre", "identificacion", "activo", "email", "telefono", "notas"}
-    uuid_fields = {"tipo_persona_id", "grupo_id", "categoria_id"}
+    uuid_fields = {"tipo_persona_id", "grupo_id", "grupo_funcional_id"}
     sets, params = [], {"id": id}
     for k, v in datos_persona.items():
         if k in allowed:

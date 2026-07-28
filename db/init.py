@@ -99,6 +99,33 @@ def init_db():
                         ) THEN
                             ALTER TABLE {slug}.justificaciones ADD COLUMN hora_recuperacion_fin TIME;
                         END IF;
+
+                        -- 2026-07-28: renombrar 'categorias' a 'grupos_funcionales'
+                        -- y columna 'categoria_id' a 'grupo_funcional_id' en 'personas'.
+                        -- Compatible con produccion (idempotente) y con tests
+                        -- que usan pgserver (donde Alembic no corre).
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.tables
+                            WHERE table_schema = '{slug}' AND table_name = 'categorias'
+                        ) AND NOT EXISTS (
+                            SELECT 1 FROM information_schema.tables
+                            WHERE table_schema = '{slug}' AND table_name = 'grupos_funcionales'
+                        ) THEN
+                            ALTER TABLE {slug}.categorias RENAME TO grupos_funcionales;
+                        END IF;
+
+                        IF EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = '{slug}' AND table_name = 'personas'
+                              AND column_name = 'categoria_id'
+                        ) AND NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_schema = '{slug}' AND table_name = 'personas'
+                              AND column_name = 'grupo_funcional_id'
+                        ) THEN
+                            ALTER TABLE {slug}.personas
+                                RENAME COLUMN categoria_id TO grupo_funcional_id;
+                        END IF;
                     END $$;
                 """))
             conn.commit()

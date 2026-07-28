@@ -290,24 +290,24 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                 ).fetchone()
                                 grupo_id = str(g_new[0])
 
-                        # B. Upsert categoría
-                        cat_id = None
+                        # B. Upsert grupo funcional (antes 'categoria')
+                        gf_id = None
                         if cat_name:
                             c_row = conn.execute(
-                                text("SELECT id FROM categorias WHERE UPPER(nombre) = UPPER(:n) LIMIT 1"),
+                                text("SELECT id FROM grupos_funcionales WHERE UPPER(nombre) = UPPER(:n) LIMIT 1"),
                                 {"n": cat_name},
                             ).fetchone()
                             if c_row:
-                                cat_id = str(c_row[0])
+                                gf_id = str(c_row[0])
                             else:
                                 c_new = conn.execute(
                                     text("""
-                                        INSERT INTO categorias (nombre, tipo_persona_id)
+                                        INSERT INTO grupos_funcionales (nombre, tipo_persona_id)
                                         VALUES (:n, CAST(:t_id AS uuid)) RETURNING id
                                     """),
                                     {"n": cat_name, "t_id": tipo_persona_id},
                                 ).fetchone()
-                                cat_id = str(c_new[0])
+                                gf_id = str(c_new[0])
 
                         # C. Upsert persona
                         persona_id = None
@@ -322,10 +322,10 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                     text("""
                                         UPDATE personas
                                         SET nombre=:n, grupo_id=CAST(:g AS uuid),
-                                            categoria_id=CAST(:c AS uuid), activo=true
+                                            grupo_funcional_id=CAST(:c AS uuid), activo=true
                                         WHERE id=CAST(:pid AS uuid)
                                     """),
-                                    {"n": nombre_p, "g": grupo_id, "c": cat_id, "pid": persona_id},
+                                    {"n": nombre_p, "g": grupo_id, "c": gf_id, "pid": persona_id},
                                 )
                                 actualizadas += 1
 
@@ -340,23 +340,23 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                     text("""
                                         UPDATE personas
                                         SET identificacion=:ident, grupo_id=CAST(:g AS uuid),
-                                            categoria_id=CAST(:c AS uuid), activo=true
+                                            grupo_funcional_id=CAST(:c AS uuid), activo=true
                                         WHERE id=CAST(:pid AS uuid)
                                     """),
-                                    {"ident": identif or None, "g": grupo_id, "c": cat_id, "pid": persona_id},
+                                    {"ident": identif or None, "g": grupo_id, "c": gf_id, "pid": persona_id},
                                 )
                                 actualizadas += 1
                             else:
                                 p_new = conn.execute(
                                     text("""
                                         INSERT INTO personas (nombre, identificacion, tipo_persona_id,
-                                            grupo_id, categoria_id)
+                                            grupo_id, grupo_funcional_id)
                                         VALUES (:n, :ident, CAST(:t AS uuid),
                                                 CAST(:g AS uuid), CAST(:c AS uuid))
                                         RETURNING id
                                     """),
                                     {"n": nombre_p, "ident": identif or None,
-                                     "t": tipo_persona_id, "g": grupo_id, "c": cat_id},
+                                     "t": tipo_persona_id, "g": grupo_id, "c": gf_id},
                                 ).fetchone()
                                 persona_id = str(p_new[0])
                                 nuevas += 1

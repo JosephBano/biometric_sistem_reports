@@ -29,8 +29,8 @@ class TestAdminBlueprintAmpliado:
         assert r.status_code == 200
 
     def test_get_admin_categorias_html(self, admin_client):
-        """GET /admin/categorias → 200."""
-        r = admin_client.get("/admin/categorias")
+        """GET /admin/grupos-funcionales → 200."""
+        r = admin_client.get("/admin/grupos-funcionales")
         assert r.status_code == 200
 
     def test_get_admin_dispositivos_html(self, admin_client):

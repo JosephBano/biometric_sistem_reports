@@ -9,12 +9,12 @@ import pytest
 
 from db import set_thread_tenant
 from db.queries.grupos import (
-    actualizar_categoria,
     actualizar_grupo,
-    crear_categoria,
+    actualizar_grupo_funcional,
     crear_grupo,
-    listar_categorias,
+    crear_grupo_funcional,
     listar_grupos,
+    listar_grupos_funcionales,
 )
 from db.queries.tenants import get_tipos_persona, insertar_tipo_persona
 
@@ -98,48 +98,46 @@ class TestGrupos:
         assert result is None
 
 
-class TestCategorias:
+class TestGruposFuncionales:
 
-    def test_crear_categoria_sin_tipo_persona(self):
-        """Crear categoría sin tipo_persona_id lo permite (es opcional)."""
-        nombre = f"Cat {uuid.uuid4().hex[:8]}"
-        result = crear_categoria(nombre)
+    def test_crear_grupo_funcional_sin_tipo_persona(self):
+        """Crear grupo funcional sin tipo_persona_id lo permite (es opcional)."""
+        nombre = f"GF {uuid.uuid4().hex[:8]}"
+        result = crear_grupo_funcional(nombre)
         assert result["nombre"] == nombre
         assert result["activo"] is True
 
-    def test_crear_categoria_con_tipo_persona(self, tipo_persona_test):
-        """Crear categoría con tipo_persona_id lo asocia."""
-        nombre = f"Cat {uuid.uuid4().hex[:8]}"
-        result = crear_categoria(nombre, tipo_persona_test["id"])
+    def test_crear_grupo_funcional_con_tipo_persona(self, tipo_persona_test):
+        """Crear grupo funcional con tipo_persona_id lo asocia."""
+        nombre = f"GF {uuid.uuid4().hex[:8]}"
+        result = crear_grupo_funcional(nombre, tipo_persona_test["id"])
         assert result["nombre"] == nombre
         assert result["tipo_persona_id"] == tipo_persona_test["id"]
 
-    def test_listar_categorias_todas(self):
-        """listar_categorias sin filtro retorna todas."""
-        result = listar_categorias()
+    def test_listar_grupos_funcionales_todos(self):
+        """listar_grupos_funcionales sin filtro retorna todos."""
+        result = listar_grupos_funcionales()
         assert isinstance(result, list)
 
-    def test_listar_categorias_filtradas_por_tipo(self, tipo_persona_test):
-        """listar_categorias(tipo_persona_id=X) filtra por tipo."""
-        # Crear 2 categorías, una con tipo y otra sin
-        crear_categoria(f"ConTipo-{uuid.uuid4().hex[:8]}", tipo_persona_test["id"])
-        crear_categoria(f"SinTipo-{uuid.uuid4().hex[:8]}")
+    def test_listar_grupos_funcionales_filtrados_por_tipo(self, tipo_persona_test):
+        """listar_grupos_funcionales(tipo_persona_id=X) filtra por tipo."""
+        crear_grupo_funcional(f"ConTipo-{uuid.uuid4().hex[:8]}", tipo_persona_test["id"])
+        crear_grupo_funcional(f"SinTipo-{uuid.uuid4().hex[:8]}")
 
-        result = listar_categorias(tipo_persona_id=tipo_persona_test["id"])
-        # Solo la primera debe aparecer
+        result = listar_grupos_funcionales(tipo_persona_id=tipo_persona_test["id"])
         assert all(
-            c["tipo_persona_id"] == tipo_persona_test["id"]
-            for c in result
+            gf["tipo_persona_id"] == tipo_persona_test["id"]
+            for gf in result
         )
 
-    def test_actualizar_categoria_nombre(self):
-        """actualizar_categoria cambia el nombre."""
-        c = crear_categoria(f"Orig {uuid.uuid4().hex[:8]}")
-        result = actualizar_categoria(c["id"], {"nombre": "Updated"})
+    def test_actualizar_grupo_funcional_nombre(self):
+        """actualizar_grupo_funcional cambia el nombre."""
+        gf = crear_grupo_funcional(f"Orig {uuid.uuid4().hex[:8]}")
+        result = actualizar_grupo_funcional(gf["id"], {"nombre": "Updated"})
         assert result["nombre"] == "Updated"
 
-    def test_actualizar_categoria_sin_campos_validos(self):
-        """actualizar_categoria con datos vacíos → None."""
-        c = crear_categoria(f"Cat {uuid.uuid4().hex[:8]}")
-        result = actualizar_categoria(c["id"], {"campo_invalido": "x"})
+    def test_actualizar_grupo_funcional_sin_campos_validos(self):
+        """actualizar_grupo_funcional con datos vacíos → None."""
+        gf = crear_grupo_funcional(f"GF {uuid.uuid4().hex[:8]}")
+        result = actualizar_grupo_funcional(gf["id"], {"campo_invalido": "x"})
         assert result is None

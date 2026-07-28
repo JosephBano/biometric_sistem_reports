@@ -12,6 +12,7 @@ from db import (
     crear_persona,
     get_historico_persona,
     listar_grupos,
+    listar_grupos_funcionales,
     listar_personas,
 )
 
@@ -20,5 +21,6 @@ __all__ = [
     "crear_persona",
     "get_historico_persona",
     "listar_grupos",
+    "listar_grupos_funcionales",
     "listar_personas",
 ]

@@ -159,7 +159,7 @@ CREATE TABLE IF NOT EXISTS grupos (
     creado_en   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS categorias (
+CREATE TABLE IF NOT EXISTS grupos_funcionales (
     id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     nombre           TEXT        NOT NULL,
     tipo_persona_id  UUID        REFERENCES tipos_persona(id) ON DELETE SET NULL,
@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS personas (
     identificacion   TEXT        UNIQUE,
     tipo_persona_id  UUID        REFERENCES tipos_persona(id) ON DELETE RESTRICT,
     grupo_id         UUID        REFERENCES grupos(id) ON DELETE SET NULL,
-    categoria_id     UUID        REFERENCES categorias(id) ON DELETE SET NULL,
+    grupo_funcional_id UUID      REFERENCES grupos_funcionales(id) ON DELETE SET NULL,
     sede_id          UUID        REFERENCES sedes(id) ON DELETE SET NULL,
     email            TEXT,
     telefono         TEXT,
