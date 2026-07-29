@@ -91,7 +91,13 @@ class DevelopmentConfig(BaseConfig):
 
 class ProductionConfig(BaseConfig):
     DEBUG = False
-    SESSION_COOKIE_SECURE = True  # sólo por HTTPS
+
+    # Cookie de sesión sólo por HTTPS (defecto). Si el despliegue sirve HTTP
+    # plano (p. ej. LAN http://192.168.x.x:5000) hay que poner
+    # SESSION_COOKIE_SECURE=false en el .env: con `Secure` el navegador
+    # descarta la cookie, la sesión llega vacía al POST y todo formulario
+    # falla con 403 "Token CSRF inválido".
+    SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
 
 
 class TestingConfig(BaseConfig):
