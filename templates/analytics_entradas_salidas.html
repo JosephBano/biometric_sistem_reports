@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-header mb-4">
     <h3>Analitica de Entradas y Salidas</h3>
-    <p class="text-muted">Consulta las marcaciones de una persona en un rango de fechas. Pagina server-side (50 por pagina).</p>
+    <p class="text-muted">Resumen por dia: primer y ultimo marcaje, tiempo dentro de la institucion y validacion del marcaje. Haz clic en una fila para ver el detalle del dia.</p>
 </div>
 
 <div class="card border-0 shadow-sm mb-4">
@@ -40,7 +40,7 @@
     </div>
     <div class="card-body p-0">
         <div id="resultadosContainer" class="p-3 text-muted small">
-            Ingresa el UUID de una persona y un rango de fechas para consultar sus marcaciones.
+            Selecciona una persona y un rango de fechas para ver el resumen diario.
         </div>
     </div>
     <div class="card-footer d-flex justify-content-between align-items-center" id="paginationFooter" style="display:none !important;">
@@ -48,6 +48,23 @@
         <div>
             <button class="btn btn-sm btn-outline-secondary" id="btnPrev">Anterior</button>
             <button class="btn btn-sm btn-outline-secondary ms-1" id="btnNext">Siguiente</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="modalDetalleDia" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0" id="modalDetalleTitulo">Detalle del dia</h5>
+                    <small class="text-muted" id="modalDetalleEstado"></small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody"></div>
         </div>
     </div>
 </div>
@@ -125,31 +142,66 @@
             container.textContent = 'No se pudo cargar el listado de personas.';
         });
 
-    function renderTabla(data) {
-        badgeTotal.textContent = 'Total: ' + (data.total || 0);
-        if (!data.marcaciones || data.marcaciones.length === 0) {
+    // Los datos vienen de la BD (tipo_raw, fuente): escapar siempre.
+    function esc(v) {
+        return String(v === null || v === undefined ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function tipoBadge(tipo, tipoRaw) {
+        if (tipo === 'entrada') {
+            return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Entrada</span>';
+        }
+        if (tipo === 'salida') {
+            return '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Salida</span>';
+        }
+        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">'
+            + esc(tipoRaw || tipo) + '</span>';
+    }
+
+    function estadoBadge(dia) {
+        if (dia.estado === 'ok') {
+            return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">&check; OK</span>';
+        }
+        if (dia.estado === 'sin_marcaciones') {
+            return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">Sin marcaciones</span>';
+        }
+        return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">&#9888; '
+            + esc(dia.mensaje) + '</span>';
+    }
+
+    // Los dias de la pagina actual, indexados por fecha, para el popup:
+    // vienen embebidos en la respuesta, asi que el modal no pide nada al server.
+    let diasPorFecha = {};
+
+    function renderResumen(data) {
+        diasPorFecha = {};
+        badgeTotal.textContent = 'Dias: ' + (data.total_dias || 0);
+        if (!data.dias || data.dias.length === 0) {
             container.className = 'p-3 text-muted small';
-            container.innerHTML = 'No se encontraron marcaciones para los criterios indicados.';
+            container.innerHTML = 'No hay dias en el rango indicado.';
             paginationFooter.style.display = 'none';
             return;
         }
         paginationFooter.style.display = 'flex';
-        paginationInfo.textContent = 'Pagina ' + data.page + ' de ' + data.total_pages + ' (' + data.total + ' marcaciones totales)';
+        paginationInfo.textContent = 'Pagina ' + data.page + ' de ' + data.total_pages
+            + ' (' + data.total_dias + ' dias en el rango)';
         btnPrev.disabled = data.page <= 1;
         btnNext.disabled = data.page >= data.total_pages;
 
-        const rows = data.marcaciones.map(function(m) {
-            const tipoBadge = m.tipo === 'entrada'
-                ? '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Entrada</span>'
-                : (m.tipo === 'salida'
-                    ? '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Salida</span>'
-                    : '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">' + (m.tipo_raw || m.tipo) + '</span>');
-            return '<tr>'
-                + '<td class="text-nowrap">' + m.fecha + '</td>'
-                + '<td class="text-nowrap fw-bold">' + m.hora + '</td>'
-                + '<td>' + tipoBadge + '</td>'
-                + '<td class="text-muted small">' + (m.tipo_raw || '') + '</td>'
-                + '<td class="text-muted small">' + (m.fuente || '') + '</td>'
+        const rows = data.dias.map(function(d) {
+            diasPorFecha[d.fecha] = d;
+            const vacio = d.total_marcaciones === 0;
+            return '<tr role="button" data-fecha="' + esc(d.fecha) + '"'
+                + (vacio ? ' class="text-muted"' : '') + '>'
+                + '<td class="text-nowrap">' + esc(d.fecha) + '</td>'
+                + '<td class="text-nowrap fw-bold">' + esc(d.primer_marcaje || '—') + '</td>'
+                + '<td class="text-nowrap fw-bold">' + esc(d.ultimo_marcaje || '—') + '</td>'
+                + '<td class="text-nowrap">' + esc(d.permanencia || '—') + '</td>'
+                + '<td class="text-nowrap">' + esc(d.efectivo || '—') + '</td>'
+                + '<td class="text-center">' + d.total_marcaciones + '</td>'
+                + '<td>' + estadoBadge(d) + '</td>'
                 + '</tr>';
         }).join('');
 
@@ -157,10 +209,56 @@
         container.innerHTML =
             '<div class="table-responsive"><table class="table table-hover align-middle mb-0">'
             + '<thead class="bg-light"><tr>'
-            + '<th>Fecha</th><th>Hora</th><th>Tipo</th><th>Dato crudo</th><th>Fuente</th>'
+            + '<th>Fecha</th><th>1&ordf; entrada</th><th>Ultima salida</th>'
+            + '<th>Permanencia</th><th>Efectivo</th>'
+            + '<th class="text-center">Marc.</th><th>Estado</th>'
             + '</tr></thead>'
             + '<tbody>' + rows + '</tbody>'
             + '</table></div>';
+
+        container.querySelectorAll('tbody tr').forEach(function(tr) {
+            tr.addEventListener('click', function() { abrirDetalle(tr.dataset.fecha); });
+        });
+    }
+
+    // ── Popup de detalle del dia ───────────────────────────────────────
+    const modalEl = document.getElementById('modalDetalleDia');
+    const modalDetalle = new bootstrap.Modal(modalEl);
+
+    function abrirDetalle(fecha) {
+        const dia = diasPorFecha[fecha];
+        if (!dia) return;
+        document.getElementById('modalDetalleTitulo').textContent = 'Marcajes del ' + fecha;
+        const estadoEl = document.getElementById('modalDetalleEstado');
+        estadoEl.textContent = dia.mensaje || '';
+        estadoEl.className = dia.con_alerta ? 'text-danger' : 'text-muted';
+
+        const body = document.getElementById('modalDetalleBody');
+        if (!dia.marcaciones || dia.marcaciones.length === 0) {
+            body.innerHTML = '<p class="text-muted small mb-0">Este dia no tiene marcajes registrados.</p>';
+        } else {
+            // Se resalta el marcaje que rompe la alternancia: es el que hay
+            // que ir a corregir al biometrico.
+            const filas = dia.marcaciones.map(function(m, i) {
+                const previo = i > 0 ? dia.marcaciones[i - 1] : null;
+                const conflicto = previo && previo.tipo === m.tipo;
+                return '<tr' + (conflicto ? ' class="table-danger"' : '') + '>'
+                    + '<td class="fw-bold text-nowrap">' + esc(m.hora) + '</td>'
+                    + '<td>' + tipoBadge(m.tipo, m.tipo_raw) + '</td>'
+                    + '<td class="text-muted small">' + esc(m.tipo_raw) + '</td>'
+                    + '<td class="text-muted small">' + esc(m.fuente) + '</td>'
+                    + '</tr>';
+            }).join('');
+            body.innerHTML =
+                '<table class="table table-sm align-middle mb-3">'
+                + '<thead><tr><th>Hora</th><th>Tipo</th><th>Dato crudo</th><th>Fuente</th></tr></thead>'
+                + '<tbody>' + filas + '</tbody></table>'
+                + '<div class="d-flex gap-4 small text-muted">'
+                + '<span>Permanencia: <strong>' + esc(dia.permanencia || '—') + '</strong></span>'
+                + '<span>Efectivo: <strong>' + esc(dia.efectivo || '—') + '</strong></span>'
+                + '</div>';
+        }
+        modalDetalle.show();
     }
 
     function consultar(pagina) {
@@ -188,11 +286,10 @@
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
             page: String(currentPage),
-            per_page: '50',
         });
         container.className = 'p-3 text-muted small';
         container.textContent = 'Cargando...';
-        fetch(_BASE + '/api/analytics/entradas-salidas?' + params.toString())
+        fetch(_BASE + '/api/analytics/entradas-salidas/resumen-diario?' + params.toString())
             .then(function(r) {
                 if (!r.ok) {
                     return r.json().then(function(e) {
@@ -201,7 +298,7 @@
                 }
                 return r.json();
             })
-            .then(renderTabla)
+            .then(renderResumen)
             .catch(function(err) {
                 container.className = 'p-3 text-danger small';
                 container.textContent = 'Error: ' + err.message;
@@ -220,7 +317,7 @@
         document.getElementById('inputFechaInicio').value = '';
         document.getElementById('inputFechaFin').value = '';
         container.className = 'p-3 text-muted small';
-        container.innerHTML = 'Selecciona una persona y un rango de fechas para consultar sus marcaciones.';
+        container.innerHTML = 'Selecciona una persona y un rango de fechas para ver el resumen diario.';
         paginationFooter.style.display = 'none';
     });
 

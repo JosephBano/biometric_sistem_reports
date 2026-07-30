@@ -162,6 +162,49 @@ def listar_marcaciones_por_persona(
     return out
 
 
+def listar_marcaciones_rango(
+    persona_id: str,
+    fecha_inicio: date,
+    fecha_fin: date,
+    schema: str = None,
+) -> list[dict]:
+    """
+    Todas las marcaciones de una persona en el rango, sin paginar.
+
+    El resumen diario necesita el rango completo para agrupar por día: no se
+    puede paginar antes de agrupar. El volumen está acotado por la validación
+    de 366 días del servicio (unas pocas marcaciones por día).
+    """
+    schema = schema or "istpet"
+    schema = validate_schema_name(schema)
+    fecha_tope = fecha_fin + timedelta(days=1)
+    inicio_str = fecha_inicio.strftime("%Y-%m-%d") + "T00:00:00+00:00"
+    fin_str = fecha_tope.strftime("%Y-%m-%d") + "T00:00:00+00:00"
+    with get_connection(schema) as conn:
+        rows = conn.execute(
+            text("""
+                SELECT a.fecha_hora, a.tipo, a.fuente
+                FROM asistencias a
+                WHERE a.persona_id = CAST(:persona_id AS uuid)
+                  AND a.fecha_hora >= :inicio AND a.fecha_hora < :fin
+                ORDER BY a.fecha_hora ASC
+            """),
+            {"persona_id": persona_id, "inicio": inicio_str, "fin": fin_str},
+        ).fetchall()
+    out = []
+    for r in rows:
+        fh = r[0]
+        if hasattr(fh, "tzinfo") and fh.tzinfo is not None:
+            fh = fh.replace(tzinfo=None)
+        out.append({
+            "datetime": fh,
+            "tipo": normalizar_tipo_marcacion(r[1]),
+            "tipo_raw": r[1],
+            "fuente": r[2],
+        })
+    return out
+
+
 def contar_marcaciones_por_persona(
     persona_id: str,
     fecha_inicio: date,
@@ -190,5 +233,6 @@ __all__ = [
     "normalizar_tipo_marcacion",
     "grupos_funcionales_disponibles",
     "listar_marcaciones_por_persona",
+    "listar_marcaciones_rango",
     "contar_marcaciones_por_persona",
 ]

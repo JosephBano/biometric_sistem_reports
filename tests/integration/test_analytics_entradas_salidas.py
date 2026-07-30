@@ -216,3 +216,124 @@ class TestAnalyticsEntradasSalidas:
         assert normalizar_tipo_marcacion("1") == "salida"
         assert normalizar_tipo_marcacion(None) == "otro"
         assert normalizar_tipo_marcacion("xyz") == "otro"
+
+class TestResumenDiario:
+    """
+    Endpoint /api/analytics/entradas-salidas/resumen-diario: una fila por dia.
+
+    Spec: docs/superpowers/specs/2026-07-30-resumen-diario-entradas-salidas-design.md
+    """
+
+    RUTA = "/api/analytics/entradas-salidas/resumen-diario"
+
+    def test_sin_persona_id_retorna_400(self, admin_client, tenant_id):
+        r = admin_client.get(self.RUTA)
+        assert r.status_code == 400
+        assert "persona_id" in (r.get_json().get("error") or "").lower()
+
+    def test_persona_id_no_uuid_retorna_400(self, admin_client, tenant_id):
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id=30&fecha_inicio=2025-07-01&fecha_fin=2025-07-31"
+        )
+        assert r.status_code == 400
+
+    def test_rango_invertido_retorna_400(self, admin_client, tenant_id):
+        from db.connection import get_engine
+        e = get_engine()
+        base = _seed_basico(e)
+        pid, _, _ = _seed_persona_con_marcaciones(e, base, n=0)
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-31&fecha_fin=2025-07-01"
+        )
+        assert r.status_code == 400
+
+    def test_persona_sin_marcaciones_devuelve_todos_los_dias(self, admin_client, tenant_id):
+        """Los dias vacios igual aparecen: es como se ven las ausencias."""
+        from db.connection import get_engine
+        e = get_engine()
+        base = _seed_basico(e)
+        pid, _, _ = _seed_persona_con_marcaciones(e, base, n=0)
+
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-01&fecha_fin=2025-07-05"
+        )
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["total_dias"] == 5
+        assert len(data["dias"]) == 5
+        assert [d["fecha"] for d in data["dias"]] == [
+            "2025-07-01", "2025-07-02", "2025-07-03", "2025-07-04", "2025-07-05",
+        ]
+        assert all(d["estado"] == "sin_marcaciones" for d in data["dias"])
+        assert all(d["permanencia"] is None for d in data["dias"])
+
+    def test_cuatro_marcaciones_calcula_permanencia_y_efectivo(self, admin_client, tenant_id):
+        """El seed crea 08:00 E, 10:00 S, 12:00 E, 14:00 S el 2025-07-15."""
+        from db.connection import get_engine
+        e = get_engine()
+        base = _seed_basico(e)
+        pid, _, _ = _seed_persona_con_marcaciones(e, base, n=4)
+
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-15&fecha_fin=2025-07-15"
+        )
+        assert r.status_code == 200
+        dia = r.get_json()["dias"][0]
+        assert dia["total_marcaciones"] == 4
+        assert dia["primer_marcaje"] == "08:00:00"
+        assert dia["ultimo_marcaje"] == "14:00:00"
+        assert dia["permanencia"] == "6h 00m"   # 08:00 -> 14:00
+        assert dia["efectivo"] == "4h 00m"      # 2h + 2h, descuenta el intermedio
+        assert dia["estado"] == "ok"
+        assert dia["con_alerta"] is False
+
+    def test_dia_impar_marca_alerta(self, admin_client, tenant_id):
+        from db.connection import get_engine
+        e = get_engine()
+        base = _seed_basico(e)
+        pid, _, _ = _seed_persona_con_marcaciones(e, base, n=3)
+
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-15&fecha_fin=2025-07-15"
+        )
+        dia = r.get_json()["dias"][0]
+        assert dia["total_marcaciones"] == 3
+        assert dia["estado"] == "impar"
+        assert dia["con_alerta"] is True
+
+    def test_marcaciones_embebidas_para_el_popup(self, admin_client, tenant_id):
+        from db.connection import get_engine
+        e = get_engine()
+        base = _seed_basico(e)
+        pid, _, _ = _seed_persona_con_marcaciones(e, base, n=2)
+
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-15&fecha_fin=2025-07-15"
+        )
+        marcaciones = r.get_json()["dias"][0]["marcaciones"]
+        assert [m["hora"] for m in marcaciones] == ["08:00:00", "10:00:00"]
+        assert [m["tipo"] for m in marcaciones] == ["entrada", "salida"]
+        assert marcaciones[0]["tipo_raw"] == "Entrada"
+
+    def test_pagina_por_dia_31_por_pagina(self, admin_client, tenant_id):
+        from db.connection import get_engine
+        e = get_engine()
+        base = _seed_basico(e)
+        pid, _, _ = _seed_persona_con_marcaciones(e, base, n=0)
+
+        r = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-01&fecha_fin=2025-08-31"
+        )
+        data = r.get_json()
+        assert data["total_dias"] == 62
+        assert data["total_pages"] == 2
+        assert data["per_page"] == 31
+        assert len(data["dias"]) == 31
+        assert data["dias"][0]["fecha"] == "2025-07-01"
+
+        r2 = admin_client.get(
+            f"{self.RUTA}?persona_id={pid}&fecha_inicio=2025-07-01&fecha_fin=2025-08-31&page=2"
+        )
+        data2 = r2.get_json()
+        assert data2["dias"][0]["fecha"] == "2025-08-01"
+        assert len(data2["dias"]) == 31

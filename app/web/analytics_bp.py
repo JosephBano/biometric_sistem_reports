@@ -7,7 +7,8 @@ Rutas:
   - POST /api/analytics/narrativo                         → narrativo IA on-demand
   - GET  /api/analytics                                   → hallazgos JSON (en reports_bp)
   - GET  /analytics/entradas-salidas                      → vista detalle por persona
-  - GET  /api/analytics/entradas-salidas                  → JSON paginado
+  - GET  /api/analytics/entradas-salidas                  → JSON paginado (marcaciones crudas)
+  - GET  /api/analytics/entradas-salidas/resumen-diario   → JSON paginado (una fila por día)
 """
 from __future__ import annotations
 
@@ -18,7 +19,10 @@ from flask import Blueprint, jsonify, render_template, request
 from app.domain import ai_narrative
 from app.domain import analytics as analytics_svc
 from app.domain.analytics import calcular_asistencia_periodo, get_periodo, listar_grupos
-from app.domain.analytics_entradas_salidas import consultar_entradas_salidas
+from app.domain.analytics_entradas_salidas import (
+    consultar_entradas_salidas,
+    consultar_resumen_diario,
+)
 from app.domain.rbac import require_role
 
 bp = Blueprint("analytics", __name__)
@@ -130,6 +134,33 @@ def api_entradas_salidas():
             fecha_fin=fecha_fin,
             page=page,
             per_page=per_page,
+        )
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify(resultado)
+
+
+@bp.get("/api/analytics/entradas-salidas/resumen-diario")
+@require_role("admin", "superadmin", "gestor", "supervisor_grupo", "readonly")
+def api_entradas_salidas_resumen_diario():
+    """Una fila por día: primer/último marcaje, tiempos y estado del marcaje."""
+    hoy = date.today()
+    fecha_inicio = _parse_date(request.args.get("fecha_inicio"), hoy - timedelta(days=7))
+    fecha_fin = _parse_date(request.args.get("fecha_fin"), hoy)
+    persona_id = (request.args.get("persona_id") or "").strip()
+    try:
+        page = int(request.args.get("page", "1"))
+    except ValueError:
+        page = 1
+
+    if not persona_id:
+        return jsonify({"error": "persona_id es requerido"}), 400
+    try:
+        resultado = consultar_resumen_diario(
+            persona_id=persona_id,
+            fecha_inicio=fecha_inicio,
+            fecha_fin=fecha_fin,
+            page=page,
         )
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
