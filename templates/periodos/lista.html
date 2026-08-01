@@ -1,36 +1,31 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Períodos de Vigencia</h3>
-        <p class="text-muted mb-0">Gestión de períodos de prácticas, contratistas y vigencias.</p>
-    </div>
-    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalCrearPeriodo">
+<div class="page-header mb-4">
+    <h3>Períodos de Vigencia</h3>
+    <p class="text-muted">Gestión de períodos de prácticas, contratistas y vigencias.</p>
+    <button class="btn btn-primary mt-3 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalCrearPeriodo">
         <span class="material-symbols-outlined">add</span> Nuevo Período
     </button>
 </div>
 
-<!-- Filtros -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body p-4">
-        <form class="row g-3 align-items-end" method="GET">
-            <div class="col-md-4">
-                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo de Persona</label>
-                <select class="form-select bg-light border-0" name="tipo_persona_id">
-                    <option value="">Todos los tipos</option>
-                    {% for t in tenant_tipos %}
-                    <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100 fw-bold shadow-sm d-flex align-items-center justify-content-center gap-1" style="height: 38px;">
-                    <span class="material-symbols-outlined">filter_alt</span> Filtrar
-                </button>
-            </div>
-        </form>
-    </div>
+<div class="filter-card mb-4">
+    <form class="row g-3 align-items-end" method="GET">
+        <div class="col-md-4">
+            <label class="form-label small text-muted fw-bold mb-2">Tipo de Persona</label>
+            <select class="form-select" name="tipo_persona_id">
+                <option value="">Todos los tipos</option>
+                {% for t in tenant_tipos %}
+                <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-1" style="height: 38px;">
+                <span class="material-symbols-outlined">filter_alt</span> Filtrar
+            </button>
+        </div>
+    </form>
 </div>
 
 <!-- Tabs -->
@@ -70,18 +65,30 @@
                                     <span class="material-symbols-outlined">more_vert</span>
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('periodo_detalle', id=p.id) }}">
+                                    <li><a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('periods.detalle', id=p.id) }}">
                                         <span class="material-symbols-outlined fs-6">visibility</span> Ver Detalle</a>
                                     </li>
                                     <li><hr class="dropdown-menu-divider"></li>
                                     <li>
-                                        <form method="POST" action="{{ url_for('cerrar_periodo_route', id=p.id) }}">
+                                        <form method="POST" action="{{ url_for('periods.cerrar', id=p.id) }}">
                                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                             <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger">
                                                 <span class="material-symbols-outlined fs-6">lock</span> Cerrar Período
                                             </button>
                                         </form>
                                     </li>
+                                    {% if 'superadmin' in session.get('roles', []) %}
+                                    <li><hr class="dropdown-menu-divider"></li>
+                                    <li>
+                                        <form method="POST" action="{{ url_for('periods.eliminar', id=p.id) }}"
+                                              onsubmit="return confirm('¿Eliminar permanentemente el período «{{ p.nombre }}» y todas sus personas asociadas? Esta acción no se puede deshacer.')">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger fw-bold">
+                                                <span class="material-symbols-outlined fs-6">delete_forever</span> Eliminar Permanentemente
+                                            </button>
+                                        </form>
+                                    </li>
+                                    {% endif %}
                                 </ul>
                             </div>
                         </div>
@@ -96,7 +103,7 @@
                         </p>
                     </div>
                     <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between">
-                        <a href="{{ url_for('periodo_detalle', id=p.id) }}" class="btn btn-sm btn-outline-primary w-100">Administrar</a>
+                        <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-outline-primary w-100">Administrar</a>
                     </div>
                 </div>
             </div>
@@ -115,7 +122,7 @@
                     <div class="card-body">
                         <div class="d-flex justify-content-between mb-3">
                             <span class="badge bg-secondary-subtle text-secondary">{{ p.estado | capitalize }}</span>
-                            <a href="{{ url_for('periodo_detalle', id=p.id) }}" class="btn btn-sm btn-icon"><span class="material-symbols-outlined">visibility</span></a>
+                            <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-icon"><span class="material-symbols-outlined">visibility</span></a>
                         </div>
                         <h5 class="card-title fw-bold text-truncate">{{ p.nombre }}</h5>
                         <p class="text-muted small mb-2">
@@ -136,7 +143,7 @@
 <div class="modal fade" id="modalCrearPeriodo" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('crear_periodo_route') }}">
+            <form method="POST" action="{{ url_for('periods.crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title fw-bold">Nuevo Período</h5>
@@ -180,21 +187,21 @@
 </div>
 
 <style>
-.card-hover { transition: transform 0.2s, box-shadow 0.2s; }
-.card-hover:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1.5rem rgba(0,0,0,.08)!important; }
-.btn-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; padding: 0; }
-
-.custom-tab {
-    background-color: transparent !important;
-    color: #6c757d !important;
-    border: none;
-    border-radius: 10px !important;
-    transition: all 0.2s ease-in-out;
+.card-hover {
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
 }
-.custom-tab.active {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
+.card-hover:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg) !important;
+}
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    padding: 0;
 }
 </style>
 {% endblock %}

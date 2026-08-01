@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h3>Analitica de Entradas y Salidas</h3>
+    <p class="text-muted">Resumen por dia: primer y ultimo marcaje, tiempo dentro de la institucion y validacion del marcaje. Haz clic en una fila para ver el detalle del dia.</p>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form class="row g-3 align-items-end" method="GET" id="formEntradasSalidas">
+            <div class="col-md-4">
+                <label class="form-label small fw-bold text-muted mb-2">Persona</label>
+                <select name="persona_id" id="inputPersonaId" placeholder="Nombre, cedula o ID biometrico...">
+                    <option value="">Selecciona una persona...</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-2">Fecha inicio</label>
+                <input type="date" class="form-control" name="fecha_inicio" id="inputFechaInicio"
+                       value="{{ fecha_inicio }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted mb-2">Fecha fin</label>
+                <input type="date" class="form-control" name="fecha_fin" id="inputFechaFin"
+                       value="{{ fecha_fin }}">
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Consultar</button>
+                <button type="button" class="btn btn-outline-secondary" id="btnLimpiar" style="height: 38px;">X</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
+        <h5 class="fw-bold mb-0">Resultados</h5>
+        <span class="badge bg-primary bg-opacity-10 text-primary" id="badgeTotal">Total: 0</span>
+    </div>
+    <div class="card-body p-0">
+        <div id="resultadosContainer" class="p-3 text-muted small">
+            Selecciona una persona y un rango de fechas para ver el resumen diario.
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center" id="paginationFooter" style="display:none !important;">
+        <small class="text-muted" id="paginationInfo"></small>
+        <div>
+            <button class="btn btn-sm btn-outline-secondary" id="btnPrev">Anterior</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" id="btnNext">Siguiente</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<div class="modal fade" id="modalDetalleDia" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title mb-0" id="modalDetalleTitulo">Detalle del dia</h5>
+                    <small class="text-muted" id="modalDetalleEstado"></small>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body" id="modalDetalleBody"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    const form = document.getElementById('formEntradasSalidas');
+    const container = document.getElementById('resultadosContainer');
+    const badgeTotal = document.getElementById('badgeTotal');
+    const paginationFooter = document.getElementById('paginationFooter');
+    const paginationInfo = document.getElementById('paginationInfo');
+    const btnPrev = document.getElementById('btnPrev');
+    const btnNext = document.getElementById('btnNext');
+    const btnLimpiar = document.getElementById('btnLimpiar');
+    let currentPage = 1;
+    let currentPersonaId = '';
+    let currentFechaInicio = '';
+    let currentFechaFin = '';
+
+    // ── Selector de persona ────────────────────────────────────────────
+    // El endpoint expone el UUID; el operador busca por nombre, cedula o
+    // ID del biometrico, que son los datos que si conoce.
+    const PERSONA_PRESELECCIONADA = {{ persona_id | tojson }};
+
+    const tsPersona = new TomSelect('#inputPersonaId', {
+        valueField: 'id',
+        labelField: 'nombre',
+        searchField: ['nombre', 'identificacion', 'id_usuario_zk'],
+        maxOptions: 1000,
+        create: false,
+        placeholder: 'Nombre, cedula o ID biometrico...',
+        render: {
+            option: function(d, escape) {
+                const meta = [
+                    d.identificacion ? 'CI ' + escape(d.identificacion) : '',
+                    d.id_usuario_zk ? 'ZK ' + escape(d.id_usuario_zk) : '',
+                    d.activo ? '' : 'inactivo',
+                ].filter(Boolean).join(' &middot; ');
+                return '<div class="py-1">'
+                    + '<div class="fw-bold">' + escape(d.nombre) + '</div>'
+                    + (meta ? '<div class="text-muted small">' + meta + '</div>' : '')
+                    + '</div>';
+            },
+            item: function(d, escape) {
+                const zk = d.id_usuario_zk ? ' (ZK ' + escape(d.id_usuario_zk) + ')' : '';
+                return '<div>' + escape(d.nombre) + zk + '</div>';
+            },
+            no_results: function() {
+                return '<div class="p-2 text-muted small">Sin coincidencias.</div>';
+            },
+        },
+    });
+
+    tsPersona.on('change', function() {
+        // Limpiar el aviso de "selecciona una persona" al elegir.
+        if (tsPersona.getValue() && container.classList.contains('text-warning')) {
+            container.className = 'p-3 text-muted small';
+            container.textContent = 'Pulsa Consultar para ver las marcaciones.';
+        }
+    });
+
+    fetch(_BASE + '/api/personas/buscar')
+        .then(function(r) { return r.ok ? r.json() : { personas: [] }; })
+        .then(function(data) {
+            tsPersona.addOptions(data.personas || []);
+            if (PERSONA_PRESELECCIONADA) {
+                tsPersona.setValue(PERSONA_PRESELECCIONADA, true);
+                consultar(1);
+            }
+        })
+        .catch(function() {
+            container.className = 'p-3 text-danger small';
+            container.textContent = 'No se pudo cargar el listado de personas.';
+        });
+
+    // Los datos vienen de la BD (tipo_raw, fuente): escapar siempre.
+    function esc(v) {
+        return String(v === null || v === undefined ? '' : v)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function tipoBadge(tipo, tipoRaw) {
+        if (tipo === 'entrada') {
+            return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Entrada</span>';
+        }
+        if (tipo === 'salida') {
+            return '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Salida</span>';
+        }
+        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">'
+            + esc(tipoRaw || tipo) + '</span>';
+    }
+
+    function estadoBadge(dia) {
+        if (dia.estado === 'ok') {
+            return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">&check; OK</span>';
+        }
+        if (dia.estado === 'sin_marcaciones') {
+            return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">Sin marcaciones</span>';
+        }
+        return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">&#9888; '
+            + esc(dia.mensaje) + '</span>';
+    }
+
+    // Los dias de la pagina actual, indexados por fecha, para el popup:
+    // vienen embebidos en la respuesta, asi que el modal no pide nada al server.
+    let diasPorFecha = {};
+
+    function renderResumen(data) {
+        diasPorFecha = {};
+        badgeTotal.textContent = 'Dias: ' + (data.total_dias || 0);
+        if (!data.dias || data.dias.length === 0) {
+            container.className = 'p-3 text-muted small';
+            container.innerHTML = 'No hay dias en el rango indicado.';
+            paginationFooter.style.display = 'none';
+            return;
+        }
+        paginationFooter.style.display = 'flex';
+        paginationInfo.textContent = 'Pagina ' + data.page + ' de ' + data.total_pages
+            + ' (' + data.total_dias + ' dias en el rango)';
+        btnPrev.disabled = data.page <= 1;
+        btnNext.disabled = data.page >= data.total_pages;
+
+        const rows = data.dias.map(function(d) {
+            diasPorFecha[d.fecha] = d;
+            const vacio = d.total_marcaciones === 0;
+            return '<tr role="button" data-fecha="' + esc(d.fecha) + '"'
+                + (vacio ? ' class="text-muted"' : '') + '>'
+                + '<td class="text-nowrap">' + esc(d.fecha) + '</td>'
+                + '<td class="text-nowrap fw-bold">' + esc(d.primer_marcaje || '—') + '</td>'
+                + '<td class="text-nowrap fw-bold">' + esc(d.ultimo_marcaje || '—') + '</td>'
+                + '<td class="text-nowrap">' + esc(d.permanencia || '—') + '</td>'
+                + '<td class="text-nowrap">' + esc(d.efectivo || '—') + '</td>'
+                + '<td class="text-center">' + d.total_marcaciones + '</td>'
+                + '<td>' + estadoBadge(d) + '</td>'
+                + '</tr>';
+        }).join('');
+
+        container.className = '';
+        container.innerHTML =
+            '<div class="table-responsive"><table class="table table-hover align-middle mb-0">'
+            + '<thead class="bg-light"><tr>'
+            + '<th>Fecha</th><th>1&ordf; entrada</th><th>Ultima salida</th>'
+            + '<th>Permanencia</th><th>Efectivo</th>'
+            + '<th class="text-center">Marc.</th><th>Estado</th>'
+            + '</tr></thead>'
+            + '<tbody>' + rows + '</tbody>'
+            + '</table></div>';
+
+        container.querySelectorAll('tbody tr').forEach(function(tr) {
+            tr.addEventListener('click', function() { abrirDetalle(tr.dataset.fecha); });
+        });
+    }
+
+    // ── Popup de detalle del dia ───────────────────────────────────────
+    const modalEl = document.getElementById('modalDetalleDia');
+    const modalDetalle = new bootstrap.Modal(modalEl);
+
+    function abrirDetalle(fecha) {
+        const dia = diasPorFecha[fecha];
+        if (!dia) return;
+        document.getElementById('modalDetalleTitulo').textContent = 'Marcajes del ' + fecha;
+        const estadoEl = document.getElementById('modalDetalleEstado');
+        estadoEl.textContent = dia.mensaje || '';
+        estadoEl.className = dia.con_alerta ? 'text-danger' : 'text-muted';
+
+        const body = document.getElementById('modalDetalleBody');
+        if (!dia.marcaciones || dia.marcaciones.length === 0) {
+            body.innerHTML = '<p class="text-muted small mb-0">Este dia no tiene marcajes registrados.</p>';
+        } else {
+            // Se resalta el marcaje que rompe la alternancia: es el que hay
+            // que ir a corregir al biometrico.
+            const filas = dia.marcaciones.map(function(m, i) {
+                const previo = i > 0 ? dia.marcaciones[i - 1] : null;
+                const conflicto = previo && previo.tipo === m.tipo;
+                return '<tr' + (conflicto ? ' class="table-danger"' : '') + '>'
+                    + '<td class="fw-bold text-nowrap">' + esc(m.hora) + '</td>'
+                    + '<td>' + tipoBadge(m.tipo, m.tipo_raw) + '</td>'
+                    + '<td class="text-muted small">' + esc(m.tipo_raw) + '</td>'
+                    + '<td class="text-muted small">' + esc(m.fuente) + '</td>'
+                    + '</tr>';
+            }).join('');
+            body.innerHTML =
+                '<table class="table table-sm align-middle mb-3">'
+                + '<thead><tr><th>Hora</th><th>Tipo</th><th>Dato crudo</th><th>Fuente</th></tr></thead>'
+                + '<tbody>' + filas + '</tbody></table>'
+                + '<div class="d-flex gap-4 small text-muted">'
+                + '<span>Permanencia: <strong>' + esc(dia.permanencia || '—') + '</strong></span>'
+                + '<span>Efectivo: <strong>' + esc(dia.efectivo || '—') + '</strong></span>'
+                + '</div>';
+        }
+        modalDetalle.show();
+    }
+
+    function consultar(pagina) {
+        const personaId = tsPersona.getValue();
+        const fechaInicio = document.getElementById('inputFechaInicio').value;
+        const fechaFin = document.getElementById('inputFechaFin').value;
+        if (!personaId) {
+            container.className = 'p-3 text-warning small';
+            container.textContent = 'Selecciona una persona.';
+            paginationFooter.style.display = 'none';
+            return;
+        }
+        if (!fechaInicio || !fechaFin) {
+            container.className = 'p-3 text-warning small';
+            container.textContent = 'Selecciona rango de fechas valido.';
+            paginationFooter.style.display = 'none';
+            return;
+        }
+        currentPersonaId = personaId;
+        currentFechaInicio = fechaInicio;
+        currentFechaFin = fechaFin;
+        currentPage = pagina || 1;
+        const params = new URLSearchParams({
+            persona_id: personaId,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fechaFin,
+            page: String(currentPage),
+        });
+        container.className = 'p-3 text-muted small';
+        container.textContent = 'Cargando...';
+        fetch(_BASE + '/api/analytics/entradas-salidas/resumen-diario?' + params.toString())
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.json().then(function(e) {
+                        throw new Error(e.error || 'Error ' + r.status);
+                    });
+                }
+                return r.json();
+            })
+            .then(renderResumen)
+            .catch(function(err) {
+                container.className = 'p-3 text-danger small';
+                container.textContent = 'Error: ' + err.message;
+                paginationFooter.style.display = 'none';
+            });
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        consultar(1);
+    });
+    btnPrev.addEventListener('click', function() { if (currentPage > 1) consultar(currentPage - 1); });
+    btnNext.addEventListener('click', function() { if (currentPage < 999) consultar(currentPage + 1); });
+    btnLimpiar.addEventListener('click', function() {
+        tsPersona.clear();
+        document.getElementById('inputFechaInicio').value = '';
+        document.getElementById('inputFechaFin').value = '';
+        container.className = 'p-3 text-muted small';
+        container.innerHTML = 'Selecciona una persona y un rango de fechas para ver el resumen diario.';
+        paginationFooter.style.display = 'none';
+    });
+
+    // La consulta automatica al llegar con ?persona_id=... se dispara al
+    // terminar de cargar el catalogo (ver el fetch de arriba), no aqui:
+    // antes de eso `tsPersona.getValue()` estaria vacio.
+})();
+</script>
+{% endblock %}

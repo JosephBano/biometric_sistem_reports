@@ -42,18 +42,21 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
         feriados = get_feriados_set(fecha_inicio, fecha_fin)
         
         # 3. Obtener todas las personas en este determinado período (mismo nombre y fechas)
+        # DISTINCT ON (p.id) evita duplicados cuando la misma persona tiene
+        # múltiples filas en periodos_vigencia para el mismo período.
         personas = conn.execute(
             text("""
-                SELECT 
+                SELECT DISTINCT ON (p.id)
                     p.id as persona_id, p.nombre, p.identificacion,
                     g.nombre as grupo, c.nombre as categoria
                 FROM periodos_vigencia pv
                 JOIN personas p ON pv.persona_id = p.id
                 LEFT JOIN grupos g ON p.grupo_id = g.id
-                LEFT JOIN categorias c ON p.categoria_id = c.id
+                LEFT JOIN grupos_funcionales c ON p.grupo_funcional_id = c.id
                 WHERE pv.nombre = :nombre
                   AND pv.fecha_inicio = :fecha_inicio
                   AND (pv.fecha_fin = :fecha_fin OR (:fecha_fin IS NULL AND pv.fecha_fin IS NULL))
+                ORDER BY p.id
             """),
             {
                 "nombre": nombre,
@@ -108,8 +111,9 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 if current_date in feriados:
                     status = "feriado"
                 else:
-                    # Lookup schedule
-                    horario = get_horario_en_fecha(conn, persona_id, current_date)
+                    # Lookup schedule (fallback por nombre si el UUID no tiene asignación)
+                    horario = get_horario_en_fecha(conn, persona_id, current_date,
+                                                   nombre=p_dict.get("nombre"))
                     current_weekday = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"][current_date.weekday()]
                     
                     if horario and horario.get(current_weekday):
@@ -151,17 +155,24 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 current_date += timedelta(days=1)
                 
             # Calcular % y semáforo
-            porcentaje = (presentes / dias_programados * 100) if dias_programados > 0 else 100.0
-            
+            sin_horario = dias_programados == 0
+            if sin_horario:
+                porcentaje = 0.0
+            else:
+                porcentaje = presentes / dias_programados * 100
+
             semaforo = "Rojo"
-            color = "#E05D5D" # red
-            if porcentaje >= 90:
+            color = "#E05D5D"  # red
+            if sin_horario:
+                semaforo = "Sin horario"
+                color = "#AAAAAA"  # grey
+            elif porcentaje >= 90:
                 semaforo = "Verde"
-                color = "#5D9E5D" # green
+                color = "#5D9E5D"  # green
             elif porcentaje >= 75:
                 semaforo = "Amarillo"
-                color = "#E0C25D" # yellow
-                
+                color = "#E0C25D"  # yellow
+
             p_dict["detalle_asistencia"] = dias_detalle
             p_dict["resumen"] = {
                 "presentes": presentes,
@@ -169,7 +180,8 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 "dias_programados": dias_programados,
                 "porcentaje_asistencia": round(porcentaje, 2),
                 "semaforo": semaforo,
-                "color": color
+                "color": color,
+                "sin_horario": sin_horario,
             }
             resultado.append(p_dict)
             

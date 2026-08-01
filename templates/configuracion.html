@@ -1,11 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Configuración</h3>
-        <p class="text-muted mb-0">Atención de feriados, históricos y backups del sistema.</p>
-    </div>
+<div class="page-header mb-4">
+    <h3>Configuración</h3>
+    <p class="text-muted">Atención de feriados, históricos y backups del sistema.</p>
 </div>
 
 <!-- Tabs -->
@@ -23,6 +21,14 @@
         <span class="d-flex align-items-center gap-2">
             <span class="material-symbols-outlined fs-5">cloud_sync</span>
             Respaldos y Históricos
+        </span>
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="sync-tab" data-bs-toggle="tab" data-bs-target="#sync" type="button" role="tab" aria-controls="sync" aria-selected="false">
+        <span class="d-flex align-items-center gap-2">
+            <span class="material-symbols-outlined fs-5">sync</span>
+            Sincronización
         </span>
     </button>
   </li>
@@ -63,7 +69,7 @@
                             Importar CSV
                             <input type="file" id="feriados-import-file" style="display:none" accept=".csv">
                         </label>
-                        <a href="{{ url_for('exportar_feriados') }}" class="btn btn-sm btn-outline-secondary">Exportar CSV</a>
+                        <a href="{{ url_for('attendance.exportar_feriados') }}" class="btn btn-sm btn-outline-secondary">Exportar CSV</a>
                         <button class="btn btn-sm btn-outline-secondary" onclick="cargarFeriados();"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">sync</span></button>
                     </div>
                 </div>
@@ -85,10 +91,10 @@
                         <h5 class="fw-bold mb-3">Copias de Seguridad (Backups)</h5>
                         <p class="small text-muted mb-4">Descargue respaldos de seguridad de la base de datos completa para guardado externo.</p>
                         <div class="d-flex flex-column gap-2" style="max-width: 320px;">
-                            <a href="/api/backup/descargar" class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center gap-2">
+                            <a href="{{ url_for('reports.descargar_backup_db') }}" class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center gap-2">
                                 <span class="material-symbols-outlined" style="font-size: 1.1rem;">download</span> Descargar Base de Datos (.db)
                             </a>
-                            <a href="/api/backup/csv" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
+                            <a href="{{ url_for('reports.descargar_backup_csv') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
                                 <span class="material-symbols-outlined" style="font-size: 1.1rem;">table_chart</span> Descargar Historial completo (CSV)
                             </a>
                         </div>
@@ -117,23 +123,61 @@
             </div>
         </div>
     </div>
+
+    <!-- SINCRONIZACIÓN TAB (Fase 1 — Sync observable) -->
+    <div class="tab-pane fade" id="sync" role="tabpanel" aria-labelledby="sync-tab">
+        <div class="row g-4 p-2">
+            <div class="col-12">
+                <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0">Sincronización automática</h5>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="cargarSchedulerEstado();">
+                                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">refresh</span>
+                                Actualizar
+                            </button>
+                        </div>
+                        <p class="small text-muted mb-4">Estado del scheduler en segundo plano y últimas corridas registradas.</p>
+
+                        <div id="sync-estado-resumen" class="row g-3 mb-4">
+                            <div class="col-md-3">
+                                <div class="p-3 bg-light border rounded text-center">
+                                    <small class="text-muted d-block">Estado</small>
+                                    <span id="sync-activo-badge" class="badge bg-secondary fs-6 mt-1">—</span>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-light border rounded text-center">
+                                    <small class="text-muted d-block">Hora nocturna</small>
+                                    <strong id="sync-hora-nocturna" class="d-block mt-1">—</strong>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-light border rounded text-center">
+                                    <small class="text-muted d-block">Intervalo</small>
+                                    <strong id="sync-intervalo" class="d-block mt-1">—</strong>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="p-3 bg-light border rounded text-center">
+                                    <small class="text-muted d-block">Próxima corrida</small>
+                                    <strong id="sync-proxima" class="d-block mt-1" style="font-size: 0.85rem;">—</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6 class="fw-bold mb-2">Últimas 10 corridas</h6>
+                        <div id="sync-corridas-tabla" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <p class="text-muted small">Haga clic en "Actualizar" o abra este tab para cargar.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
-<style>
-.custom-tab {
-    background-color: transparent !important;
-    color: #6c757d !important;
-    border: none;
-    border-radius: 10px !important;
-    transition: all 0.2s ease-in-out;
-}
-.custom-tab.active {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
-}
-</style>
 {% endblock %}

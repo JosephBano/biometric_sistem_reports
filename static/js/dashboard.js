@@ -73,7 +73,7 @@ function fetchDispositivos() {
             if (!data.dispositivos || data.dispositivos.length === 0) {
                 document.getElementById('dispositivos-container').innerHTML =
                     '<div class="text-muted small text-center py-3">No hay dispositivos registrados. ' +
-                    '<a href="/admin/dispositivos">Agregar uno</a>.</div>';
+                    '<a href="' + (window.APP_BASE || '') + '/admin/dispositivos">Agregar uno</a>.</div>';
                 return;
             }
             renderDispositivos(data.dispositivos);

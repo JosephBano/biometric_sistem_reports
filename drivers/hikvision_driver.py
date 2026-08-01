@@ -22,7 +22,7 @@ class HikvisionDriver(BiometricDriver):
         self.base_url = f"{protocolo}://{self.ip}:{self.port}/ISAPI"
         
         # Desencriptar la contraseña del dispositivo
-        from auth import decrypt_device_password
+        from app.domain.auth import decrypt_device_password
         self.username = "admin" # asume usuario admin para ISAPI
         pwd_enc = dispositivo.get('password_enc')
         
@@ -130,5 +130,5 @@ class HikvisionDriver(BiometricDriver):
     def get_capacidad(self) -> dict:
         return {
             "total_registros": 0,
-            "capacidad_max": 100000
+            "capacidad_max": int(self.dispositivo.get("capacidad_max", 100000))
         }

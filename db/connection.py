@@ -5,11 +5,23 @@ Fase 2+: leerá g.tenant_schema del contexto Flask.
 """
 
 import os
+import threading
 from contextlib import contextmanager
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
 _engine = None
+_thread_local = threading.local()
+
+
+def set_thread_tenant(schema: str):
+    """Establece el tenant schema para el hilo actual (uso en background threads)."""
+    _thread_local.tenant_schema = schema
+
+
+def clear_thread_tenant():
+    """Limpia el tenant schema del hilo actual."""
+    _thread_local.tenant_schema = None
 
 
 def get_engine():
@@ -34,9 +46,14 @@ def get_engine():
 
 def get_tenant_schema() -> str:
     """
-    Fase 1: retorna siempre TENANT_DEFAULT.
-    Fase 2+: leerá g.tenant_schema del contexto Flask.
+    Prioridad:
+    1. Thread-local (background threads que capturaron el schema antes de lanzarse)
+    2. Flask g.tenant_schema (requests HTTP normales)
+    3. TENANT_DEFAULT env var (fallback)
     """
+    schema = getattr(_thread_local, "tenant_schema", None)
+    if schema:
+        return schema
     try:
         from flask import g
         schema = getattr(g, "tenant_schema", None)
@@ -47,16 +64,24 @@ def get_tenant_schema() -> str:
     return os.environ.get("TENANT_DEFAULT", "istpet")
 
 
+def validate_schema_name(schema: str) -> str:
+    """Valida que el nombre de schema solo tiene caracteres seguros (previene SQL injection).
+
+    Usar SIEMPRE antes de interpolar un nombre de schema en SQL, incluso si
+    proviene de la propia tabla public.tenants.
+    """
+    if not schema or not all(c.isalnum() or c == "_" for c in schema):
+        raise ValueError(f"Schema name inválido: {schema!r}")
+    return schema
+
+
 @contextmanager
 def get_connection(schema: str = None):
     """
     Context manager que entrega una conexión con el search_path correcto.
     Hace commit automático al salir sin excepción; rollback en error.
     """
-    schema = schema or get_tenant_schema()
-    # Validar que el slug solo tiene caracteres seguros (previene SQL injection)
-    if not all(c.isalnum() or c == "_" for c in schema):
-        raise ValueError(f"Schema name inválido: {schema!r}")
+    schema = validate_schema_name(schema or get_tenant_schema())
     with get_engine().connect() as conn:
         conn.execute(text(f"SET search_path TO {schema}, public"))
         try:

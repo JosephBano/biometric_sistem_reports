@@ -150,6 +150,36 @@ def archivar_periodo(id: str) -> None:
         )
 
 
+def eliminar_periodo(id: str) -> bool:
+    """
+    Elimina permanentemente un grupos_periodo y todos sus periodos_vigencia asociados.
+    NO elimina las personas ni sus horarios, solo la asociación al período.
+    Retorna True si existía y fue eliminado.
+    """
+    with get_connection() as conn:
+        gp = conn.execute(
+            text("SELECT nombre, fecha_inicio, fecha_fin FROM grupos_periodo WHERE id = CAST(:id AS uuid)"),
+            {"id": id},
+        ).fetchone()
+        if not gp:
+            return False
+        d = dict(gp._mapping)
+        conn.execute(
+            text("""
+                DELETE FROM periodos_vigencia
+                WHERE nombre = :nombre
+                  AND fecha_inicio = :fi
+                  AND (fecha_fin = :ff OR (:ff IS NULL AND fecha_fin IS NULL))
+            """),
+            {"nombre": d["nombre"], "fi": d["fecha_inicio"], "ff": d["fecha_fin"]},
+        )
+        conn.execute(
+            text("DELETE FROM grupos_periodo WHERE id = CAST(:id AS uuid)"),
+            {"id": id},
+        )
+        return True
+
+
 def cerrar_periodos_vencidos() -> int:
     """Cierra grupos_periodo y periodos_vigencia cuya fecha_fin ya pasó."""
     with get_connection() as conn:
@@ -188,9 +218,15 @@ def agregar_personas_a_periodo_bulk(periodo_id: str, personas_ids: list[str]) ->
                 conn.execute(
                     text("""
                         INSERT INTO periodos_vigencia (persona_id, nombre, fecha_inicio, fecha_fin, estado, descripcion)
-                        VALUES (CAST(:persona_id AS uuid), :nombre,
-                                CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc)
-                        ON CONFLICT DO NOTHING
+                        SELECT CAST(:persona_id AS uuid), :nombre,
+                               CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM periodos_vigencia
+                            WHERE persona_id = CAST(:persona_id AS uuid)
+                              AND nombre = :nombre
+                              AND fecha_inicio = CAST(:fi AS date)
+                              AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
+                        )
                     """),
                     {"persona_id": p_id, "nombre": d["nombre"],
                      "fi": d["fecha_inicio"], "ff": d["fecha_fin"],
@@ -254,24 +290,24 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                 ).fetchone()
                                 grupo_id = str(g_new[0])
 
-                        # B. Upsert categoría
-                        cat_id = None
+                        # B. Upsert grupo funcional (antes 'categoria')
+                        gf_id = None
                         if cat_name:
                             c_row = conn.execute(
-                                text("SELECT id FROM categorias WHERE UPPER(nombre) = UPPER(:n) LIMIT 1"),
+                                text("SELECT id FROM grupos_funcionales WHERE UPPER(nombre) = UPPER(:n) LIMIT 1"),
                                 {"n": cat_name},
                             ).fetchone()
                             if c_row:
-                                cat_id = str(c_row[0])
+                                gf_id = str(c_row[0])
                             else:
                                 c_new = conn.execute(
                                     text("""
-                                        INSERT INTO categorias (nombre, tipo_persona_id)
+                                        INSERT INTO grupos_funcionales (nombre, tipo_persona_id)
                                         VALUES (:n, CAST(:t_id AS uuid)) RETURNING id
                                     """),
                                     {"n": cat_name, "t_id": tipo_persona_id},
                                 ).fetchone()
-                                cat_id = str(c_new[0])
+                                gf_id = str(c_new[0])
 
                         # C. Upsert persona
                         persona_id = None
@@ -286,10 +322,10 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                     text("""
                                         UPDATE personas
                                         SET nombre=:n, grupo_id=CAST(:g AS uuid),
-                                            categoria_id=CAST(:c AS uuid), activo=true
+                                            grupo_funcional_id=CAST(:c AS uuid), activo=true
                                         WHERE id=CAST(:pid AS uuid)
                                     """),
-                                    {"n": nombre_p, "g": grupo_id, "c": cat_id, "pid": persona_id},
+                                    {"n": nombre_p, "g": grupo_id, "c": gf_id, "pid": persona_id},
                                 )
                                 actualizadas += 1
 
@@ -304,35 +340,41 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
                                     text("""
                                         UPDATE personas
                                         SET identificacion=:ident, grupo_id=CAST(:g AS uuid),
-                                            categoria_id=CAST(:c AS uuid), activo=true
+                                            grupo_funcional_id=CAST(:c AS uuid), activo=true
                                         WHERE id=CAST(:pid AS uuid)
                                     """),
-                                    {"ident": identif or None, "g": grupo_id, "c": cat_id, "pid": persona_id},
+                                    {"ident": identif or None, "g": grupo_id, "c": gf_id, "pid": persona_id},
                                 )
                                 actualizadas += 1
                             else:
                                 p_new = conn.execute(
                                     text("""
                                         INSERT INTO personas (nombre, identificacion, tipo_persona_id,
-                                            grupo_id, categoria_id)
+                                            grupo_id, grupo_funcional_id)
                                         VALUES (:n, :ident, CAST(:t AS uuid),
                                                 CAST(:g AS uuid), CAST(:c AS uuid))
                                         RETURNING id
                                     """),
                                     {"n": nombre_p, "ident": identif or None,
-                                     "t": tipo_persona_id, "g": grupo_id, "c": cat_id},
+                                     "t": tipo_persona_id, "g": grupo_id, "c": gf_id},
                                 ).fetchone()
                                 persona_id = str(p_new[0])
                                 nuevas += 1
 
-                        # D. Crear periodo_vigencia para la persona
+                        # D. Crear periodo_vigencia para la persona (evitar duplicados)
                         conn.execute(
                             text("""
                                 INSERT INTO periodos_vigencia
                                     (persona_id, nombre, fecha_inicio, fecha_fin, estado, descripcion)
-                                VALUES (CAST(:pid AS uuid), :nombre,
-                                        CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc)
-                                ON CONFLICT DO NOTHING
+                                SELECT CAST(:pid AS uuid), :nombre,
+                                       CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc
+                                WHERE NOT EXISTS (
+                                    SELECT 1 FROM periodos_vigencia
+                                    WHERE persona_id = CAST(:pid AS uuid)
+                                      AND nombre = :nombre
+                                      AND fecha_inicio = CAST(:fi AS date)
+                                      AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
+                                )
                             """),
                             {"pid": persona_id, "nombre": p_data["nombre"],
                              "fi": fecha_inicio, "ff": fecha_fin,

@@ -22,7 +22,7 @@ class ZKDriver(BiometricDriver):
         
         # Desencriptar la contraseña del dispositivo
         # Asume que si password_enc está vacío, usa 0 (default pyzk)
-        from auth import decrypt_device_password
+        from app.domain.auth import decrypt_device_password
         pwd_enc = dispositivo.get('password_enc')
         
         # Retro-compatibilidad con la variable de entorno si pwd_enc es None (Fase 1/2)
@@ -56,12 +56,14 @@ class ZKDriver(BiometricDriver):
         if not ZK_DISPONIBLE:
             return False
         try:
-            zk = ZK(self.ip, port=self.port, timeout=10, 
+            zk = ZK(self.ip, port=self.port, timeout=10,
                     password=self.password, force_udp=self.udp, ommit_ping=True)
             conn = zk.connect()
             conn.disconnect()
             return True
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("test_conexion %s:%s falló: %s", self.ip, self.port, e)
             return False
 
     def get_usuarios(self) -> list[dict]:
@@ -141,7 +143,7 @@ class ZKDriver(BiometricDriver):
 
     def get_capacidad(self) -> dict:
         total = 0
-        cap_max = int(os.getenv("ZK_CAPACIDAD_MAX", "100000"))
+        cap_max = int(self.dispositivo.get("capacidad_max", 100000))
         try:
             zk = self._make_zk()
             conn = zk.connect()

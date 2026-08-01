@@ -184,12 +184,16 @@ function generarReporte() {
     const filtros = leerFiltros();
     const modo = document.getElementById('modo').value;
 
+    const fmtEl = document.querySelector('input[name="formato-reporte"]:checked');
+    const formato = fmtEl ? fmtEl.value : 'pdf';
+
     const payload = {
         fecha_inicio: fi,
         fecha_fin: ff,
         modo: modo,
         filtros: filtros,
-        excluidos: excl
+        excluidos: excl,
+        formato: formato,
     };
 
     if (modo === 'persona') {
@@ -207,7 +211,7 @@ function generarReporte() {
     btn.disabled = true;
 
     // Use raw fetch for download capability
-    fetch('/api/generar-desde-db', {
+    fetch(_BASE + '/api/generar-desde-db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

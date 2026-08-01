@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page-header mb-4">
+    <h3>Asignación masiva de grupo funcional</h3>
+    <p class="text-muted">Aplica un grupo funcional por defecto a un conjunto de personas filtradas. ADR-0003.</p>
+</div>
+
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form id="form-asignacion-masiva" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="col-md-3">
+                <label class="form-label">Grupo destino <span class="text-danger">*</span></label>
+                <select class="form-select" name="grupo_funcional_id_destino" required>
+                    <option value="">Cargando…</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Plantilla (solo modo override)</label>
+                <select class="form-select" name="plantilla_id">
+                    <option value="">—</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha inicio <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="fecha_inicio" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Fecha fin (opcional)</label>
+                <input type="date" class="form-control" name="fecha_fin">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="button" class="btn btn-primary w-100" onclick="previewMasiva();">
+                    Preview
+                </button>
+            </div>
+
+            <div class="col-12"><hr></div>
+
+            <div class="col-md-3">
+                <label class="form-label">Filtro: Grupo (operativo)</label>
+                <select class="form-select" name="grupo_id">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Filtro: Tipo de persona</label>
+                <select class="form-select" name="tipo_persona_id">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Filtro: Categoría</label>
+                <select class="form-select" name="categoria_id">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Filtro: Sede</label>
+                <select class="form-select" name="sede_id">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+            <div class="col-12 d-flex gap-2 align-items-center flex-wrap">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           id="cerrar_legacy" name="cerrar_legacy_en_fecha">
+                    <label class="form-check-label" for="cerrar_legacy">
+                        Cerrar asignaciones legacy en fecha_inicio-1
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                           id="modo_override" name="modo_override">
+                    <label class="form-check-label" for="modo_override">
+                        Modo: crear_override (en lugar de asignar_grupo_funcional)
+                    </label>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="preview-resultado" class="card border-0 shadow-sm" style="display:none;">
+    <div class="card-header bg-transparent py-3">
+        <h5 class="fw-bold mb-0">Preview</h5>
+    </div>
+    <div class="card-body" id="preview-body"></div>
+    <div class="card-footer">
+        <button type="button" class="btn btn-warning" id="btn-ejecutar"
+                onclick="ejecutarMasiva();" disabled>
+            Ejecutar asignación masiva
+        </button>
+        <span class="text-muted ms-2">Marca "Confirmar" para habilitar.</span>
+        <div class="form-check d-inline-block ms-3">
+            <input type="checkbox" id="confirmar" class="form-check-input"
+                   onchange="document.getElementById('btn-ejecutar').disabled = !this.checked;">
+            <label class="form-check-label" for="confirmar">Confirmar</label>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/asignacion_masiva.js') }}"></script>
+{% endblock %}

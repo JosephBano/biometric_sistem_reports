@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h3>Gestión de Grupos Funcionales</h3>
+    <p class="text-muted">Rol laboral de cada persona (ej: Profesor, Administrativo, Trabajador). Define el horario por defecto del grupo.</p>
+    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrearGrupoFuncional">
+        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">label</span> Nuevo Grupo Funcional
+    </button>
+</div>
+
+<!-- Filtro por tipo -->
+<div class="filter-card mb-4">
+    <form class="row g-3 align-items-end" method="GET">
+        <div class="col-md-5">
+            <label class="form-label small text-muted fw-bold mb-2">Filtrar por Tipo de Persona</label>
+            <select class="form-select" name="tipo_persona_id">
+                <option value="">Todos los tipos</option>
+                {% for t in tenant_tipos %}
+                <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
+            <a href="{{ url_for('groups.listar_grupos_funcionales') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+        </div>
+    </form>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th>Nombre</th>
+                    <th>Tipo de Persona</th>
+                    <th>Estado</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for gf in grupos_funcionales %}
+                <tr>
+                    <td class="fw-bold">{{ gf.nombre }}</td>
+                    <td>{{ gf.tipo_persona_nombre or '—' }}</td>
+                    <td>
+                        <span class="badge {% if gf.activo %}bg-success{% else %}bg-secondary{% endif %}">
+                            {% if gf.activo %}Activo{% else %}Inactivo{% endif %}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#modalEditarGrupoFuncional"
+                                data-id="{{ gf.id }}"
+                                data-nombre="{{ gf.nombre }}"
+                                data-activo="{{ '1' if gf.activo else '0' }}">
+                            Editar
+                        </button>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" class="text-center py-5 text-muted">No hay grupos funcionales creados.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Modal Crear Grupo Funcional -->
+<div class="modal fade" id="modalCrearGrupoFuncional" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Nuevo Grupo Funcional</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('groups.crear_grupo_funcional') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Persona</label>
+                        <select class="form-select" name="tipo_persona_id">
+                            <option value="">Sin tipo específico</option>
+                            {% for t in tenant_tipos %}
+                            <option value="{{ t.id }}">{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Crear</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Editar Grupo Funcional -->
+<div class="modal fade" id="modalEditarGrupoFuncional" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Grupo Funcional</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="formEditarGrupoFuncional" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nombre</label>
+                        <input type="text" class="form-control" name="nombre" id="edit_gf_nombre">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" name="activo" id="edit_gf_activo">
+                            <option value="1">Activo</option>
+                            <option value="0">Inactivo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('modalEditarGrupoFuncional').addEventListener('show.bs.modal', function(e) {
+    const btn = e.relatedTarget;
+    const form = document.getElementById('formEditarGrupoFuncional');
+    form.action = (window.APP_BASE || '') + '/admin/grupos-funcionales/' + btn.dataset.id;
+    document.getElementById('edit_gf_nombre').value = btn.dataset.nombre || '';
+    document.getElementById('edit_gf_activo').value = btn.dataset.activo || '1';
+});
+</script>
+{% endblock %}

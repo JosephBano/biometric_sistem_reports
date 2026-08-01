@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "biometric-sistem-reports"
+version = "2.0.0"
+description = "Sistema multi-tenant de informes biométricos (Flask + PostgreSQL)"
+requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "Proprietary" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "db*", "drivers*"]
+exclude = ["tests*", "docs*", "static*", "templates*", "data*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "data",
+    "docs",
+    "static",
+    "templates",
+    "tests/fixtures",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (manejado por formatter)
+    "B008",  # function call in default argument (Flask routes lo requiere)
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = """
+    -ra
+    --strict-markers
+    --strict-config
+    --tb=short
+    --cov=app
+    --cov=db
+    --cov-report=term-missing:skip-covered
+    --cov-fail-under=43
+"""
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "integration: tests que requieren PostgreSQL de test",
+    "unit: tests que no requieren DB",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/__init__.py",   # sólo expone create_app; medido por tests indirectamente
+    "app/web/__init__.py",
+    "app/domain/__init__.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]

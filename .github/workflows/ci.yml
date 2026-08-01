@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (unit + integration)
+    runs-on: ubuntu-latest
+
+    env:
+      FLASK_ENV: testing
+      FLASK_SECRET_KEY: test-secret-key-for-ci-only-do-not-use-in-prod
+      DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+      DB_ENCRYPTION_KEY: ZGVjaWRpZG9wb3JjaGV0dGVzdGluZw==
+      SYNC_AUTO: "false"
+      BACKUP_AUTO: "false"
+      PYTHON_VERSION: "3.12"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          # pgserver: trae binarios de PostgreSQL 16 embebidos para los tests
+          # de integración (no requiere servicio Docker postgres:16).
+          pip install pgserver
+
+      - name: Lint (ruff)
+        run: |
+          ruff check . --output-format=github
+
+      - name: Run tests (unit + integration)
+        env:
+          # pgserver crea un socket Unix local, no necesita servicio Postgres.
+          # Forzamos un valor dummy para que `app.config` pase la salvaguarda
+          # de TestingConfig (que exige "test" en DATABASE_URL).
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_ci
+        run: |
+          pytest -v --tb=short --color=yes
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            htmlcov/
+            .coverage
+          retention-days: 30
+
+  coverage-gate:
+    name: Coverage gate (≥43%)
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+          pip install pgserver
+
+      - name: Check coverage
+        # El umbral está en pyproject.toml (--cov-fail-under=43).
+        # DoD-8 del ADR-0001 pide 60%; el gap actual se debe a:
+        # - app/domain/reports.py (1244 stmts, 11%) — funciones de análisis
+        #   y rendering de PDF, requieren mocks pesados
+        # - app/domain/report_docx.py (451 stmts, 8%) — rendering DOCX
+        # - app/web/admin_bp.py / schedule_bp.py / periods_bp.py (38%)
+        # - db/queries/asistencia_periodo.py (24%) — requiere datos complejos
+        # Plan: tests focalizados por módulo en próximos PRs.
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/test_ci
+        run: |
+          pytest --cov=app --cov=db --cov-fail-under=43 --cov-report=term-missing

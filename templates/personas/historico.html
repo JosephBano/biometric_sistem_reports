@@ -1,12 +1,10 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Historial por Identificación</h3>
-        <p class="text-muted mb-0">Consulta todos los períodos de vigencia de una persona por su cédula o pasaporte.</p>
-    </div>
-    <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-1">
+<div class="page-header mb-4">
+    <h3>Historial por Identificación</h3>
+    <p class="text-muted">Consulta todos los períodos de vigencia de una persona por su cédula o pasaporte.</p>
+    <a href="{{ url_for('people.lista') }}" class="btn btn-outline-secondary mt-3 btn-sm d-flex align-items-center gap-1">
         <span class="material-symbols-outlined fs-6">arrow_back</span> Volver
     </a>
 </div>
@@ -66,6 +64,7 @@
                         <th>Período</th>
                         <th>Fecha Inicio</th>
                         <th>Fecha Fin</th>
+                        <th>Origen horario</th>
                         <th>Estado</th>
                     </tr>
                 </thead>
@@ -75,7 +74,7 @@
                         <td class="fw-bold">
                             {{ pv.nombre }}
                             {% if pv.grupo_periodo_id %}
-                            <a href="{{ url_for('periodo_detalle', id=pv.grupo_periodo_id) }}"
+                            <a href="{{ url_for('periods.detalle', id=pv.grupo_periodo_id) }}"
                                class="btn btn-sm btn-outline-primary ms-2" style="font-size:0.7rem;">
                                 Ver período
                             </a>
@@ -84,6 +83,19 @@
                         <td>{{ pv.fecha_inicio }}</td>
                         <td>{{ pv.fecha_fin or 'Abierto' }}</td>
                         <td>
+                            {% if pv.horario_origen == 'personalizado' %}
+                            <span class="badge bg-info-subtle text-info-emphasis">Personalizado</span>
+                            {% elif pv.horario_origen == 'individual_legacy' %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis">Individual legacy</span>
+                            {% elif pv.horario_origen == 'default_grupo' %}
+                            <span class="badge bg-primary-subtle text-primary-emphasis">Default de grupo</span>
+                            {% elif pv.horario_origen == 'sin_horario' %}
+                            <span class="badge bg-secondary">Sin horario</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
                             <span class="badge {% if pv.estado == 'activo' %}bg-success{% elif pv.estado == 'cerrado' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
                                 {{ pv.estado|capitalize }}
                             </span>
@@ -91,7 +103,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="4" class="text-center py-4 text-muted">Sin períodos registrados.</td>
+                        <td colspan="5" class="text-center py-4 text-muted">Sin períodos registrados.</td>
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -12,7 +12,7 @@ from alembic.config import Config
 from db.connection import get_engine, get_connection
 from db.schema import get_tenant_ddl
 from db.queries.tenants import insertar_tipo_persona, eliminar_tenant_de_public
-from db.init import _insertar_feriados_ecuador
+from db.init_seed import _insertar_feriados_ecuador
 
 log = logging.getLogger(__name__)
 

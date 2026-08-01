@@ -62,13 +62,17 @@ def actualizar_estado_sync_ui(dispositivo_id: str, estado: str, progreso: int = 
 def upsert_dispositivo(data: dict) -> str:
     """Inserta o actualiza un dispositivo"""
     with get_connection() as conn:
+        # Default de 100000 si no se envía
+        if "capacidad_max" not in data:
+            data["capacidad_max"] = 100000
+            
         if data.get("id"):
             conn.execute(text("""
                 UPDATE dispositivos SET 
                     nombre = :nombre, ip = :ip, puerto = :puerto, 
                     protocolo = :protocolo, tipo_driver = :tipo_driver, 
                     prioridad = :prioridad, timeout_seg = :timeout_seg,
-                    activo = :activo
+                    activo = :activo, capacidad_max = :capacidad_max
                     """ + (", password_enc = :password_enc" if data.get("password_enc") else "") + """
                 WHERE id = CAST(:id AS uuid)
             """), data)
@@ -76,12 +80,23 @@ def upsert_dispositivo(data: dict) -> str:
             return data["id"]
         else:
             row = conn.execute(text("""
-                INSERT INTO dispositivos (nombre, ip, puerto, protocolo, tipo_driver, prioridad, timeout_seg, password_enc)
-                VALUES (:nombre, :ip, :puerto, :protocolo, :tipo_driver, :prioridad, :timeout_seg, :password_enc)
+                INSERT INTO dispositivos (nombre, ip, puerto, protocolo, tipo_driver, prioridad, timeout_seg, capacidad_max, password_enc)
+                VALUES (:nombre, :ip, :puerto, :protocolo, :tipo_driver, :prioridad, :timeout_seg, :capacidad_max, :password_enc)
                 RETURNING id
             """), data).fetchone()
             conn.commit()
             return str(row[0])
+
+
+def eliminar_dispositivo(dispositivo_id: str) -> bool:
+    """Elimina un dispositivo por ID. Retorna True si fue eliminado."""
+    with get_connection() as conn:
+        result = conn.execute(
+            text("DELETE FROM dispositivos WHERE id = CAST(:id AS uuid)"),
+            {"id": dispositivo_id}
+        )
+        conn.commit()
+        return result.rowcount > 0
 
 
 def has_alerta_hoy(dispositivo_id: str) -> bool:

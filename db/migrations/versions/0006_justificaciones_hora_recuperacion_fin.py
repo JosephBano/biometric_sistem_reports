@@ -17,13 +17,15 @@ def upgrade() -> None:
     op.execute(text("""
         DO $$
         BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns
-                WHERE table_name = 'justificaciones'
-                  AND column_name = 'hora_recuperacion_fin'
-                  AND table_schema = current_schema()
-            ) THEN
-                ALTER TABLE justificaciones ADD COLUMN hora_recuperacion_fin TIME;
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'justificaciones' AND table_schema = current_schema()) THEN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name = 'justificaciones'
+                      AND column_name = 'hora_recuperacion_fin'
+                      AND table_schema = current_schema()
+                ) THEN
+                    ALTER TABLE justificaciones ADD COLUMN hora_recuperacion_fin TIME;
+                END IF;
             END IF;
         END $$;
     """))

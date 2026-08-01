@@ -1,18 +1,16 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Personas</h3>
-        <p class="text-muted mb-0">Gestión del personal y sus horarios de trabajo.</p>
-    </div>
+<div class="page-header mb-4">
+    <h3>Personas</h3>
+    <p class="text-muted">Gestión del personal y sus horarios de trabajo.</p>
     {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-    <div id="header-actions-personal">
+    <div id="header-actions-personal" class="mt-3">
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
             <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">person_add</span> Nueva Persona
         </button>
     </div>
-    <div id="header-actions-horarios" style="display:none;">
+    <div id="header-actions-horarios" class="mt-3" style="display:none;">
         <label class="btn btn-outline-secondary mb-0" for="horarios-input" title="Importar horarios masivamente (.csv, .obd, .ods)">
             <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">upload_file</span> Importar
             <input type="file" id="horarios-input" style="display:none" accept=".obd,.ods,.csv">
@@ -54,44 +52,42 @@
     <div class="tab-pane fade show active" id="tab-personal">
 
         <!-- Filtros -->
-        <div class="card border-0 shadow-sm mb-4">
-            <div class="card-body p-4">
-                <form class="row g-3 align-items-end" method="GET">
-                    <div class="col-md-4">
-                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Búsqueda</label>
-                        <input type="text" class="form-control bg-light border-0" name="q"
-                            placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Tipo</label>
-                        <select class="form-select bg-light border-0" name="tipo_persona_id">
-                            <option value="">Todos los tipos</option>
-                            {% for t in tenant_tipos %}
-                            <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Grupo</label>
-                        <select class="form-select bg-light border-0" name="grupo_id">
-                            <option value="">Todos los grupos</option>
-                            {% for g in grupos %}
-                            <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex gap-2">
-                        <button type="submit" class="btn btn-primary flex-fill fw-bold shadow-sm" style="height: 38px;">Filtrar</button>
-                        <a href="{{ url_for('personas_lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
-                    </div>
-                </form>
-            </div>
+<div class="filter-card mb-4">
+    <form class="row g-3 align-items-end" method="GET">
+        <div class="col-md-4">
+            <label class="form-label small text-muted fw-bold mb-2">Búsqueda</label>
+            <input type="text" class="form-control" name="q"
+                placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
         </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold mb-2">Tipo</label>
+            <select class="form-select" name="tipo_persona_id">
+                <option value="">Todos los tipos</option>
+                {% for t in tenant_tipos %}
+                <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small text-muted fw-bold mb-2">Grupo</label>
+            <select class="form-select" name="grupo_id">
+                <option value="">Todos los grupos</option>
+                {% for g in grupos %}
+                <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
+            <a href="{{ url_for('people.lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
+        </div>
+    </form>
+</div>
 
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0">{{ personas|length }} persona(s)</h5>
-                <a href="{{ url_for('personas_historico') }}" class="btn btn-sm btn-outline-secondary">
+                <a href="{{ url_for('people.historico') }}" class="btn btn-sm btn-outline-secondary">
                     <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">history</span> Historial por Cédula
                 </a>
             </div>
@@ -140,7 +136,8 @@
                                     data-identificacion="{{ p.identificacion or '' }}"
                                     data-tipo="{{ p.tipo_persona_id or '' }}"
                                     data-grupo="{{ p.grupo_id or '' }}"
-                                    data-categoria="{{ p.categoria_id or '' }}"
+                                    data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
+                                    data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
                                     data-email="{{ p.email or '' }}"
                                     data-telefono="{{ p.telefono or '' }}"
                                     data-notas="{{ p.notas or '' }}"
@@ -262,7 +259,7 @@
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('personas_crear') }}">
+            <form method="POST" action="{{ url_for('people.crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body pt-3">
 
@@ -289,7 +286,7 @@
                             <div class="col-md-8">
                                 <p class="text-muted small mb-0">
                                     Número de usuario del dispositivo ZK. Se puede consultar en
-                                    <a href="{{ url_for('admin_dispositivos') }}" target="_blank">Dispositivos</a>
+                                    <a href="{{ url_for('admin.admin_dispositivos') }}" target="_blank">Dispositivos</a>
                                     o en la pantalla del reloj.
                                     <strong>Necesario para generar informes.</strong>
                                 </p>
@@ -400,6 +397,15 @@
                                 <option value="">Sin grupo</option>
                                 {% for g in grupos %}
                                 <option value="{{ g.id }}">{{ g.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold">Grupo Funcional</label>
+                            <select class="form-select" name="grupo_funcional_id" id="edit_grupo_funcional">
+                                <option value="">Sin grupo funcional</option>
+                                {% for gf in grupos_funcionales %}
+                                <option value="{{ gf.id }}">{{ gf.nombre }}</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -554,12 +560,13 @@ const _modalEditar = document.getElementById('modalEditarPersona');
 if (_modalEditar) {
     _modalEditar.addEventListener('show.bs.modal', function(e) {
         const btn = e.relatedTarget;
-        document.getElementById('formEditarPersona').action = '/personas/' + btn.dataset.id;
+        document.getElementById('formEditarPersona').action = (window.APP_BASE || '') + '/personas/' + btn.dataset.id;
         document.getElementById('edit_subtitulo').textContent = btn.dataset.nombre || '';
         document.getElementById('edit_nombre').value         = btn.dataset.nombre || '';
         document.getElementById('edit_identificacion').value = btn.dataset.identificacion || '';
         document.getElementById('edit_tipo').value           = btn.dataset.tipo || '';
         document.getElementById('edit_grupo').value          = btn.dataset.grupo || '';
+        document.getElementById('edit_grupo_funcional').value = btn.dataset.grupoFuncional || '';
         document.getElementById('edit_email').value          = btn.dataset.email || '';
         document.getElementById('edit_activo').value         = btn.dataset.activo || '1';
         document.getElementById('edit_notas').value          = btn.dataset.notas || '';
@@ -652,18 +659,4 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
-<style>
-.custom-tab {
-    background-color: transparent !important;
-    color: #6c757d !important;
-    border: none;
-    border-radius: 10px !important;
-    transition: all 0.2s ease-in-out;
-}
-.custom-tab.active {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important;
-}
-</style>
 {% endblock %}

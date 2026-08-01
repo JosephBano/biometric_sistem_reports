@@ -6,7 +6,7 @@ app.py, script.py y sync.py no requieren ningún cambio.
 """
 
 # ── Conexión ──────────────────────────────────────────────────────────────
-from db.connection import get_connection
+from db.connection import get_connection, set_thread_tenant, clear_thread_tenant
 
 # ── Inicialización ────────────────────────────────────────────────────────
 from db.init import init_db
@@ -37,7 +37,14 @@ from db.queries.horarios import (
 )
 
 # ── Sync log ──────────────────────────────────────────────────────────────
-from db.queries.sync_log import registrar_sync
+from db.queries.sync_log import registrar_sync, get_latest_sync_logs_por_dispositivo
+
+# ── Scheduler runs (Fase 1 — Sync observable) ──────────────────────────────
+from db.queries.scheduler_runs import (
+    registrar_run,
+    listar_ultimos,
+    purgar_mayor_a,
+)
 
 # ── Justificaciones ───────────────────────────────────────────────────────
 from db.queries.justificaciones import (
@@ -71,6 +78,8 @@ from db.queries.auth import (
     get_usuario_por_email,
     get_usuario_por_id,
     get_usuarios_tenant,
+    get_usuarios_all_tenants,
+    get_tenants_activos,
     crear_usuario_db,
     actualizar_roles_db,
     desactivar_usuario_db,
@@ -103,6 +112,7 @@ from db.queries.periodos import (
     archivar_periodo,
     cerrar_periodos_vencidos,
     procesar_csv_personas_periodo,
+    eliminar_periodo,
 )
 
 from db.queries.asistencia_periodo import calcular_asistencia_periodo
@@ -111,9 +121,9 @@ from db.queries.grupos import (
     listar_grupos,
     crear_grupo,
     actualizar_grupo,
-    listar_categorias,
-    crear_categoria,
-    actualizar_categoria,
+    listar_grupos_funcionales,
+    crear_grupo_funcional,
+    actualizar_grupo_funcional,
 )
 
 from db.queries.personas_crud import (
@@ -132,6 +142,7 @@ from db.queries.dispositivos import (
     get_estado_sync_ui,
     actualizar_estado_sync_ui,
     upsert_dispositivo,
+    eliminar_dispositivo,
     get_dispositivos_con_fallas_consecutivas,
     has_alerta_hoy,
     marcar_alerta_enviada,
@@ -162,6 +173,11 @@ __all__ = [
     "get_estado_horarios",
     # sync
     "registrar_sync",
+    "get_latest_sync_logs_por_dispositivo",
+    # scheduler runs
+    "registrar_run",
+    "listar_ultimos",
+    "purgar_mayor_a",
     # justificaciones
     "insertar_justificacion",
     "get_justificaciones",
@@ -184,6 +200,8 @@ __all__ = [
     "get_usuario_por_email",
     "get_usuario_por_id",
     "get_usuarios_tenant",
+    "get_usuarios_all_tenants",
+    "get_tenants_activos",
     "crear_usuario_db",
     "actualizar_roles_db",
     "desactivar_usuario_db",
@@ -214,13 +232,13 @@ __all__ = [
     "cerrar_periodos_vencidos",
     "procesar_csv_personas_periodo",
     "calcular_asistencia_periodo",
-    # grupos y categorías
+    # grupos y grupos funcionales
     "listar_grupos",
     "crear_grupo",
     "actualizar_grupo",
-    "listar_categorias",
-    "crear_categoria",
-    "actualizar_categoria",
+    "listar_grupos_funcionales",
+    "crear_grupo_funcional",
+    "actualizar_grupo_funcional",
     # personas CRUD
     "listar_personas",
     "get_persona",

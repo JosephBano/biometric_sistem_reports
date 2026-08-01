@@ -11,13 +11,13 @@ def listar_personas(tipo_persona_id: str = None, grupo_id: str = None,
                p.email, p.telefono, p.notas,
                t.nombre as tipo_persona, t.id::text as tipo_persona_id,
                g.nombre as grupo, g.id::text as grupo_id,
-               c.nombre as categoria, c.id::text as categoria_id,
+               gf.nombre as grupo_funcional, gf.id::text as grupo_funcional_id,
                pd.id_en_dispositivo as id_usuario_zk,
                pd.dispositivo_id::text as dispositivo_id_principal
         FROM personas p
         LEFT JOIN tipos_persona t ON p.tipo_persona_id = t.id
         LEFT JOIN grupos g ON p.grupo_id = g.id
-        LEFT JOIN categorias c ON p.categoria_id = c.id
+        LEFT JOIN grupos_funcionales gf ON p.grupo_funcional_id = gf.id
         LEFT JOIN LATERAL (
             SELECT id_en_dispositivo, dispositivo_id
             FROM personas_dispositivos
@@ -38,7 +38,13 @@ def listar_personas(tipo_persona_id: str = None, grupo_id: str = None,
         q += " AND p.grupo_id = CAST(:grupo_id AS uuid)"
         params["grupo_id"] = grupo_id
     if busqueda:
-        q += " AND (UPPER(p.nombre) LIKE UPPER(:busq) OR p.identificacion LIKE :busq)"
+        # También por ID del biométrico: es el identificador que el operador
+        # tiene a mano cuando mira el dispositivo o un reporte.
+        q += (
+            " AND (UPPER(p.nombre) LIKE UPPER(:busq)"
+            " OR p.identificacion LIKE :busq"
+            " OR pd.id_en_dispositivo LIKE :busq)"
+        )
         params["busq"] = f"%{busqueda}%"
     q += " ORDER BY p.nombre"
     with get_connection() as conn:
@@ -54,12 +60,12 @@ def get_persona(id: str) -> dict | None:
                        p.email, p.telefono, p.notas,
                        t.nombre as tipo_persona, t.id::text as tipo_persona_id,
                        g.nombre as grupo, g.id::text as grupo_id,
-                       c.nombre as categoria, c.id::text as categoria_id,
+                       gf.nombre as grupo_funcional, gf.id::text as grupo_funcional_id,
                        pd.id_en_dispositivo as id_usuario_zk
                 FROM personas p
                 LEFT JOIN tipos_persona t ON p.tipo_persona_id = t.id
                 LEFT JOIN grupos g ON p.grupo_id = g.id
-                LEFT JOIN categorias c ON p.categoria_id = c.id
+                LEFT JOIN grupos_funcionales gf ON p.grupo_funcional_id = gf.id
                 LEFT JOIN LATERAL (
                     SELECT id_en_dispositivo FROM personas_dispositivos
                     WHERE persona_id = p.id AND activo = true
@@ -72,16 +78,48 @@ def get_persona(id: str) -> dict | None:
         return dict(row._mapping) if row else None
 
 
-def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
+def _upsert_zk_id(
+    conn, persona_id: str, id_usuario_zk: str | None, dispositivo_id: str | None = None,
+) -> None:
     """Inserta o actualiza el ID del biométrico para la persona.
-    Si id_usuario_zk es None o vacío, desactiva la entrada principal existente."""
+    Si id_usuario_zk es None o vacío, desactiva la entrada principal existente.
+
+    Si no se pasa `dispositivo_id`, usa el dispositivo activo de mayor
+    prioridad (comportamiento legado para instalaciones de un solo
+    dispositivo). En instalaciones con varios dispositivos, el llamador
+    debe pasar `dispositivo_id` explícito para no vincular el ZK id al
+    dispositivo equivocado.
+
+    Notas de integridad:
+      - El par (dispositivo_id, id_en_dispositivo) es UNIQUE globalmente
+        (ver `db/schema.py::personas_dispositivos`). Si OTRA persona ya
+        ocupa ese id_en_dispositivo en el dispositivo, la cláusula
+        ON CONFLICT reasignará el vínculo a la persona actual.
+      - El historial de marcaciones NO se ve afectado porque
+        `asistencias.persona_id` es FK directa a `personas.id` y se
+        resuelve en el momento de insertar la marcación.
+      - Por seguridad evitamos reasignar vínculos que difieren solo
+        en espacios: el id se pasa por `str(id_usuario_zk).strip()`
+        y se descarta si queda vacío.
+    """
     if id_usuario_zk:
-        dev = conn.execute(
-            text("SELECT id::text FROM dispositivos WHERE activo = true ORDER BY prioridad ASC LIMIT 1")
-        ).fetchone()
+        zk_norm = str(id_usuario_zk).strip()
+        if not zk_norm:
+            # Tratar valor solo-espacios como "sin asignar"
+            conn.execute(
+                text("UPDATE personas_dispositivos SET activo = false, es_principal = false WHERE persona_id = CAST(:pid AS uuid) AND es_principal = true"),
+                {"pid": persona_id},
+            )
+            return
+        if dispositivo_id:
+            dev = (dispositivo_id,)
+        else:
+            dev = conn.execute(
+                text("SELECT id::text FROM dispositivos WHERE activo = true ORDER BY prioridad ASC LIMIT 1")
+            ).fetchone()
         if not dev:
             return
-        # Desactivar entrada principal previa de ESTA persona (para evitar dos principales)
+        # Desactivar entradas principales previas de ESTA persona (evita dos principales)
         conn.execute(
             text("UPDATE personas_dispositivos SET es_principal = false WHERE persona_id = CAST(:pid AS uuid) AND es_principal = true"),
             {"pid": persona_id},
@@ -95,7 +133,7 @@ def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
                               es_principal = true,
                               activo = true
             """),
-            {"pid": persona_id, "did": dev[0], "zk_id": str(id_usuario_zk)},
+            {"pid": persona_id, "did": dev[0], "zk_id": zk_norm},
         )
     else:
         conn.execute(
@@ -105,27 +143,27 @@ def _upsert_zk_id(conn, persona_id: str, id_usuario_zk: str | None) -> None:
 
 
 def crear_persona(nombre: str, identificacion: str = None, tipo_persona_id: str = None,
-                  grupo_id: str = None, categoria_id: str = None,
+                  grupo_id: str = None, grupo_funcional_id: str = None,
                   email: str = None, telefono: str = None, notas: str = None,
-                  id_usuario_zk: str = None) -> dict:
+                  id_usuario_zk: str = None, dispositivo_id: str = None) -> dict:
     with get_connection() as conn:
         row = conn.execute(
             text("""
                 INSERT INTO personas (nombre, identificacion, tipo_persona_id,
-                    grupo_id, categoria_id, email, telefono, notas)
+                    grupo_id, grupo_funcional_id, email, telefono, notas)
                 VALUES (:nombre, :identificacion, CAST(:tipo_persona_id AS uuid),
-                        CAST(:grupo_id AS uuid), CAST(:categoria_id AS uuid),
+                        CAST(:grupo_id AS uuid), CAST(:grupo_funcional_id AS uuid),
                         :email, :telefono, :notas)
                 RETURNING id::text, nombre, identificacion, activo
             """),
             {"nombre": nombre, "identificacion": identificacion or None,
              "tipo_persona_id": tipo_persona_id, "grupo_id": grupo_id,
-             "categoria_id": categoria_id, "email": email,
+             "grupo_funcional_id": grupo_funcional_id, "email": email,
              "telefono": telefono, "notas": notas},
         ).fetchone()
         persona = dict(row._mapping)
         if id_usuario_zk:
-            _upsert_zk_id(conn, persona["id"], id_usuario_zk)
+            _upsert_zk_id(conn, persona["id"], id_usuario_zk, dispositivo_id)
         return persona
 
 
@@ -135,11 +173,18 @@ def actualizar_persona(id: str, datos: dict) -> dict | None:
     datos_persona = {k: v for k, v in datos.items() if k != "id_usuario_zk"}
 
     allowed = {"nombre", "identificacion", "activo", "email", "telefono", "notas"}
-    uuid_fields = {"tipo_persona_id", "grupo_id", "categoria_id"}
+    uuid_fields = {"tipo_persona_id", "grupo_id", "grupo_funcional_id"}
     sets, params = [], {"id": id}
     for k, v in datos_persona.items():
         if k in allowed:
-            sets.append(f"{k} = :{k}")
+            # Cast explícito para `activo` para evitar ambigüedad de tipo
+            # en serialización (psycopg2 ya mapea bool<->boolean, pero
+            # CAST lo hace inequívoco en logs de Postgres y protege contra
+            # drivers que serialicen distinto).
+            if k == "activo":
+                sets.append(f"{k} = CAST(:{k} AS boolean)")
+            else:
+                sets.append(f"{k} = :{k}")
             params[k] = v
         elif k in uuid_fields:
             sets.append(f"{k} = CAST(:{k} AS uuid)")

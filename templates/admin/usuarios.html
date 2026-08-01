@@ -8,12 +8,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Gestión de Usuarios</h3>
-        <p class="text-muted mb-0">Administración de cuentas de acceso, roles y permisos del sistema.</p>
-    </div>
-    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCrear">
+<div class="page-header mb-4">
+    <h3>Gestión de Usuarios</h3>
+    <p class="text-muted">Administración de cuentas de acceso, roles y permisos del sistema.</p>
+    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrear">
         <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">person_add</span>
         Nuevo Usuario
     </button>
@@ -94,7 +92,7 @@
 <div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('admin_crear_usuario') }}" id="formCrear">
+            <form method="POST" action="{{ url_for('admin.crear_usuario') }}" id="formCrear">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
                     <h5 class="modal-title" id="modalCrearLabel">Nuevo Usuario</h5>
@@ -244,7 +242,7 @@ function toggleScopeFields(prefix, checkbox) {
 
 function abrirEditar(usuarioId, datos) {
     // Configurar acción del form
-    document.getElementById('formEditar').action = '/admin/usuarios/' + usuarioId;
+    document.getElementById('formEditar').action = (window.APP_BASE || '') + '/admin/usuarios/' + usuarioId;
 
     // Nombre (solo lectura)
     document.getElementById('editar-nombre').value = datos.nombre || '';

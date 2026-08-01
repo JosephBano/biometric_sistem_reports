@@ -1,10 +1,17 @@
-"""CRUD de grupos y categorías del tenant."""
+"""CRUD de grupos y grupos funcionales del tenant.
 
+Convenciones:
+  - `grupos`           → ubicación/departamento operativa (jerarquica).
+  - `grupos_funcionales` → rol laboral que define el horario por defecto.
+  - `tipos_persona`    → tipo de contrato institucional (Empleado/Practicante).
+
+`grupos_funcionales` reemplaza al antiguo `categorias` (ADR-0003, Opción A).
+"""
 from sqlalchemy import text
 from db.connection import get_connection
 
 
-# ── Grupos ────────────────────────────────────────────────────────────────────
+# ── Grupos (operativos) ────────────────────────────────────────────────────────
 
 def listar_grupos(activo: bool = None) -> list[dict]:
     with get_connection() as conn:
@@ -48,30 +55,42 @@ def actualizar_grupo(id: str, datos: dict) -> dict | None:
         return dict(row._mapping) if row else None
 
 
-# ── Categorías ────────────────────────────────────────────────────────────────
+# ── Grupos Funcionales (rol laboral / horario por defecto) ────────────────────
 
-def listar_categorias(tipo_persona_id: str = None) -> list[dict]:
+def listar_grupos_funcionales(
+    tipo_persona_id: str = None, activo: bool = None,
+) -> list[dict]:
+    """Lista los grupos funcionales del tenant.
+
+    `activo=None` (default) devuelve activos e inactivos, igual que
+    `listar_grupos`.
+    """
     with get_connection() as conn:
         q = """
-            SELECT c.id::text, c.nombre, c.activo, c.tipo_persona_id::text,
+            SELECT gf.id::text, gf.nombre, gf.activo, gf.tipo_persona_id::text,
                    t.nombre as tipo_persona_nombre
-            FROM categorias c
-            LEFT JOIN tipos_persona t ON c.tipo_persona_id = t.id
+            FROM grupos_funcionales gf
+            LEFT JOIN tipos_persona t ON gf.tipo_persona_id = t.id
         """
-        params = {}
+        where, params = [], {}
         if tipo_persona_id:
-            q += " WHERE c.tipo_persona_id = CAST(:tipo_persona_id AS uuid)"
+            where.append("gf.tipo_persona_id = CAST(:tipo_persona_id AS uuid)")
             params["tipo_persona_id"] = tipo_persona_id
-        q += " ORDER BY c.nombre"
+        if activo is not None:
+            where.append("gf.activo = :activo")
+            params["activo"] = activo
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        q += " ORDER BY gf.nombre"
         rows = conn.execute(text(q), params).fetchall()
         return [dict(r._mapping) for r in rows]
 
 
-def crear_categoria(nombre: str, tipo_persona_id: str = None) -> dict:
+def crear_grupo_funcional(nombre: str, tipo_persona_id: str = None) -> dict:
     with get_connection() as conn:
         row = conn.execute(
             text("""
-                INSERT INTO categorias (nombre, tipo_persona_id)
+                INSERT INTO grupos_funcionales (nombre, tipo_persona_id)
                 VALUES (:nombre, CAST(:tipo_persona_id AS uuid))
                 RETURNING id::text, nombre, activo, tipo_persona_id::text
             """),
@@ -80,7 +99,7 @@ def crear_categoria(nombre: str, tipo_persona_id: str = None) -> dict:
         return dict(row._mapping)
 
 
-def actualizar_categoria(id: str, datos: dict) -> dict | None:
+def actualizar_grupo_funcional(id: str, datos: dict) -> dict | None:
     allowed = {"nombre": str, "activo": bool}
     sets, params = [], {"id": id}
     for k, v in datos.items():
@@ -91,7 +110,7 @@ def actualizar_categoria(id: str, datos: dict) -> dict | None:
         return None
     with get_connection() as conn:
         row = conn.execute(
-            text(f"UPDATE categorias SET {', '.join(sets)} WHERE id = CAST(:id AS uuid) RETURNING id::text, nombre, activo"),
+            text(f"UPDATE grupos_funcionales SET {', '.join(sets)} WHERE id = CAST(:id AS uuid) RETURNING id::text, nombre, activo"),
             params,
         ).fetchone()
         return dict(row._mapping) if row else None

@@ -1,40 +1,34 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h3 class="fw-bold mb-0">Gestión de Tiempos y Justificaciones</h3>
-        <p class="text-muted mb-0">Control, revisión y aprobación de tiempos, faltas y eventos de asistencia.</p>
-    </div>
-    <button class="btn btn-primary" onclick="abrirOffcanvasJustificacion();">+ Nueva Justificación</button>
+<div class="page-header mb-4">
+    <h3>Gestión de Tiempos y Justificaciones</h3>
+    <p>Control, revisión y aprobación de tiempos, faltas y eventos de asistencia.</p>
 </div>
 
-<!-- Filtros -->
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body p-4">
-        <form class="row g-3 align-items-end" onsubmit="event.preventDefault(); cargarJustificaciones();">
-            <div class="col-md-5">
-                <label class="form-label small text-uppercase text-muted fw-bold letter-spacing-1 mb-2">Rango de Fechas</label>
-                <div class="input-group">
-                    <input type="date" class="form-control bg-light border-0" id="filtro-fecha-inicio">
-                    <span class="input-group-text bg-light border-0 text-muted">A</span>
-                    <input type="date" class="form-control bg-light border-0" id="filtro-fecha-fin">
-                </div>
+<div class="filter-card">
+    <form class="row g-3 align-items-end" onsubmit="event.preventDefault(); cargarJustificaciones();">
+        <div class="col-md-5">
+            <label class="form-label">Rango de Fechas</label>
+            <div class="input-group">
+                <input type="date" class="form-control" id="filtro-fecha-inicio">
+                <span class="input-group-text">A</span>
+                <input type="date" class="form-control" id="filtro-fecha-fin">
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary w-100 fw-bold d-flex align-items-center justify-content-center gap-1 shadow-sm" style="height: 38px;">
-                    <span class="material-symbols-outlined">filter_alt</span> Filtrar
-                </button>
-            </div>
-        </form>
-    </div>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary w-100">
+                <span class="material-symbols-outlined">filter_alt</span>
+                Filtrar
+            </button>
+        </div>
+    </form>
 </div>
 
-<!-- Tabla -->
-<div class="card border-0 shadow-sm">
+<div class="card">
     <div class="table-responsive" style="max-height: 540px; overflow-y: auto;">
         <table class="table table-hover align-middle mb-0" id="tabla-justificaciones">
-            <thead class="table-light sticky-top">
+            <thead>
                 <tr>
                     <th>Fecha</th>
                     <th>Persona</th>
@@ -54,22 +48,21 @@
 {% endblock %}
 
 {% block modals %}
-<!-- Offcanvas Nueva Justificación -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvas-justificacion" aria-labelledby="offcanvasJustificacionLabel" style="width: 450px;">
-  <div class="offcanvas-header border-bottom">
+  <div class="offcanvas-header">
     <h5 class="offcanvas-title fw-bold" id="offcanvasJustificacionLabel">Nueva Justificación</h5>
     <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas" aria-label="Close"></button>
   </div>
   <div class="offcanvas-body">
     <div class="alert alert-info py-2 small mb-4">
-        Las justificaciones permiten suprimir o mitigar las alertas (ausencias, tardanzas, etc.) generadas por el sistema.
+        Las justificaciones permiten suprimir o mitigar las alertas generadas por el sistema.
     </div>
 
     <div class="mb-3">
         <label class="form-label small fw-semibold text-muted">Persona (ID — Nombre)</label>
         <select id="just-persona-id" placeholder="Buscar persona..."></select>
     </div>
-    
+
     <div class="row g-3 mb-3">
         <div class="col-md-6">
             <label class="form-label small fw-semibold text-muted">Fecha del Evento</label>
@@ -88,33 +81,23 @@
         </div>
     </div>
 
-    <!-- Campos Dinámicos (Fase C + Parte II) -->
-    <div id="dynamic-fields-container" class="p-3 bg-light rounded mb-3 border border-secondary border-opacity-25" style="display:none;">
+    <div id="dynamic-fields-container" class="p-3 rounded mb-3 border" style="display:none;">
         <div id="df-hora_permitida" style="display:none;">
             <label class="form-label small text-primary fw-bold">Hora Entrada/Salida autorizada</label>
-            <input type="time" class="form-control form-control-sm" id="just-hora_permitida"
-                   oninput="actualizarPermisoNeto();">
+            <input type="time" class="form-control form-control-sm" id="just-hora_permitida" oninput="actualizarPermisoNeto();">
         </div>
         <div id="df-hora_retorno_permiso" style="display:none;" class="mt-2">
             <label class="form-label small text-primary fw-bold">Hora Retorno autorizada</label>
-            <input type="time" class="form-control form-control-sm" id="just-hora_retorno_permiso"
-                   oninput="actualizarPermisoNeto();">
+            <input type="time" class="form-control form-control-sm" id="just-hora_retorno_permiso" oninput="actualizarPermisoNeto();">
         </div>
-        <div id="df-incluye_almuerzo" style="display:none;" class="mt-2 p-2 bg-white rounded border">
+        <div id="df-incluye_almuerzo" style="display:none;" class="mt-2 p-2 bg-light rounded border">
             <div class="form-check mb-1">
-                <input class="form-check-input" type="checkbox" id="just-incluye_almuerzo"
-                       onchange="actualizarPermisoNeto();">
-                <label class="form-check-label small fw-bold" for="just-incluye_almuerzo">
-                    Incluye almuerzo habitual
-                </label>
+                <input class="form-check-input" type="checkbox" id="just-incluye_almuerzo" onchange="actualizarPermisoNeto();">
+                <label class="form-check-label small fw-bold" for="just-incluye_almuerzo">Incluye almuerzo habitual</label>
             </div>
-            <small class="text-muted d-block" style="font-size:0.7rem;">
-                El tiempo de almuerzo del empleado se descuenta del permiso (no cuenta como tiempo de permiso).
-            </small>
+            <small class="text-muted d-block" style="font-size:0.7rem;">El tiempo de almuerzo se descuenta del permiso.</small>
             <div id="permiso-neto-info" style="display:none;" class="mt-1">
-                <span class="badge bg-secondary" style="font-size:0.7rem;">
-                    Permiso neto estimado: <strong id="permiso-neto-valor">—</strong>
-                </span>
+                <span class="badge bg-secondary" style="font-size:0.7rem;">Permiso neto: <strong id="permiso-neto-valor">—</strong></span>
             </div>
         </div>
         <div id="df-duracion_permitida" style="display:none;" class="mt-2">
@@ -125,13 +108,10 @@
             <input class="form-check-input" type="checkbox" id="just-media_jornada">
             <label class="form-check-label small text-primary fw-bold">Aplica solo media jornada</label>
         </div>
-        
-        <div id="df-recuperable" class="p-2 bg-white rounded border mt-2" style="display:none;">
+        <div id="df-recuperable" class="p-2 bg-light rounded border mt-2" style="display:none;">
             <div class="form-check mb-1">
                 <input class="form-check-input" type="checkbox" id="just-recuperable" onchange="toggleCamposRecuperacion();">
-                <label class="form-check-label small fw-bold text-primary" for="just-recuperable">
-                    ¿Es recuperable / compensable?
-                </label>
+                <label class="form-check-label small fw-bold text-primary" for="just-recuperable">¿Es recuperable / compensable?</label>
             </div>
             <div id="campos-recuperacion" style="display:none;" class="row g-2 mt-1 p-2 bg-light rounded border">
                 <div class="col-4">
@@ -150,10 +130,12 @@
         </div>
     </div>
 
-    <!-- Categorización de Breaks (Parte II) -->
-    <div id="panel-categorizacion-breaks" class="p-3 bg-info bg-opacity-10 border border-info rounded mb-3" style="display:none;">
-        <h6 class="small fw-bold text-info mb-2"><span class="material-symbols-outlined align-middle" style="font-size:1.1rem">category</span> Categorización de Marcaciones Múltiples</h6>
-        <p class="mb-2" style="font-size:0.75rem;">Se detectó un día con más de 4 marcaciones. ¿Cómo desea tratar este intervalo?</p>
+    <div id="panel-categorizacion-breaks" class="p-3 rounded mb-3 border border-primary border-opacity-25" style="display:none;">
+        <h6 class="small fw-bold text-primary mb-2">
+            <span class="material-symbols-outlined align-middle" style="font-size:1.1rem">category</span>
+            Categorización de Marcaciones Múltiples
+        </h6>
+        <p class="mb-2" style="font-size:0.75rem;">Día con más de 4 marcaciones. ¿Cómo tratar este intervalo?</p>
         <div class="row g-2">
             <div class="col-6">
                 <input type="time" class="form-control form-control-sm" id="cat-hora-ini" placeholder="Inicio">
@@ -173,17 +155,16 @@
             </div>
         </div>
     </div>
-    
+
     <div class="mb-3">
         <label class="form-label small fw-semibold text-muted">Motivo</label>
         <textarea class="form-control form-control-sm" id="just-motivo" rows="3" placeholder="Ej: Cita médica, calamidad doméstica..."></textarea>
     </div>
-    
+
     <div class="mb-4">
         <label class="form-label small fw-semibold text-muted">Aprobado por</label>
         <input type="text" class="form-control form-control-sm" id="just-aprobado_por" placeholder="Nombre de quien autoriza">
     </div>
-
   </div>
   <div class="offcanvas-footer p-3 border-top d-flex justify-content-end gap-2">
     <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="offcanvas">Cancelar</button>
