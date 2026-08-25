@@ -488,25 +488,65 @@ def analizar_por_persona(
         horario_persona = _buscar_horario(nombre, id_usuario, horarios)
         if horario_persona is None:
             if permitir_sin_horario:
-                # Si se permite sin horario, procesamos lo básico: solo listar marcaciones
-                # (sin alertas de tardanza/ausencia que dependen de horario)
+                # Si no tiene horario configurado pero tiene marcaciones, mostrar todos sus timbres y horas
                 dias_list = []
                 for f, ms in sorted(por_fecha.items()):
                     ms.sort(key=lambda x: x["datetime"])
+                    entradas = [m for m in ms if m.get("tipo") == "Entrada"]
+                    salidas = [m for m in ms if m.get("tipo") == "Salida"]
+                    llegada = entradas[0]["hora"].strftime("%H:%M") if entradas else (ms[0]["hora"].strftime("%H:%M") if ms else None)
+                    salida = salidas[-1]["hora"].strftime("%H:%M") if salidas else (ms[-1]["hora"].strftime("%H:%M") if len(ms) > 1 else None)
+                    
+                    tiempo_dentro = None
+                    if len(ms) >= 2:
+                        primera_dt = ms[0]["datetime"]
+                        ultima_dt = ms[-1]["datetime"]
+                        if ultima_dt > primera_dt:
+                            td_min = int((ultima_dt - primera_dt).total_seconds() / 60)
+                            h_td, m_td = divmod(td_min, 60)
+                            tiempo_dentro = f"{h_td}h {m_td:02d}m"
+
+                    tiempo_neto = _calcular_tiempo_neto_min(ms)
+                    horas_trabajadas = None
+                    if tiempo_neto > 0:
+                        h_t, m_t = divmod(tiempo_neto, 60)
+                        horas_trabajadas = f"{h_t}h {m_t:02d}m"
+                    elif tiempo_dentro:
+                        horas_trabajadas = tiempo_dentro
+
                     dias_list.append({
                         "fecha":             f,
-                        "llegada":           ms[0]["hora"].strftime("%H:%M") if ms[0]["tipo"] == "Entrada" else None,
-                        "salida":            ms[-1]["hora"].strftime("%H:%M") if ms[-1]["tipo"] == "Salida" else None,
-                        "hora_programada":   None,
+                        "llegada":           llegada,
+                        "salida":            salida,
+                        "hora_programada":   "—",
                         "almuerzo_duracion": None,
+                        "tiempo_dentro":     tiempo_dentro,
+                        "tiempo_neto_min":   tiempo_neto,
+                        "horas_trabajadas":  horas_trabajadas,
+                        "n_registros":       len(ms),
                         "detalle_registros": " / ".join(f"{mx['tipo']} {mx['hora'].strftime('%H:%M')}" for mx in ms),
-                        "observaciones":     ["Sin horario asignado"],
-                        "estado":            "incompleto",  # Marcamos como incompleto por defecto al no haber horario
+                        "observaciones":     ["Sin horario individual configurado"],
+                        "estado":            "sin_horario",
                     })
                 resultado[nombre] = {
                     "dias": dias_list,
-                    "resumen": {"total_dias": len(dias_list), "incompletos": len(dias_list)},
-                    "sin_novedades": False
+                    "resumen": {
+                        "total_dias": len(dias_list),
+                        "dias_laborables": len(dias_list),
+                        "tardanza_leve": 0,
+                        "tardanza_severa": 0,
+                        "almuerzo_largo": 0,
+                        "incompletos": sum(1 for d in dias_list if len(ms) < 2),
+                        "ausencias": 0,
+                        "justificadas": 0,
+                        "salida_anticipada_leve": 0,
+                        "salida_anticipada_severa": 0,
+                    },
+                    "sin_novedades": True,
+                    "horario_info": {
+                        "tipo": "Sin horario individual",
+                        "descripcion": "El colaborador registra marcaciones pero no tiene un turno configurado."
+                    }
                 }
             continue
 
@@ -574,6 +614,16 @@ def analizar_por_persona(
                 "detalle_registros": "",
                 "observaciones":     [],
                 "estado":            "ok",
+                "marcaciones": [
+                    {
+                        "hora": m["hora"].strftime("%H:%M:%S") if hasattr(m["hora"], "strftime") else str(m["hora"]),
+                        "tipo": m.get("tipo", "").lower(),
+                        "tipo_raw": m.get("tipo_raw") or m.get("tipo", ""),
+                        "fuente": m.get("fuente", "Biométrico"),
+                        "dispositivo_id": m.get("dispositivo_id", ""),
+                    }
+                    for m in marcaciones
+                ],
             }
 
             # ── Resolver horario para este día ─────────────────────────
@@ -640,23 +690,53 @@ def analizar_por_persona(
                         dia_info["observaciones"].append(f"Día con {len(breaks_dia)} breaks categorizados.")
                         # Aquí se podría añadir lógica más fina si se desea
 
-                if marcaciones[0]["tipo"] == "Entrada":
+                # Buscar primera entrada y última salida registrada
+                entradas = [m for m in marcaciones if m.get("tipo") == "Entrada"]
+                salidas = [m for m in marcaciones if m.get("tipo") == "Salida"]
+
+                if entradas:
+                    dia_info["llegada"] = entradas[0]["hora"].strftime("%H:%M")
+                elif marcaciones:
                     dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
-                if len(marcaciones) > 1 and marcaciones[-1]["tipo"] == "Salida":
+
+                if salidas:
+                    # La salida final siempre será la última salida registrada del día
+                    dia_info["salida"] = salidas[-1]["hora"].strftime("%H:%M")
+                elif len(marcaciones) > 1:
                     dia_info["salida"] = marcaciones[-1]["hora"].strftime("%H:%M")
                 
+                if len(marcaciones) >= 2:
+                    primera_dt = marcaciones[0]["datetime"]
+                    ultima_dt = marcaciones[-1]["datetime"]
+                    if ultima_dt > primera_dt:
+                        td_min = int((ultima_dt - primera_dt).total_seconds() / 60)
+                        h_td, m_td = divmod(td_min, 60)
+                        dia_info["tiempo_dentro"] = f"{h_td}h {m_td:02d}m"
+
                 dia_info["tiempo_neto_min"] = _calcular_tiempo_neto_min(marcaciones)
 
             else:
                 primera = marcaciones[0]
                 ultima  = marcaciones[-1]
 
-                if primera["tipo"] == "Entrada":
-                    dia_info["llegada"] = primera["hora"].strftime("%H:%M")
+                entradas = [m for m in marcaciones if m.get("tipo") == "Entrada"]
+                salidas = [m for m in marcaciones if m.get("tipo") == "Salida"]
 
-                    # ── Tiempo dentro de la institución ────────────────
-                    if ultima["tipo"] == "Salida":
-                        td_min = int((ultima["datetime"] - primera["datetime"]).total_seconds() / 60)
+                if entradas:
+                    dia_info["llegada"] = entradas[0]["hora"].strftime("%H:%M")
+                elif marcaciones:
+                    dia_info["llegada"] = marcaciones[0]["hora"].strftime("%H:%M")
+
+                if salidas:
+                    dia_info["salida"] = salidas[-1]["hora"].strftime("%H:%M")
+                elif len(marcaciones) > 1:
+                    dia_info["salida"] = marcaciones[-1]["hora"].strftime("%H:%M")
+
+                if len(marcaciones) >= 2:
+                    primera_dt = marcaciones[0]["datetime"]
+                    ultima_dt = marcaciones[-1]["datetime"]
+                    if ultima_dt > primera_dt:
+                        td_min = int((ultima_dt - primera_dt).total_seconds() / 60)
                         h_td, m_td = divmod(td_min, 60)
                         dia_info["tiempo_dentro"] = f"{h_td}h {m_td:02d}m"
 
@@ -851,14 +931,15 @@ def analizar_por_persona(
                             
                             if salida_diff > 0:  # Salió antes
                                 if salida_diff > MARGEN_LEVE_MIN:
-                                    dia_info["estado"] = "severa"
+                                    if dia_info["estado"] in ("ok", "leve", "tardanza_leve"):
+                                        dia_info["estado"] = "salida_anticipada_severa"
                                     dia_info["observaciones"].append(
                                         f"Salida ant. severa (-{salida_diff}m sobre {hora_salida_prog})"
                                     )
                                     resumen["salida_anticipada_severa"] += 1
                                 else:
                                     if dia_info["estado"] == "ok":
-                                        dia_info["estado"] = "leve"
+                                        dia_info["estado"] = "salida_anticipada_leve"
                                     dia_info["observaciones"].append(
                                         f"Salida ant. leve (-{salida_diff}m sobre {hora_salida_prog})"
                                     )
@@ -870,7 +951,8 @@ def analizar_por_persona(
                                 salida_diff = -_minutos_diferencia(h_permitida_t, ultima_salida)
                                 
                                 if salida_diff > 0: # Salió antes de lo permitido
-                                    dia_info["estado"] = "severa"
+                                    if dia_info["estado"] in ("ok", "leve", "tardanza_leve"):
+                                        dia_info["estado"] = "salida_anticipada_severa"
                                     dia_info["observaciones"].append(
                                         f"Salida ant. NO JUSTIF. (-{salida_diff}m, auth. {hora_permitida})"
                                     )
@@ -879,13 +961,13 @@ def analizar_por_persona(
                                     dia_info["justificado"] = True
                                     resumen["justificadas"] += 1
                                     if dia_info["estado"] == "ok":
-                                        dia_info["estado"] = "leve"
+                                        dia_info["estado"] = "salida_anticipada_leve"
                                     dia_info["observaciones"].append(f"Salida JUSTIFICADA: {just_salida.get('motivo','(Sin motivo)')}")
                             else:
                                 dia_info["justificado"] = True
                                 resumen["justificadas"] += 1
                                 if dia_info["estado"] == "ok":
-                                    dia_info["estado"] = "leve"
+                                    dia_info["estado"] = "salida_anticipada_leve"
                                 dia_info["observaciones"].append(f"Salida JUSTIFICADA: {just_salida.get('motivo','(Sin motivo)')}")
 
             todos_los_dias.append(dia_info)
@@ -1038,7 +1120,8 @@ _WEEKDAY_COL = {
 def _buscar_horario(nombre: str, id_usuario, horarios: dict) -> dict | None:
     """
     Busca el horario de un empleado en el dict de horarios.
-    Intenta por id_usuario primero; cae en búsqueda por nombre en mayúsculas.
+    Intenta por id_usuario primero; cae en búsqueda por nombre en mayúsculas,
+    y luego por coincidencia de palabras/nombre invertido.
     Retorna el dict de horario o None si no se encuentra.
     """
     if not horarios:
@@ -1050,7 +1133,14 @@ def _buscar_horario(nombre: str, id_usuario, horarios: dict) -> dict | None:
         return by_id[str(id_usuario)]
 
     if nombre:
-        return by_nombre.get(nombre.strip().upper())
+        nom_clean = nombre.strip().upper()
+        if nom_clean in by_nombre:
+            return by_nombre[nom_clean]
+
+        palabras_target = set(nom_clean.replace(",", " ").split())
+        for k, v in by_nombre.items():
+            if set(k.replace(",", " ").split()) == palabras_target:
+                return v
 
     return None
 

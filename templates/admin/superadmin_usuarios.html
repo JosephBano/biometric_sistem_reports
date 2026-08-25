@@ -1,170 +1,317 @@
 {% extends "base.html" %}
 
-{% block extra_css %}
-<style>
-.role-badge { font-size: 0.75rem; }
-.user-row-inactive { opacity: 0.55; }
-.tenant-badge { font-family: monospace; font-size: 0.78rem; }
-</style>
-{% endblock %}
+{% block title %}Gestión Global de Usuarios - {{ super() }}{% endblock %}
 
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Gestión Global de Usuarios</h3>
-    <p class="text-muted">Superadmin — ver, mover y registrar usuarios entre tenants.</p>
-</div>
+<div class="page-shell">
 
-{% if mensaje %}
-<div class="alert alert-{{ mensaje_tipo or 'info' }} alert-dismissible fade show" role="alert">
-    {{ mensaje }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
-
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0" id="tablaUsuarios">
-                <thead class="table-light">
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Email</th>
-                        <th>Tenant</th>
-                        <th>Roles</th>
-                        <th>Último acceso</th>
-                        <th>Estado</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for u in usuarios %}
-                    <tr class="{{ 'user-row-inactive' if not u.activo else '' }}"
-                        data-usuario-id="{{ u.id }}"
-                        data-usuario-email="{{ u.email }}"
-                        data-usuario-nombre="{{ u.nombre }}"
-                        data-usuario-tenant-id="{{ u.tenant_id or '' }}"
-                        data-usuario-tenant-slug="{{ u.tenant_slug or '' }}"
-                        data-usuario-roles="{{ u.roles | tojson }}">
-                        <td class="fw-medium">{{ u.nombre }}</td>
-                        <td class="text-muted small">{{ u.email }}</td>
-                        <td>
-                            {% if u.tenant_nombre %}
-                                <span class="badge bg-dark tenant-badge">{{ u.tenant_nombre }}</span>
-                            {% else %}
-                                <span class="badge bg-secondary tenant-badge">Sin tenant</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% for rol in u.roles %}
-                            <span class="badge role-badge
-                                {% if rol == 'superadmin' %}bg-danger
-                                {% elif rol == 'admin' %}bg-primary
-                                {% elif rol == 'gestor' %}bg-success
-                                {% elif rol in ('supervisor_grupo', 'supervisor_periodo') %}bg-warning text-dark
-                                {% else %}bg-secondary{% endif %}">
-                                {{ rol }}
-                            </span>
-                            {% else %}
-                            <span class="text-muted small">Sin roles</span>
-                            {% endfor %}
-                        </td>
-                        <td class="text-muted small">
-                            {% if u.ultimo_acceso %}
-                                {{ u.ultimo_acceso.strftime('%d/%m/%Y %H:%M') }}
-                            {% else %}—{% endif %}
-                        </td>
-                        <td>
-                            {% if u.activo %}
-                            <span class="badge bg-success-subtle text-success border border-success-subtle">Activo</span>
-                            {% else %}
-                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">Inactivo</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end">
-                            <button class="btn btn-sm btn-outline-primary"
-                                    onclick="abrirMoverUsuario(this)">
-                                Mover
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger"
-                                    onclick="abrirEliminarUsuario(this)">
-                                Eliminar
-                            </button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="7" class="text-center text-muted py-4">No hay usuarios registrados.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- ── Header de Página ────────────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">shield_person</span>
+                    Superadmin Global
+                </span>
+                <span class="rippling-pill rippling-pill-navy">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">supervisor_account</span>
+                    Directorio Multi-Tenant
+                </span>
+            </div>
+            <h1 class="title-hero mb-0">Gestión Global de Usuarios</h1>
+            <p class="page-header-subtitle mb-0">
+                Auditoría centralizada de cuentas de acceso, reasignación y transferencia de usuarios entre instituciones.
+            </p>
         </div>
     </div>
-</div>
 
-<!-- Modal: Mover usuario -->
+    {% if mensaje %}
+    <div class="alert alert-{{ mensaje_tipo or 'info' }} alert-dismissible fade show border-0 shadow-sm" role="alert" style="border-radius: var(--radius-lg);">
+        <div class="d-flex align-items-center gap-2">
+            <span class="material-symbols-outlined fs-5">info</span>
+            <span>{{ mensaje }}</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- ── KPIs Ejecutivos ─────────────────────────────────────────────────── -->
+    {% set total_u = usuarios|length %}
+    {% set activos_u = usuarios|selectattr('activo')|list|length %}
+    {% set inactivos_u = total_u - activos_u %}
+    {% set con_tenant_u = usuarios|selectattr('tenant_id', 'defined')|selectattr('tenant_id')|list|length %}
+
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Usuarios -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">groups</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Cuentas Totales</div>
+                <div class="dashboard-kpi-value">{{ total_u }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Activos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">how_to_reg</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Cuentas Activas</div>
+                <div class="dashboard-kpi-value text-success">{{ activos_u }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inactivos -->
+        <div class="dashboard-kpi-card" {% if inactivos_u > 0 %}style="border-left: 3px solid #f59e0b;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if inactivos_u > 0 %}dashboard-kpi-icon-gold{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">person_off</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Cuentas Inactivas</div>
+                <div class="dashboard-kpi-value">{{ inactivos_u }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Con Tenant -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">apartment</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Con Institución</div>
+                <div class="dashboard-kpi-value">{{ con_tenant_u }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tarjeta y Directorio Global ─────────────────────────────────────── -->
+    <div class="component-card-shell">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <div class="component-title-icon-wrapper">
+                    <span class="material-symbols-outlined">manage_accounts</span>
+                </div>
+                <div>
+                    <h5 class="component-card-title mb-0">Directorio Global de Cuentas de Acceso</h5>
+                    <small class="text-muted">Gestión de privilegios y migración de contexto institucional</small>
+                </div>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <div class="input-group" style="max-width: 250px;">
+                    <span class="input-group-text bg-light border-end-0 text-muted" style="height: 38px;"><span class="material-symbols-outlined fs-6">search</span></span>
+                    <input type="text" class="form-control form-control-sm border-start-0 ps-0" id="search-global-u"
+                           placeholder="Buscar por usuario, correo o tenant..." oninput="filtrarGlobalU();" style="height: 38px;">
+                </div>
+                <select class="form-select form-select-sm" id="filter-global-tenant" onchange="filtrarGlobalU();" style="height: 38px; width: 180px;">
+                    <option value="">Todos los tenants</option>
+                    {% for t in tenants %}
+                    <option value="{{ t.slug }}">{{ t.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tablaUsuarios">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th class="ps-4">Usuario</th>
+                            <th>Correo Electrónico</th>
+                            <th>Institución (Tenant)</th>
+                            <th>Roles y Permisos</th>
+                            <th>Último Acceso</th>
+                            <th>Estado</th>
+                            <th class="text-end pe-4">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for u in usuarios %}
+                        <tr class="global-u-row {{ 'opacity-50' if not u.activo else '' }}"
+                            data-usuario-id="{{ u.id }}"
+                            data-usuario-email="{{ u.email }}"
+                            data-usuario-nombre="{{ u.nombre }}"
+                            data-usuario-tenant-id="{{ u.tenant_id or '' }}"
+                            data-usuario-tenant-slug="{{ u.tenant_slug or '' }}"
+                            data-usuario-roles="{{ u.roles | tojson }}"
+                            data-nombre-upper="{{ (u.nombre or '')|upper }}"
+                            data-email-upper="{{ (u.email or '')|upper }}"
+                            data-tenant-slug="{{ (u.tenant_slug or '') }}">
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white shadow-xs"
+                                         style="width: 34px; height: 34px; background: linear-gradient(135deg, var(--navy-800, #1e293b), var(--navy-600, #475569)); font-size: 0.85rem;">
+                                        {{ (u.nombre or 'U')[0]|upper }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ u.nombre }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="text-muted small font-monospace">{{ u.email }}</span>
+                            </td>
+                            <td>
+                                {% if u.tenant_nombre %}
+                                <span class="badge bg-light text-dark border font-monospace" style="font-size: 0.75rem;">{{ u.tenant_nombre }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size: 0.75rem;">Sin tenant</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    {% for rol in u.roles %}
+                                    <span class="rippling-pill
+                                        {% if rol == 'superadmin' %}rippling-pill-gold
+                                        {% elif rol == 'admin' %}rippling-pill-navy
+                                        {% elif rol == 'gestor' %}rippling-pill-green
+                                        {% else %}rippling-pill-slate{% endif %}" style="font-size: 0.72rem;">
+                                        {{ rol }}
+                                    </span>
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
+                                    {% endfor %}
+                                </div>
+                            </td>
+                            <td class="text-muted small">
+                                {% if u.ultimo_acceso %}
+                                <span class="material-symbols-outlined fs-6 align-middle text-success">login</span>
+                                {{ u.ultimo_acceso.strftime('%d/%m/%Y %H:%M') }}
+                                {% else %}
+                                <span class="text-muted">— Sin registros —</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if u.activo %}
+                                <span class="rippling-pill rippling-pill-green" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">check_circle</span>
+                                    Activo
+                                </span>
+                                {% else %}
+                                <span class="rippling-pill rippling-pill-slate" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">cancel</span>
+                                    Inactivo
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-flex gap-1 justify-content-end">
+                                    <button class="btn btn-sm btn-rippling-primary d-inline-flex align-items-center gap-1"
+                                            onclick="abrirMoverUsuario(this)" title="Reasignar a otra institución">
+                                        <span class="material-symbols-outlined fs-6">swap_horiz</span>
+                                        <span>Mover</span>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger d-inline-flex align-items-center"
+                                            onclick="abrirEliminarUsuario(this)" title="Desactivar cuenta">
+                                        <span class="material-symbols-outlined fs-6">delete</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">No hay usuarios registrados en el sistema.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- ── Modal: Mover Usuario ──────────────────────────────────────────────── -->
 <div class="modal fade" id="modalMover" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Mover Usuario</h5>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">swap_horiz</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Transferir Usuario a Institución</h5>
+                        <p class="text-muted small mb-0">Reasignar cuenta a otro esquema de tenant.</p>
+                    </div>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p> mover a: <strong id="moverEmail"></strong></p>
-                <p class="text-muted small mb-3">Tenant actual: <span id="moverTenantOrigen" class="badge bg-secondary"></span></p>
+            
+            <div class="modal-body p-4">
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <div class="small fw-bold text-dark mb-1">Usuario a transferir:</div>
+                    <strong class="text-primary" id="moverEmail"></strong>
+                    <div class="small text-muted mt-2">Institución actual: <span id="moverTenantOrigen" class="badge bg-secondary font-monospace"></span></div>
+                </div>
+
                 <div class="mb-3">
-                    <label class="form-label fw-medium">Tenant destino <span class="text-danger">*</span></label>
-                    <select class="form-select" id="selectTenantDestino">
-                        <option value="">— Seleccione un tenant —</option>
+                    <label class="form-label small fw-bold text-muted mb-1">Institución / Tenant Destino <span class="text-danger">*</span></label>
+                    <select class="form-select" id="selectTenantDestino" style="height: 42px;">
+                        <option value="">— Seleccione una institución de destino —</option>
                         {% for t in tenants %}
                         <option value="{{ t.id }}">{{ t.nombre }} ({{ t.slug }})</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="mb-3">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" id="checkGenerarPass" checked
-                               onchange="togglePassField()">
-                        <label class="form-check-label" for="checkGenerarPass">
+
+                <div class="p-3 bg-light rounded-3 border mb-3">
+                    <div class="form-check d-flex align-items-center gap-2 mb-0">
+                        <input class="form-check-input ms-0 me-2" type="checkbox" id="checkGenerarPass" checked
+                               onchange="togglePassField()" style="cursor: pointer;">
+                        <label class="form-check-label fw-semibold text-dark small" for="checkGenerarPass" style="cursor: pointer;">
                             Generar contraseña temporal automáticamente
                         </label>
                     </div>
                 </div>
+
                 <div class="mb-3" id="fieldPassManual" style="display:none;">
-                    <label class="form-label">Contraseña manual</label>
+                    <label class="form-label small fw-bold text-muted mb-1">Contraseña Manual</label>
                     <input type="password" class="form-control" id="inputPassManual"
-                           placeholder="Mínimo 8 caracteres" minlength="8">
+                           placeholder="Mínimo 8 caracteres seguros" minlength="8" style="height: 42px;">
                 </div>
-                <div id="tempPassContainer" class="alert alert-success mb-0" style="display:none;">
-                    <strong>Contraseña temporal:</strong>
-                    <code id="tempPassMostrar" class="d-block mt-1 fs-5"></code>
-                    <small class="text-muted">Cópiela y entréguela al usuario.</small>
+
+                <div id="tempPassContainer" class="alert alert-success border-0 shadow-xs p-3 mb-0" style="display:none; border-radius: var(--radius-md);">
+                    <div class="fw-bold small mb-1">Contraseña Temporal Generada:</div>
+                    <code id="tempPassMostrar" class="d-block p-2 bg-white rounded border fw-bold text-primary fs-5 text-center my-2"></code>
+                    <small class="text-muted d-block">Por favor, copie esta contraseña y proporciónela de forma segura al usuario.</small>
                 </div>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" id="btnConfirmarMover">Mover usuario</button>
+
+            <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-rippling-primary btn-sm px-4 shadow-sm" id="btnConfirmarMover">
+                    <span class="material-symbols-outlined fs-6">swap_horiz</span>
+                    <span>Transferir Usuario</span>
+                </button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal: Eliminar usuario -->
+<!-- ── Modal: Eliminar Usuario ──────────────────────────────────────────── -->
 <div class="modal fade" id="modalEliminar" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title text-danger">Eliminar Usuario</h5>
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-2 text-danger">
+                    <span class="material-symbols-outlined fs-5">warning</span>
+                    <h6 class="modal-title fw-bold mb-0">Desactivar Cuenta</h6>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p>¿Eliminar al usuario <strong id="eliminarEmail"></strong>?</p>
-                <p class="text-muted small">Esta acción lo desactivará (soft-delete). Podrá re-registrarlo en otro tenant cuando lo necesite.</p>
+            <div class="modal-body p-4">
+                <p class="small text-dark mb-2">¿Está seguro de desactivar la cuenta de <strong id="eliminarEmail"></strong>?</p>
+                <p class="text-muted small mb-0">Esta acción aplicará un soft-delete deshabilitando su ingreso. Podrá reasignarlo o reactivarlo posteriormente.</p>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-danger" id="btnConfirmarEliminar">Eliminar</button>
+            <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-danger btn-sm px-3 shadow-sm" id="btnConfirmarEliminar">Desactivar</button>
             </div>
         </div>
     </div>
@@ -179,7 +326,7 @@ function abrirMoverUsuario(btn) {
     rowSeleccionada = btn.closest('tr');
     const email = rowSeleccionada.dataset.usuarioEmail;
     const nombre = rowSeleccionada.dataset.usuarioNombre;
-    const tenantSlug = rowSeleccionada.dataset.usuarioTenantSlug || '—';
+    const tenantSlug = rowSeleccionada.dataset.usuarioTenantSlug || 'Sin tenant';
 
     document.getElementById('moverEmail').textContent = email + ' (' + nombre + ')';
     document.getElementById('moverTenantOrigen').textContent = tenantSlug;
@@ -196,57 +343,60 @@ function togglePassField() {
     document.getElementById('fieldPassManual').style.display = generar ? 'none' : 'block';
 }
 
-document.getElementById('btnConfirmarMover').addEventListener('click', async function() {
-    const usuarioId = rowSeleccionada.dataset.usuarioId;
-    const tenantDestino = document.getElementById('selectTenantDestino').value;
-    const generarPass = document.getElementById('checkGenerarPass').checked;
-    const passManual = document.getElementById('inputPassManual').value;
+const btnMover = document.getElementById('btnConfirmarMover');
+if (btnMover) {
+    btnMover.addEventListener('click', async function() {
+        const usuarioId = rowSeleccionada.dataset.usuarioId;
+        const tenantDestino = document.getElementById('selectTenantDestino').value;
+        const generarPass = document.getElementById('checkGenerarPass').checked;
+        const passManual = document.getElementById('inputPassManual').value;
 
-    if (!tenantDestino) {
-        alert('Seleccione un tenant destino.');
-        return;
-    }
-    if (!generarPass && passManual.length < 8) {
-        alert('La contraseña debe tener al menos 8 caracteres.');
-        return;
-    }
-
-    this.disabled = true;
-    this.textContent = 'Moviendo...';
-
-    const body = {
-        usuario_id: usuarioId,
-        tenant_id_destino: tenantDestino,
-        generar_password: generarPass,
-    };
-    if (!generarPass) body.password = passManual;
-
-    try {
-        const resp = await fetch('{{ url_for("admin.api_superadmin_mover_usuario") }}', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token() }}'},
-            body: JSON.stringify(body),
-        });
-        const data = await resp.json();
-        if (data.ok) {
-            if (data.password_temporal) {
-                document.getElementById('tempPassMostrar').textContent = data.password_temporal;
-                document.getElementById('tempPassContainer').style.display = 'block';
-            } else {
-                bootstrap.Modal.getInstance(document.getElementById('modalMover')).hide();
-                window.location.reload();
-            }
-        } else {
-            alert('Error: ' + (data.error || 'desconocido'));
-            this.disabled = false;
-            this.textContent = 'Mover usuario';
+        if (!tenantDestino) {
+            alert('Seleccione un tenant destino.');
+            return;
         }
-    } catch(e) {
-        alert('Error de red: ' + e);
-        this.disabled = false;
-        this.textContent = 'Mover usuario';
-    }
-});
+        if (!generarPass && passManual.length < 8) {
+            alert('La contraseña debe tener al menos 8 caracteres.');
+            return;
+        }
+
+        this.disabled = true;
+        this.textContent = 'Moviendo...';
+
+        const body = {
+            usuario_id: usuarioId,
+            tenant_id_destino: tenantDestino,
+            generar_password: generarPass,
+        };
+        if (!generarPass) body.password = passManual;
+
+        try {
+            const resp = await fetch('{{ url_for("admin.api_superadmin_mover_usuario") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': '{{ csrf_token() }}'},
+                body: JSON.stringify(body),
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                if (data.password_temporal) {
+                    document.getElementById('tempPassMostrar').textContent = data.password_temporal;
+                    document.getElementById('tempPassContainer').style.display = 'block';
+                } else {
+                    bootstrap.Modal.getInstance(document.getElementById('modalMover')).hide();
+                    window.location.reload();
+                }
+            } else {
+                alert('Error: ' + (data.error || 'desconocido'));
+                this.disabled = false;
+                this.textContent = 'Transferir Usuario';
+            }
+        } catch(e) {
+            alert('Error de red: ' + e);
+            this.disabled = false;
+            this.textContent = 'Transferir Usuario';
+        }
+    });
+}
 
 function abrirEliminarUsuario(btn) {
     const row = btn.closest('tr');
@@ -255,29 +405,48 @@ function abrirEliminarUsuario(btn) {
     new bootstrap.Modal(document.getElementById('modalEliminar')).show();
 }
 
-document.getElementById('btnConfirmarEliminar').addEventListener('click', async function() {
-    const usuarioId = rowSeleccionada.dataset.usuarioId;
-    this.disabled = true;
-    this.textContent = 'Eliminando...';
-    try {
-        const resp = await fetch('{{ url_for("admin.api_superadmin_eliminar_usuario", usuario_id="") }}' + usuarioId, {
-            method: 'DELETE',
-            headers: {'X-CSRF-Token': '{{ csrf_token() }}'},
-        });
-        const data = await resp.json();
-        if (data.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('modalEliminar')).hide();
-            window.location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'desconocido'));
+const btnEliminar = document.getElementById('btnConfirmarEliminar');
+if (btnEliminar) {
+    btnEliminar.addEventListener('click', async function() {
+        const usuarioId = rowSeleccionada.dataset.usuarioId;
+        this.disabled = true;
+        this.textContent = 'Desactivando...';
+        try {
+            const resp = await fetch('{{ url_for("admin.api_superadmin_eliminar_usuario", usuario_id="") }}' + usuarioId, {
+                method: 'DELETE',
+                headers: {'X-CSRF-Token': '{{ csrf_token() }}'},
+            });
+            const data = await resp.json();
+            if (data.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalEliminar')).hide();
+                window.location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'desconocido'));
+                this.disabled = false;
+                this.textContent = 'Desactivar';
+            }
+        } catch(e) {
+            alert('Error de red: ' + e);
             this.disabled = false;
-            this.textContent = 'Eliminar';
+            this.textContent = 'Desactivar';
         }
-    } catch(e) {
-        alert('Error de red: ' + e);
-        this.disabled = false;
-        this.textContent = 'Eliminar';
-    }
-});
+    });
+}
+
+function filtrarGlobalU() {
+    const q = (document.getElementById('search-global-u').value || '').toUpperCase();
+    const tenantFiltro = document.getElementById('filter-global-tenant').value;
+
+    document.querySelectorAll('.global-u-row').forEach(row => {
+        const nombre = row.dataset.nombreUpper || '';
+        const email = row.dataset.emailUpper || '';
+        const tenantSlug = row.dataset.tenantSlug || '';
+
+        const coincideTexto = nombre.includes(q) || email.includes(q) || tenantSlug.toUpperCase().includes(q);
+        const coincideTenant = !tenantFiltro || tenantSlug === tenantFiltro;
+
+        row.style.display = (coincideTexto && coincideTenant) ? '' : 'none';
+    });
+}
 </script>
-{% endblock %}
+{% endblock %}

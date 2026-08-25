@@ -17,9 +17,11 @@ from app.domain.people import (
     actualizar_persona,
     crear_persona,
     get_historico_persona,
+    get_persona,
     listar_grupos,
     listar_grupos_funcionales,
     listar_personas,
+    reordenar_a_apellido_nombre,
 )
 from app.domain.rbac import require_role
 
@@ -32,16 +34,59 @@ def lista():
     tipo_persona_id = request.args.get("tipo_persona_id", "").strip() or None
     grupo_id = request.args.get("grupo_id", "").strip() or None
     busqueda = request.args.get("q", "").strip() or None
-    personas = listar_personas(
+
+    try:
+        page = int(request.args.get("page", 1))
+    except (ValueError, TypeError):
+        page = 1
+    if page < 1:
+        page = 1
+
+    try:
+        per_page = int(request.args.get("per_page", 15))
+    except (ValueError, TypeError):
+        per_page = 15
+    if per_page not in (10, 15, 25, 50, 100):
+        per_page = 15
+
+    todas_personas = listar_personas(
         tipo_persona_id=tipo_persona_id, grupo_id=grupo_id,
         activo=None, busqueda=busqueda,
     )
+
+    # Formatear nombres como 'Apellidos Nombres' y ordenar alfabéticamente
+    for p in todas_personas:
+        p["nombre_mostrar"] = reordenar_a_apellido_nombre(p.get("nombre") or "")
+    todas_personas.sort(key=lambda x: (x.get("nombre_mostrar") or "").upper())
+
+    total_personas = len(todas_personas)
+    activos_count = sum(1 for p in todas_personas if p.get("activo"))
+    sin_id_count = sum(1 for p in todas_personas if not p.get("id_usuario_zk"))
+
+    total_pages = (total_personas + per_page - 1) // per_page if total_personas > 0 else 1
+    if page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * per_page
+    end_idx = min(start_idx + per_page, total_personas)
+    personas_paginadas = todas_personas[start_idx:end_idx]
+
     grupos = listar_grupos(activo=True)
     grupos_funcionales = listar_grupos_funcionales(activo=True)
+
     return render_template(
         "personas/lista.html",
         active_page="personas",
-        personas=personas,
+        personas=personas_paginadas,
+        todas_personas=todas_personas,
+        total_personas=total_personas,
+        activos_count=activos_count,
+        sin_id_count=sin_id_count,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+        start_idx=start_idx,
+        end_idx=end_idx,
         grupos=grupos,
         grupos_funcionales=grupos_funcionales,
         tipo_persona_id=tipo_persona_id,
@@ -76,7 +121,7 @@ def crear():
 
 
 @bp.post("/personas/<id>")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def editar(id: str):
     datos: dict = {}
     for campo in ("nombre", "identificacion", "email", "telefono", "notas",
@@ -89,12 +134,27 @@ def editar(id: str):
         datos["activo"] = activo_val == "1"
     if "id_usuario_zk" in request.form:
         datos["id_usuario_zk"] = request.form.get("id_usuario_zk", "").strip() or ""
+    
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json or "application/json" in request.headers.get("Accept", "")
     try:
         actualizar_persona(id, datos)
+        if is_ajax:
+            return jsonify({"ok": True, "mensaje": "Persona actualizada exitosamente", "persona_id": id})
         flash("Persona actualizada", "success")
     except Exception as e:  # noqa: BLE001
+        if is_ajax:
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(f"Error al actualizar persona: {e}", "danger")
     return redirect(url_for("people.lista"))
+
+
+@bp.get("/api/personas/<id>")
+@require_role("admin", "superadmin", "gestor", "supervisor_grupo", "readonly")
+def api_get_persona(id: str):
+    p = get_persona(id)
+    if not p:
+        return jsonify({"ok": False, "error": "Persona no encontrada"}), 404
+    return jsonify({"ok": True, "persona": p})
 
 
 @bp.get("/api/personas/buscar")
@@ -110,7 +170,15 @@ def buscar():
     analítica de entradas/salidas).
     """
     q = request.args.get("q", "").strip() or None
-    personas = listar_personas(activo=None, busqueda=q)
+    activo_param = request.args.get("activo")
+    if activo_param is not None:
+        if activo_param.lower() in ("all", "todos", "none"):
+            activo = None
+        else:
+            activo = activo_param.lower() in ("true", "1", "t", "yes")
+    else:
+        activo = True
+    personas = listar_personas(activo=activo, busqueda=q)
     return jsonify({
         "personas": [
             {
@@ -119,6 +187,12 @@ def buscar():
                 "identificacion": p["identificacion"] or "",
                 "id_usuario_zk": p["id_usuario_zk"] or "",
                 "activo": p["activo"],
+                "tipo_persona_id": p.get("tipo_persona_id") or "",
+                "grupo_id": p.get("grupo_id") or "",
+                "grupo_funcional_id": p.get("grupo_funcional_id") or "",
+                "email": p.get("email") or "",
+                "telefono": p.get("telefono") or "",
+                "notas": p.get("notas") or "",
             }
             for p in personas
         ]

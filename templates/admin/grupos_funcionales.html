@@ -1,137 +1,288 @@
 {% extends "base.html" %}
 
+{% block title %}Grupos Funcionales - {{ super() }}{% endblock %}
+
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Gestión de Grupos Funcionales</h3>
-    <p class="text-muted">Rol laboral de cada persona (ej: Profesor, Administrativo, Trabajador). Define el horario por defecto del grupo.</p>
-    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrearGrupoFuncional">
-        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">label</span> Nuevo Grupo Funcional
-    </button>
-</div>
+<div class="page-shell">
 
-<!-- Filtro por tipo -->
-<div class="filter-card mb-4">
-    <form class="row g-3 align-items-end" method="GET">
-        <div class="col-md-5">
-            <label class="form-label small text-muted fw-bold mb-2">Filtrar por Tipo de Persona</label>
-            <select class="form-select" name="tipo_persona_id">
-                <option value="">Todos los tipos</option>
-                {% for t in tenant_tipos %}
-                <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                {% endfor %}
-            </select>
+    <!-- ── Header de Página ────────────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span class="rippling-pill rippling-pill-navy">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">workspaces</span>
+                    Configuración de Turnos
+                </span>
+                <span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">label</span>
+                    Grupos Funcionales
+                </span>
+            </div>
+            <h1 class="title-hero mb-0">Turnos y Roles Laborales</h1>
+            <p class="page-header-subtitle mb-0">
+                Roles y jornadas de trabajo predeterminadas (ej: Docentes, Administrativos, Mantenimiento). Definen el horario base del personal.
+            </p>
         </div>
-        <div class="col-md-2 d-flex gap-2">
-            <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
-            <a href="{{ url_for('groups.listar_grupos_funcionales') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
-        </div>
-    </form>
-</div>
 
-<div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
-                <tr>
-                    <th>Nombre</th>
-                    <th>Tipo de Persona</th>
-                    <th>Estado</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for gf in grupos_funcionales %}
-                <tr>
-                    <td class="fw-bold">{{ gf.nombre }}</td>
-                    <td>{{ gf.tipo_persona_nombre or '—' }}</td>
-                    <td>
-                        <span class="badge {% if gf.activo %}bg-success{% else %}bg-secondary{% endif %}">
-                            {% if gf.activo %}Activo{% else %}Inactivo{% endif %}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-secondary"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modalEditarGrupoFuncional"
-                                data-id="{{ gf.id }}"
-                                data-nombre="{{ gf.nombre }}"
-                                data-activo="{{ '1' if gf.activo else '0' }}">
-                            Editar
-                        </button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" class="text-center py-5 text-muted">No hay grupos funcionales creados.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="page-actions-slot d-flex gap-2">
+            <a href="{{ url_for('horarios_gf.vista_horarios_gf') }}" class="btn btn-rippling-secondary shadow-sm d-inline-flex align-items-center gap-1">
+                <span class="material-symbols-outlined fs-5">schedule</span>
+                <span>Configurar Horarios Semanales</span>
+            </a>
+            <button class="btn btn-rippling-primary shadow-sm d-inline-flex align-items-center gap-2"
+                    data-bs-toggle="modal" data-bs-target="#modalCrearGrupoFuncional">
+                <span class="material-symbols-outlined fs-5">add_circle</span>
+                <span>Nuevo Grupo Funcional</span>
+            </button>
+        </div>
     </div>
+
+    <!-- ── KPIs Ejecutivos ─────────────────────────────────────────────────── -->
+    {% set total_gf = grupos_funcionales|length %}
+    {% set activos_gf = grupos_funcionales|selectattr('activo')|list|length %}
+    {% set inactivos_gf = total_gf - activos_gf %}
+    {% set con_tipo_gf = grupos_funcionales|selectattr('tipo_persona_id', 'defined')|selectattr('tipo_persona_id')|list|length %}
+
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Grupos Funcionales -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">workspaces</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Grupos Funcionales</div>
+                <div class="dashboard-kpi-value">{{ total_gf }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Activos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">check_circle</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Grupos Activos</div>
+                <div class="dashboard-kpi-value text-success">{{ activos_gf }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inactivos -->
+        <div class="dashboard-kpi-card" {% if inactivos_gf > 0 %}style="border-left: 3px solid #f59e0b;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if inactivos_gf > 0 %}dashboard-kpi-icon-gold{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">pause_circle</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Grupos Inactivos</div>
+                <div class="dashboard-kpi-value">{{ inactivos_gf }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Con Tipo de Persona -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">badge</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Con Tipo de Personal</div>
+                <div class="dashboard-kpi-value">{{ con_tipo_gf }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tarjeta y Tabla de Grupos Funcionales ───────────────────────────── -->
+    <div class="component-card-shell">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <div class="component-title-icon-wrapper">
+                    <span class="material-symbols-outlined">view_cozy</span>
+                </div>
+                <div>
+                    <h5 class="component-card-title mb-0">Listado de Grupos Funcionales y Turnos</h5>
+                    <small class="text-muted">Configuración de perfiles de jornada y compatibilidad laboral</small>
+                </div>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <div class="input-group" style="max-width: 240px;">
+                    <span class="input-group-text bg-light border-end-0 text-muted" style="height: 38px;"><span class="material-symbols-outlined fs-6">search</span></span>
+                    <input type="text" class="form-control form-control-sm border-start-0 ps-0" id="search-gf"
+                           placeholder="Buscar grupo funcional..." oninput="filtrarGF();" style="height: 38px;">
+                </div>
+                <form method="GET" class="d-flex align-items-center gap-1">
+                    <select class="form-select form-select-sm" name="tipo_persona_id" onchange="this.form.submit();" style="height: 38px; width: 180px;">
+                        <option value="">Todos los tipos</option>
+                        {% for t in tenant_tipos %}
+                        <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if tipo_persona_id %}
+                    <a href="{{ url_for('groups.listar_grupos_funcionales') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;" title="Limpiar filtro">✕</a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tablaGF">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th class="ps-4">Grupo Funcional (Turno)</th>
+                            <th>Tipo de Personal Asociado</th>
+                            <th>Estado</th>
+                            <th class="text-end pe-4">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for gf in grupos_funcionales %}
+                        <tr class="gf-row {{ 'opacity-50' if not gf.activo else '' }}"
+                            data-nombre-upper="{{ (gf.nombre or '')|upper }}">
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-xs"
+                                         style="width: 34px; height: 34px; background: var(--gold-50, #fefce8); color: var(--gold-700, #a16207); font-size: 0.95rem;">
+                                        <span class="material-symbols-outlined fs-6">label</span>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ gf.nombre }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                {% if gf.tipo_persona_nombre %}
+                                <span class="rippling-pill rippling-pill-navy" style="font-size: 0.75rem;">
+                                    {{ gf.tipo_persona_nombre }}
+                                </span>
+                                {% else %}
+                                <span class="text-muted small">— Aplica a cualquier tipo —</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if gf.activo %}
+                                <span class="rippling-pill rippling-pill-green" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">check_circle</span>
+                                    Activo
+                                </span>
+                                {% else %}
+                                <span class="rippling-pill rippling-pill-slate" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">cancel</span>
+                                    Inactivo
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="btn-group shadow-sm">
+                                    <a href="{{ url_for('horarios_gf.vista_horarios_gf') }}" class="btn btn-sm btn-outline-secondary" title="Ver / Configurar Horario Semanal">
+                                        <span class="material-symbols-outlined fs-6 text-primary align-middle">calendar_month</span>
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEditarGrupoFuncional"
+                                            data-id="{{ gf.id }}"
+                                            data-nombre="{{ gf.nombre }}"
+                                            data-activo="{{ '1' if gf.activo else '0' }}"
+                                            title="Editar Nombre / Estado">
+                                        <span class="material-symbols-outlined fs-6 align-middle">edit</span>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">No hay grupos funcionales creados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block modals %}
-<!-- Modal Crear Grupo Funcional -->
-<div class="modal fade" id="modalCrearGrupoFuncional" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Nuevo Grupo Funcional</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- ── Modal Crear Grupo Funcional ──────────────────────────────────────── -->
+<div class="modal fade" id="modalCrearGrupoFuncional" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">label</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Nuevo Grupo Funcional</h5>
+                        <p class="text-muted small mb-0">Definición de rol laboral y jornada de trabajo base.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form method="POST" action="{{ url_for('groups.crear_grupo_funcional') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="nombre" required>
+                        <label class="form-label small fw-bold text-muted mb-1">Nombre del Grupo Funcional <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required placeholder="Ej: Docentes Tiempo Completo, Administrativos Turno Mañana" style="height: 42px;">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Tipo de Persona</label>
-                        <select class="form-select" name="tipo_persona_id">
-                            <option value="">Sin tipo específico</option>
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-muted mb-1">Tipo de Personal (Opcional)</label>
+                        <select class="form-select" name="tipo_persona_id" style="height: 42px;">
+                            <option value="">Sin tipo específico (Aplica a todos)</option>
                             {% for t in tenant_tipos %}
                             <option value="{{ t.id }}">{{ t.nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Crear</button>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm px-4 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">add</span>
+                        <span>Crear Grupo Funcional</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Modal Editar Grupo Funcional -->
-<div class="modal fade" id="modalEditarGrupoFuncional" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Editar Grupo Funcional</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- ── Modal Editar Grupo Funcional ──────────────────────────────────────── -->
+<div class="modal fade" id="modalEditarGrupoFuncional" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">edit</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Editar Grupo Funcional</h5>
+                        <p class="text-muted small mb-0" id="edit_gf_subtitulo">—</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form method="POST" id="formEditarGrupoFuncional" action="">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input type="text" class="form-control" name="nombre" id="edit_gf_nombre">
+                        <label class="form-label small fw-bold text-muted mb-1">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" id="edit_gf_nombre" required style="height: 42px;">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" name="activo" id="edit_gf_activo">
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-muted mb-1">Estado</label>
+                        <select class="form-select" name="activo" id="edit_gf_activo" style="height: 42px;">
                             <option value="1">Activo</option>
                             <option value="0">Inactivo</option>
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm px-4 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">save</span>
+                        <span>Guardar Cambios</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -141,12 +292,26 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('modalEditarGrupoFuncional').addEventListener('show.bs.modal', function(e) {
-    const btn = e.relatedTarget;
-    const form = document.getElementById('formEditarGrupoFuncional');
-    form.action = (window.APP_BASE || '') + '/admin/grupos-funcionales/' + btn.dataset.id;
-    document.getElementById('edit_gf_nombre').value = btn.dataset.nombre || '';
-    document.getElementById('edit_gf_activo').value = btn.dataset.activo || '1';
-});
+const _modalEditGF = document.getElementById('modalEditarGrupoFuncional');
+if (_modalEditGF) {
+    _modalEditGF.addEventListener('show.bs.modal', function(e) {
+        const btn = e.relatedTarget;
+        const form = document.getElementById('formEditarGrupoFuncional');
+        form.action = (window.APP_BASE || '') + '/admin/grupos-funcionales/' + btn.dataset.id;
+        document.getElementById('edit_gf_nombre').value = btn.dataset.nombre || '';
+        document.getElementById('edit_gf_activo').value = btn.dataset.activo || '1';
+        const sub = document.getElementById('edit_gf_subtitulo');
+        if (sub) sub.textContent = btn.dataset.nombre || '';
+    });
+}
+
+function filtrarGF() {
+    const q = (document.getElementById('search-gf').value || '').toUpperCase();
+
+    document.querySelectorAll('.gf-row').forEach(row => {
+        const nombre = row.dataset.nombreUpper || '';
+        row.style.display = nombre.includes(q) ? '' : 'none';
+    });
+}
 </script>
-{% endblock %}
+{% endblock %}

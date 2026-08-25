@@ -1,148 +1,737 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="page-header mb-4">
-    <div class="d-flex align-items-center gap-2 mb-1">
-        <a href="{{ url_for('periods.lista') }}" class="btn btn-sm btn-link text-decoration-none p-0">
-            <span class="material-symbols-outlined fs-6">arrow_back</span>
-        </a>
-        <h3 class="fw-bold mb-0 d-flex align-items-center gap-2">
-            {{ periodo.nombre }}
-            <span class="badge {{ 'bg-success-subtle text-success' if periodo.estado == 'activo' else 'bg-secondary-subtle text-secondary' }} fs-6">
-                {{ periodo.estado | capitalize }}
-            </span>
-        </h3>
-    </div>
-    <p class="text-muted">
-        Vigencia: {{ periodo.fecha_inicio.strftime('%d/%m/%Y') }} — {{ periodo.fecha_fin.strftime('%d/%m/%Y') if periodo.fecha_fin else 'Indefinido' }}
-    </p>
-    {% if periodo.estado == 'activo' %}
-    <button class="btn btn-outline-primary mt-3 d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#modalImportarMasivo">
-        <span class="material-symbols-outlined">upload</span> Carga Masiva
-    </button>
-    {% endif %}
-</div>
-
-<!-- Resumen Estadístico general del periodo -->
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="p-3 bg-primary-subtle text-primary rounded-3"><span class="material-symbols-outlined">group</span></div>
-                <div><h3 class="fw-bold mb-0">{{ personas | length }}</h3><small class="text-muted">Personas</small></div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="p-3 bg-success-subtle text-success rounded-3"><span class="material-symbols-outlined">check_circle</span></div>
-                <div><h3 class="fw-bold mb-0">{{ resumen_general.asistencia_promedio }}%</h3><small class="text-muted">Asistencia Promedio</small></div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Listado de Personas -->
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold mb-0">Personas Asociadas</h5>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
-                <tr>
-                    <th>Nombre</th>
-                    <th>Identificación</th>
-                    <th>Grupo</th>
-                    <th>Categoría</th>
-                    <th>Asistencia</th>
-                    <th>Alertas</th>
-                    <th class="text-end">Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in personas %}
-                <tr>
-                    <td>
-                        <div class="fw-semibold">{{ p.nombre }}</div>
-                    </td>
-                    <td>{{ p.identificacion or 'S/I' }}</td>
-                    <td><span class="badge bg-light text-dark fw-normal">{{ p.grupo or '-' }}</span></td>
-                    <td>{{ p.categoria or '-' }}</td>
-                    <td>
-                        {% if p.resumen.sin_horario %}
-                        <span class="badge text-white" style="background:#AAAAAA">Sin horario</span>
-                        {% else %}
-                        <div class="d-flex align-items-center gap-2">
-                             <span class="badge text-white" data-bg-color="{{ p.resumen.color }}">{{ p.resumen.porcentaje_asistencia }}%</span>
-                             <div class="progress w-100" style="height: 6px;">
-                                 <div class="progress-bar" data-width="{{ p.resumen.porcentaje_asistencia }}" data-bg-color="{{ p.resumen.color }}"></div>
-                             </div>
-                        </div>
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if p.resumen.ausentes > 2 %}
-                        <span class="badge bg-danger-subtle text-danger" title="Inasistencias elevadas">Ausencias: {{ p.resumen.ausentes }}</span>
-                        {% else %}
-                        -
-                        {% endif %}
-                    </td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-light" onclick="cargarDetalleAsistencia('{{ p.persona_id }}')">Histórico</button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="7" class="text-center py-4 text-muted">No hay personas registradas en este período.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Modal Importar Masivo CSV -->
-<div class="modal fade" id="modalImportarMasivo" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <form method="POST" action="{{ url_for('periods.importar_personas', id=periodo.id) }}" enctype="multipart/form-data">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Carga Masiva de Personas</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <p class="small text-muted">Configure el archivo .csv con los campos: <b>identificacion, nombre, grupo, categoria, lunes_entrada, lunes_salida, martes_entrada...</b></p>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Tipo de Persona que pertenece el archivo</label>
-                        <select class="form-select" name="tipo_persona_id" required>
-                            {% for t in tenant_tipos %}
-                            <option value="{{ t.id }}">{{ t.nombre }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Archivo CSV</label>
-                        <input type="file" class="form-control" name="archivo_csv" accept=".csv" required>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cerrar</button>
-                    <button type="submit" class="btn btn-primary">Iniciar Carga</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-    function cargarDetalleAsistencia(personaId) {
-        showToast("Visualización de detalle histórico en desarrollo...", "info");
-        // Futura expansión UI
+{% block extra_css %}
+<style>
+    /* ── KPI Grid (Mismo de Entradas y Salidas) ── */
+    .kpi-grid-entradas {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
     }
+    @media (max-width: 992px) {
+        .kpi-grid-entradas {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .kpi-grid-entradas {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Avatar Circle ── */
+    .avatar-circle {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background-color: var(--token-color-navy-50, #f4f6fa);
+        color: var(--token-color-navy-900, #253259);
+        border: 1px solid var(--token-color-slate-200, #e2e8f0);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+
+    /* ── Checklist Container ── */
+    .personas-checklist-box {
+        max-height: 320px;
+        overflow-y: auto;
+        border: 1px solid var(--color-border, #e2e8f0);
+        border-radius: var(--radius-md, 8px);
+        background: #fff;
+    }
+    .persona-check-item {
+        display: flex;
+        align-items: center;
+        transition: background-color 0.15s ease;
+        user-select: none;
+    }
+    .persona-check-item:hover {
+        background-color: var(--token-color-navy-50, #f4f6fa);
+    }
+    .persona-check-item:has(input:checked) {
+        background-color: #eef2ff;
+    }
+    .cursor-pointer { cursor: pointer; }
+
+    /* ── Dropdown de Acciones ── */
+    .custom-periodo-dropdown {
+        min-width: 230px;
+        border-radius: var(--radius-md, 8px);
+        box-shadow: var(--shadow-dropdown, 0 10px 25px rgba(0,0,0,0.12)) !important;
+    }
+    .custom-periodo-dropdown .dropdown-item {
+        font-size: 0.86rem;
+        font-weight: 500;
+        color: var(--token-color-charcoal, #253259);
+        border: none;
+        background: transparent;
+        width: 100%;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .custom-periodo-dropdown .dropdown-item:hover {
+        background-color: var(--token-color-navy-50, #f4f6fa);
+        color: var(--token-color-navy-900, #253259);
+    }
+    .custom-periodo-dropdown .dropdown-item.text-danger:hover {
+        background-color: #fef2f2;
+        color: #dc2626 !important;
+    }
+    .custom-periodo-dropdown .dropdown-item.text-warning-emphasis:hover {
+        background-color: #fffbeb;
+        color: #b45309 !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-shell" style="gap: 1.25rem;">
+    <!-- ── 1. Page Header Shell ───────────────────────────────────────────── -->
+    <div class="page-header-shell" style="padding-bottom: 0.875rem;">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Cohorte de Seguimiento</span>
+                {% if periodo.estado == 'activo' %}
+                <span class="rippling-pill" style="background-color: #ecfdf5; color: #047857; border-color: #a7f3d0;">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;">check_circle</span>
+                    Activo
+                </span>
+                {% else %}
+                <span class="rippling-pill rippling-pill-slate">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;">lock</span>
+                    {{ periodo.estado | capitalize }}
+                </span>
+                {% endif %}
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{{ url_for('periods.lista') }}" class="btn btn-rippling-secondary btn-sm p-1 d-inline-flex align-items-center justify-content-center" style="width:34px; height:34px;" title="Volver a lista">
+                    <span class="material-symbols-outlined" style="font-size: 1.2rem;">arrow_back</span>
+                </a>
+                <h1 class="title-hero" style="font-size: 1.625rem;">{{ periodo.nombre }}</h1>
+            </div>
+            <p class="page-header-subtitle d-flex align-items-center gap-3 flex-wrap">
+                <span class="d-inline-flex align-items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size:1rem;">date_range</span>
+                    Vigencia: <strong>{{ periodo.fecha_inicio.strftime('%d/%m/%Y') }}</strong>
+                    {% if periodo.fecha_fin %}
+                    al <strong>{{ periodo.fecha_fin.strftime('%d/%m/%Y') }}</strong>
+                    {% else %}
+                    (Indefinido)
+                    {% endif %}
+                </span>
+                {% if periodo.descripcion %}
+                <span>· {{ periodo.descripcion }}</span>
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="page-actions-slot">
+            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) and periodo.estado == 'activo' %}
+            <button class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalGestionPersonas">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">person_add</span>
+                <span>Agregar Personas</span>
+            </button>
+            <div class="dropdown">
+                <button class="btn btn-rippling-secondary btn-sm dropdown-toggle d-flex align-items-center gap-1" data-bs-toggle="dropdown">
+                    <span class="material-symbols-outlined" style="font-size: 1.05rem;">more_horiz</span>
+                    <span>Acciones</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-1 custom-periodo-dropdown">
+                    <li>
+                        <form method="POST" action="{{ url_for('periods.cerrar', id=periodo.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 rounded text-warning-emphasis" onclick="return confirm('¿Cerrar este período? Pasará al historial.')">
+                                <span class="material-symbols-outlined fs-6 text-warning">lock</span>
+                                <span>Cerrar período</span>
+                            </button>
+                        </form>
+                    </li>
+                    {% if current_user_roles and 'superadmin' in current_user_roles %}
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li>
+                        <form method="POST" action="{{ url_for('periods.eliminar', id=periodo.id) }}" onsubmit="return confirm('¿Eliminar permanentemente este período y sus registros asociados?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 rounded text-danger">
+                                <span class="material-symbols-outlined fs-6">delete_forever</span>
+                                <span>Eliminar período</span>
+                            </button>
+                        </form>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── 2. KPIs Dinámicos de la Consulta (Rippling Style) ──────────────── -->
+    <div class="kpi-grid-entradas" id="kpiCardsRow">
+        <!-- KPI 1: Personas Asignadas -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">group</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Personas Asignadas</div>
+                <div class="dashboard-kpi-value">{{ resumen_general.total_personas }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Asistencia Promedio -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">trending_up</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Asistencia Promedio</div>
+                <div class="dashboard-kpi-value text-success">{{ resumen_general.asistencia_promedio }}%</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inasistencias Altas -->
+        <div class="dashboard-kpi-card" {% if resumen_general.con_alertas > 0 %}style="border-left: 3px solid #ef4444;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if resumen_general.con_alertas > 0 %}dashboard-kpi-icon-red{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">warning</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label {% if resumen_general.con_alertas > 0 %}text-danger{% endif %}">Inasistencias Altas (&gt;2)</div>
+                <div class="dashboard-kpi-value {% if resumen_general.con_alertas > 0 %}text-danger{% endif %}">{{ resumen_general.con_alertas }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Sin Horario Vigente -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-gold">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">schedule</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Sin Horario Vigente</div>
+                <div class="dashboard-kpi-value">{{ resumen_general.sin_horario }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. Component Card: Grid de Resultados de Personal ────────────── -->
+    <div class="component-card-shell" style="position: relative; z-index: 10;">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">groups</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Nómina de Personal Asignado</span>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <div class="input-group input-group-sm" style="max-width: 260px;">
+                    <span class="input-group-text bg-light border-end-0">
+                        <span class="material-symbols-outlined text-muted" style="font-size: 1rem;">search</span>
+                    </span>
+                    <input type="text" class="form-control border-start-0" id="filtroTablaPersonas" placeholder="Buscar en la nómina..." oninput="filtrarPersonasPeriodo()">
+                </div>
+                {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) and periodo.estado == 'activo' %}
+                <button class="btn btn-sm btn-rippling-primary d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalGestionPersonas">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">add</span>
+                    <span>Agregar</span>
+                </button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tablaPersonasPeriodo">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th style="min-width: 220px;">Persona</th>
+                            <th>Identificación</th>
+                            <th>Grupo / Categoría</th>
+                            <th style="min-width: 200px;">Cumplimiento</th>
+                            <th>Alertas</th>
+                            <th class="text-end" style="min-width: 140px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in personas %}
+                        <tr data-nombre="{{ (p.nombre_mostrar or p.nombre) | upper }}" data-ident="{{ p.identificacion or '' }}">
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="avatar-circle">
+                                        {{ (p.nombre_mostrar or p.nombre or 'P')[0] | upper }}
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark" style="font-size: 0.88rem;">{{ p.nombre_mostrar or p.nombre }}</div>
+                                        <div class="text-muted small" style="font-size:0.75rem;">
+                                            Presentes: {{ p.resumen.presentes }} / {{ p.resumen.dias_programados }} días
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="fw-semibold text-secondary" style="font-size:0.85rem;">{{ p.identificacion or 'S/I' }}</span>
+                            </td>
+                            <td>
+                                <div class="d-flex flex-column gap-1 align-items-start">
+                                    {% if p.grupo %}
+                                    <span class="rippling-pill rippling-pill-navy" style="font-size:0.7rem; padding: 1px 8px;">{{ p.grupo }}</span>
+                                    {% endif %}
+                                    {% if p.categoria %}
+                                    <span class="rippling-pill rippling-pill-slate" style="font-size:0.7rem; padding: 1px 8px;">{{ p.categoria }}</span>
+                                    {% endif %}
+                                    {% if not p.grupo and not p.categoria %}
+                                    <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if p.resumen.sin_horario %}
+                                <span class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">
+                                    <span class="material-symbols-outlined" style="font-size:0.85rem;">schedule</span>
+                                    Sin horario asignado
+                                </span>
+                                {% else %}
+                                <div>
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <span class="badge text-white fw-bold" style="background-color: {{ p.resumen.color }}; font-size:0.75rem;">
+                                            {{ p.resumen.porcentaje_asistencia }}% ({{ p.resumen.semaforo }})
+                                        </span>
+                                        <small class="text-muted">{{ p.resumen.presentes }} de {{ p.resumen.dias_programados }} d.</small>
+                                    </div>
+                                    <div class="progress" style="height: 6px; border-radius: var(--radius-pill);">
+                                        <div class="progress-bar" style="width: {{ p.resumen.porcentaje_asistencia }}%; background-color: {{ p.resumen.color }};"></div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if p.resumen.ausentes > 2 %}
+                                <span class="rippling-pill" style="background-color: #fef2f2; color: #b91c1c; border-color: #fecaca; font-size:0.75rem;">
+                                    <span class="material-symbols-outlined" style="font-size:0.85rem;">warning</span>
+                                    {{ p.resumen.ausentes }} ausencias
+                                </span>
+                                {% elif p.resumen.ausentes > 0 %}
+                                <span class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">
+                                    {{ p.resumen.ausentes }} ausencia(s)
+                                </span>
+                                {% else %}
+                                <span class="rippling-pill" style="background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; font-size:0.75rem;">
+                                    <span class="material-symbols-outlined" style="font-size:0.85rem;">check</span>
+                                    Al día
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <div class="d-flex align-items-center justify-content-end gap-1">
+                                    <button class="btn btn-sm btn-rippling-secondary py-1 px-2 d-inline-flex align-items-center gap-1"
+                                        onclick="abrirDetalleAsistenciaModal('{{ loop.index0 }}')" title="Ver desglose día a día">
+                                        <span class="material-symbols-outlined" style="font-size:1rem;">calendar_month</span>
+                                        <span class="d-none d-md-inline">Detalle</span>
+                                    </button>
+                                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) and periodo.estado == 'activo' %}
+                                    <form method="POST" action="{{ url_for('periods.remover_persona', id=periodo.id, persona_id=p.persona_id) }}" class="d-inline"
+                                          onsubmit="return confirm('¿Desvincular a «{{ p.nombre_mostrar or p.nombre }}» de este período? No se borrará la persona del sistema.')">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 d-inline-flex align-items-center" title="Quitar del período">
+                                            <span class="material-symbols-outlined" style="font-size:1rem;">person_remove</span>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="text-center py-4 px-3">
+                                    <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 56px; height: 56px;">
+                                        <span class="material-symbols-outlined text-muted" style="font-size: 2rem;">group_off</span>
+                                    </div>
+                                    <h6 class="fw-bold text-dark mb-1">No hay personas en este período</h6>
+                                    <p class="text-muted small mb-3" style="max-width: 420px; margin: 0 auto;">Agrega personal seleccionando de la base de datos, creando nuevas fichas o subiendo un archivo CSV.</p>
+                                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) and periodo.estado == 'activo' %}
+                                    <button class="btn btn-rippling-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalGestionPersonas">
+                                        <span class="material-symbols-outlined" style="font-size:1rem;">person_add</span>
+                                        <span>Agregar Personas Ahora</span>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- ── Modal Unificado de Gestión de Personas (Manual + CSV) ─────────────── -->
+<div class="modal fade" id="modalGestionPersonas" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">group_add</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Agregar Personas al Período</h5>
+                        <p class="text-muted small mb-0">{{ periodo.nombre }}</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            
+            <div class="modal-body p-4">
+                <!-- Nav Tabs para los 3 métodos -->
+                <ul class="nav nav-pills mb-4 gap-2" id="metodoAgregarTab" role="tablist">
+                    <li class="nav-item flex-fill">
+                        <button class="nav-link active w-100 fw-bold py-2 custom-tab text-center d-flex align-items-center justify-content-center gap-2"
+                                id="tab-existentes-btn" data-bs-toggle="tab" data-bs-target="#tab-existentes" type="button" role="tab">
+                            <span class="material-symbols-outlined fs-6">how_to_reg</span>
+                            <span>Seleccionar del Personal</span>
+                        </button>
+                    </li>
+                    <li class="nav-item flex-fill">
+                        <button class="nav-link w-100 fw-bold py-2 custom-tab text-center d-flex align-items-center justify-content-center gap-2"
+                                id="tab-nueva-btn" data-bs-toggle="tab" data-bs-target="#tab-nueva" type="button" role="tab">
+                            <span class="material-symbols-outlined fs-6">person_add</span>
+                            <span>Registrar Nueva Persona</span>
+                        </button>
+                    </li>
+                    <li class="nav-item flex-fill">
+                        <button class="nav-link w-100 fw-bold py-2 custom-tab text-center d-flex align-items-center justify-content-center gap-2"
+                                id="tab-csv-btn" data-bs-toggle="tab" data-bs-target="#tab-csv" type="button" role="tab">
+                            <span class="material-symbols-outlined fs-6">upload_file</span>
+                            <span>Carga Masiva CSV</span>
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <!-- ── OPCIÓN 1: Seleccionar personas existentes ── -->
+                    <div class="tab-pane fade show active" id="tab-existentes" role="tabpanel">
+                        <form method="POST" action="{{ url_for('periods.agregar_manual', id=periodo.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="modo" value="existentes">
+
+                            <div class="alert alert-light border d-flex gap-2 align-items-start py-2 mb-3" style="font-size:0.85rem; background-color: var(--token-color-navy-50);">
+                                <span class="material-symbols-outlined text-primary flex-shrink-0" style="font-size:1.1rem; margin-top:2px;">info</span>
+                                <span>Selecciona una o varias personas del directorio activo que aún no formen parte de este período.</span>
+                            </div>
+
+                            {% if personas_disponibles %}
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label small fw-bold text-muted mb-0">Personal disponible ({{ personas_disponibles|length }})</label>
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" onclick="toggleSelectAllPersonas(true)">Seleccionar todos</button>
+                                        <span class="text-muted">|</span>
+                                        <button type="button" class="btn btn-sm btn-link text-decoration-none p-0 text-secondary" onclick="toggleSelectAllPersonas(false)">Desmarcar</button>
+                                    </div>
+                                </div>
+                                <input type="text" class="form-control form-control-sm mb-2" id="search-personas-disp" placeholder="Filtrar por nombre o cédula..." oninput="filtrarPersonasDisponibles()" style="height: 38px;">
+                                <div class="personas-checklist-box" id="personas-checklist-container">
+                                    {% for p in personas_disponibles %}
+                                    <label class="persona-check-item d-flex align-items-center gap-3 p-2 px-3 border-bottom cursor-pointer mb-0" for="chk_p_{{ p.id }}" data-nombre="{{ (p.nombre_mostrar or p.nombre) | upper }}" data-ident="{{ p.identificacion or '' }}">
+                                        <input class="form-check-input chk-persona m-0 flex-shrink-0" type="checkbox" name="personas_ids" value="{{ p.id }}" id="chk_p_{{ p.id }}">
+                                        <div class="flex-grow-1 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                            <div>
+                                                <strong class="text-dark">{{ p.nombre_mostrar or p.nombre }}</strong>
+                                                {% if p.identificacion %}
+                                                <span class="text-muted small ms-1">· {{ p.identificacion }}</span>
+                                                {% endif %}
+                                            </div>
+                                            <div class="d-flex align-items-center gap-1">
+                                                {% if p.grupo %}
+                                                <span class="rippling-pill rippling-pill-navy" style="font-size:0.68rem; padding: 1px 8px;">{{ p.grupo }}</span>
+                                                {% endif %}
+                                                {% if p.id_usuario_zk %}
+                                                <span class="badge bg-light text-secondary border fw-normal" style="font-size:0.68rem;">ID: {{ p.id_usuario_zk }}</span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                                    <span class="material-symbols-outlined fs-6">check</span>
+                                    <span>Agregar Seleccionados</span>
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="text-center py-4">
+                                <span class="material-symbols-outlined text-muted mb-2" style="font-size:2.5rem;">done_all</span>
+                                <p class="text-muted mb-3">Todo el personal disponible ya se encuentra asignado a este período.</p>
+                                <button type="button" class="btn btn-rippling-secondary btn-sm" onclick="document.getElementById('tab-nueva-btn').click();">
+                                    Registrar una persona nueva
+                                </button>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+
+                    <!-- ── OPCIÓN 2: Registrar persona nueva ── -->
+                    <div class="tab-pane fade" id="tab-nueva" role="tabpanel">
+                        <form method="POST" action="{{ url_for('periods.agregar_manual', id=periodo.id) }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="modo" value="nueva">
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-8">
+                                    <label class="form-label small fw-bold text-muted mb-1">Nombre Completo <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="nombre" placeholder="Apellidos, Nombres" required style="height: 42px;">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small fw-bold text-muted mb-1">Identificación / Cédula</label>
+                                    <input type="text" class="form-control" name="identificacion" placeholder="Cédula" style="height: 42px;">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Tipo de Persona</label>
+                                    <select class="form-select" name="tipo_persona_id" style="height: 42px;">
+                                        <option value="">Seleccionar tipo...</option>
+                                        {% for t in tenant_tipos %}
+                                        <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Grupo</label>
+                                    <select class="form-select" name="grupo_id" style="height: 42px;">
+                                        <option value="">Sin grupo asignado</option>
+                                        {% for g in grupos %}
+                                        <option value="{{ g.id }}">{{ g.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Grupo Funcional / Categoría</label>
+                                    <select class="form-select" name="grupo_funcional_id" style="height: 42px;">
+                                        <option value="">Sin grupo funcional</option>
+                                        {% for gf in grupos_funcionales %}
+                                        <option value="{{ gf.id }}">{{ gf.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                                        <span class="material-symbols-outlined text-primary fs-6">fingerprint</span>
+                                        ID Reloj Biométrico
+                                    </label>
+                                    <input type="number" class="form-control" name="id_usuario_zk" min="1" placeholder="Ej: 15" style="height: 42px;">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Email</label>
+                                    <input type="email" class="form-control" name="email" placeholder="correo@institucion.edu" style="height: 42px;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Teléfono</label>
+                                    <input type="text" class="form-control" name="telefono" placeholder="Ej: 0991234567" style="height: 42px;">
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                                    <span class="material-symbols-outlined fs-6">person_add</span>
+                                    <span>Registrar y Vincular</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- ── OPCIÓN 3: Carga Masiva CSV ── -->
+                    <div class="tab-pane fade" id="tab-csv" role="tabpanel">
+                        <form method="POST" action="{{ url_for('periods.importar_personas', id=periodo.id) }}" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            
+                            <div class="alert alert-light border mb-3" style="font-size:0.85rem; background-color: var(--token-color-navy-50);">
+                                <div class="d-flex gap-2 align-items-start mb-2">
+                                    <span class="material-symbols-outlined text-primary flex-shrink-0" style="font-size:1.1rem; margin-top:2px;">info</span>
+                                    <div>
+                                        <strong>Formato requerido de archivo CSV:</strong>
+                                        <p class="mb-1 text-muted">Las columnas del encabezado deben ser exactamente:</p>
+                                        <code>identificacion, nombre, grupo, categoria, lunes_entrada, lunes_salida, martes_entrada, martes_salida, ...</code>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold text-muted mb-1">Tipo de Persona correspondiente <span class="text-danger">*</span></label>
+                                <select class="form-select" name="tipo_persona_id" required style="height: 42px;">
+                                    {% for t in tenant_tipos %}
+                                    <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-bold text-muted mb-1">Seleccionar archivo CSV <span class="text-danger">*</span></label>
+                                <input type="file" class="form-control" name="archivo_csv" accept=".csv" required style="height: 42px;">
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                                <button type="submit" class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                                    <span class="material-symbols-outlined fs-6">upload</span>
+                                    <span>Iniciar Importación CSV</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Detalle Día a Día de Asistencia ────────────────────────────── -->
+<div class="modal fade" id="modalDetalleAsistenciaPersona" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">event_note</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="modalPersonaNombre" style="font-size: 1.1rem;">Detalle de Asistencia</h5>
+                        <p class="text-muted small mb-0" id="modalPersonaSub">Desglose cronológico</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0" style="font-size:0.875rem;">
+                        <thead class="rippling-table-header">
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Día</th>
+                                <th>Horario Esperado</th>
+                                <th>Marcación Real</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="modalAsistenciaTbody">
+                            <!-- Inyectado vía JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer bg-light border-top px-4 py-2 d-flex justify-content-between">
+                <small class="text-muted d-flex align-items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">info</span>
+                    <span>Cálculo diario basado en turnos asignados y marcajes biométricos</span>
+                </small>
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cerrar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Objeto de personas cargado desde Flask de manera segura
+const personasData = {{ personas | tojson | safe }};
+
+// ── Filtro rápido de tabla de personas asociadas ──
+function filtrarPersonasPeriodo() {
+    const q = (document.getElementById('filtroTablaPersonas').value || '').trim().toUpperCase();
+    document.querySelectorAll('#tablaPersonasPeriodo tbody tr[data-nombre]').forEach(row => {
+        const nombre = (row.getAttribute('data-nombre') || '').toUpperCase();
+        const ident = (row.getAttribute('data-ident') || '').toUpperCase();
+        const match = !q || nombre.includes(q) || ident.includes(q);
+        if (match) {
+            row.classList.remove('d-none');
+        } else {
+            row.classList.add('d-none');
+        }
+    });
+}
+
+// ── Filtro rápido de checklist de personas disponibles para agregar ──
+function filtrarPersonasDisponibles() {
+    const q = (document.getElementById('search-personas-disp').value || '').trim().toUpperCase();
+    document.querySelectorAll('#personas-checklist-container .persona-check-item').forEach(item => {
+        const nombre = (item.getAttribute('data-nombre') || '').toUpperCase();
+        const ident = (item.getAttribute('data-ident') || '').toUpperCase();
+        const match = !q || nombre.includes(q) || ident.includes(q);
+        if (match) {
+            item.classList.remove('d-none');
+        } else {
+            item.classList.add('d-none');
+        }
+    });
+}
+
+// ── Seleccionar / desmarcar todos en checklist ──
+function toggleSelectAllPersonas(check) {
+    document.querySelectorAll('#personas-checklist-container .chk-persona').forEach(chk => {
+        const item = chk.closest('.persona-check-item');
+        if (item && !item.classList.contains('d-none')) {
+            chk.checked = check;
+        }
+    });
+}
+
+// ── Modal de desglose de asistencia por persona ──
+function abrirDetalleAsistenciaModal(index) {
+    const p = personasData[index];
+    if (!p) return;
+
+    document.getElementById('modalPersonaNombre').textContent = p.nombre_mostrar || p.nombre;
+    document.getElementById('modalPersonaSub').textContent = 
+        `Cédula: ${p.identificacion || 'S/I'} · Grupo: ${p.grupo || 'Sin grupo'} · Asistencia: ${p.resumen.porcentaje_asistencia}%`;
+
+    const tbody = document.getElementById('modalAsistenciaTbody');
+    tbody.innerHTML = '';
+
+    const detalle = p.detalle_asistencia || [];
+    if (detalle.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">Sin días registrados en este período.</td></tr>';
+    } else {
+        detalle.forEach(d => {
+            let estadoBadge = '';
+            if (d.estado === 'presente') {
+                estadoBadge = '<span class="rippling-pill" style="background-color:#ecfdf5;color:#047857;border-color:#a7f3d0;font-size:0.75rem;">Presente</span>';
+            } else if (d.estado === 'presente_tarde') {
+                estadoBadge = '<span class="rippling-pill" style="background-color:#fef3c7;color:#b45309;border-color:#fde68a;font-size:0.75rem;">Tardanza</span>';
+            } else if (d.estado === 'ausente') {
+                estadoBadge = '<span class="rippling-pill" style="background-color:#fef2f2;color:#b91c1c;border-color:#fecaca;font-size:0.75rem;">Ausente</span>';
+            } else if (d.estado === 'feriado') {
+                estadoBadge = '<span class="rippling-pill rippling-pill-gold" style="font-size:0.75rem;">Feriado</span>';
+            } else {
+                estadoBadge = '<span class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">No programado</span>';
+            }
+
+            const horarioEsperado = d.entrada_esperada ? `${d.entrada_esperada} → ${d.salida_esperada || '—'}` : '<span class="text-muted">—</span>';
+            const marcacionReal = (d.entrada_marcada || d.salida_marcada) ? `${d.entrada_marcada || '—'} → ${d.salida_marcada || '—'}` : '<span class="text-muted">—</span>';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td><strong>${d.fecha}</strong></td>
+                <td>${d.dia_semana}</td>
+                <td>${horarioEsperado}</td>
+                <td>${marcacionReal}</td>
+                <td>${estadoBadge}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalleAsistenciaPersona'));
+    modal.show();
+}
 </script>
 {% endblock %}

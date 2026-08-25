@@ -1,210 +1,332 @@
 {% extends "base.html" %}
 
-{% block title %}Gestión de Dispositivos - {{ super() }}{% endblock %}
+{% block title %}Control de Dispositivos - {{ super() }}{% endblock %}
 
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Control de Dispositivos</h3>
-    <p class="text-muted">Gestión de conexiones, sincronización y mantenimiento de biométricos.</p>
-    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#dispositivoModal" onclick="nuevoDispositivo()">
-        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">add_circle</span> Añadir Dispositivo
-    </button>
-</div>
+<div class="page-shell">
 
-<div class="row">
-    <!-- Lista de Dispositivos -->
-    <div class="col-12">
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0" id="tablaDispositivos">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="ps-4">Nombre</th>
-                                <th>Conexión</th>
-                                <th>Driver</th>
-                                <th>Prioridad / Timeout</th>
-                                <th>Última Sync</th>
-                                <th>Capacidad</th>
-                                <th>Estado Sync</th>
-                                <th class="text-end pe-4">Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <!-- Llenado via JS -->
-                        </tbody>
-                    </table>
-                </div>
+    <!-- ── Header de Página ────────────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span class="rippling-pill rippling-pill-navy">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">router</span>
+                    Administración
+                </span>
+                <span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">fingerprint</span>
+                    Infraestructura Biométrica
+                </span>
+            </div>
+            <h1 class="title-hero mb-0">Control de Dispositivos</h1>
+            <p class="page-header-subtitle mb-0">
+                Gestión de conexiones, protocolos de comunicación ZK/Hikvision, sincronización de marcaciones y catálogo de usuarios.
+            </p>
+        </div>
+
+        <div class="page-actions-slot">
+            <button class="btn btn-rippling-primary shadow-sm d-inline-flex align-items-center gap-2"
+                    data-bs-toggle="modal" data-bs-target="#dispositivoModal" onclick="nuevoDispositivo();">
+                <span class="material-symbols-outlined fs-5">add_circle</span>
+                <span>Añadir Dispositivo</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Cuadrícula de KPIs Ejecutivos ────────────────────────────────────── -->
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Dispositivos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">router</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Dispositivos Totales</div>
+                <div class="dashboard-kpi-value" id="kpi-total-disp">0</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Dispositivos Habilitados -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">check_circle</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Dispositivos Activos</div>
+                <div class="dashboard-kpi-value text-success" id="kpi-activos-disp">0</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inactivos / Requieren Atención -->
+        <div class="dashboard-kpi-card" id="card-kpi-inactivos">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-gold">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">warning</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Inactivos / Pausados</div>
+                <div class="dashboard-kpi-value" id="kpi-inactivos-disp">0</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Usuarios ZK Vinculados -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">link</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Cobertura ZK</div>
+                <div class="dashboard-kpi-value" id="kpi-zk-vinc">0%</div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Sección Usuarios ZK -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-transparent d-flex justify-content-between align-items-center py-3">
-                <div>
-                    <h5 class="fw-bold mb-0">
-                        <span class="material-symbols-outlined" style="font-size:1.1rem;vertical-align:-3px;">fingerprint</span>
-                        Usuarios del biométrico
-                    </h5>
-                    <small class="text-muted">Usuarios registrados en el reloj vs personas en el catálogo</small>
+    <!-- ── Tarjeta Principal de Dispositivos ───────────────────────────────── -->
+    <div class="component-card-shell">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <div class="component-title-icon-wrapper">
+                    <span class="material-symbols-outlined">devices</span>
                 </div>
-                <button class="btn btn-sm btn-outline-secondary" onclick="abrirUsuariosZK()">
-                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">manage_search</span>
-                    Ver / vincular usuarios
+                <div>
+                    <h5 class="component-card-title mb-0">Dispositivos Biométricos Registrados</h5>
+                    <small class="text-muted">Parámetros de red, capacidad de memoria y estado de polling en tiempo real</small>
+                </div>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <button class="btn btn-sm btn-rippling-secondary d-inline-flex align-items-center gap-1" onclick="cargarDispositivos();" title="Recargar lista">
+                    <span class="material-symbols-outlined fs-6">sync</span>
+                    <span>Actualizar</span>
                 </button>
             </div>
-            <div class="card-body py-2 px-4">
-                <div id="zk-resumen-bar" class="d-flex gap-3 align-items-center flex-wrap" style="min-height:32px;">
-                    <span class="text-muted small">Cargando...</span>
-                </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tablaDispositivos">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th class="ps-4">Dispositivo</th>
+                            <th>Conexión / Host</th>
+                            <th>Driver</th>
+                            <th>Prioridad / Timeout</th>
+                            <th>Última Sincronización</th>
+                            <th>Capacidad de Memoria</th>
+                            <th>Estado de Sincronización</th>
+                            <th class="text-end pe-4">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Llenado vía JS -->
+                        <tr><td colspan="8" class="text-center text-muted py-5">Cargando dispositivos...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Offcanvas Usuarios ZK -->
-<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasUsuariosZK"
-     aria-labelledby="offcanvasUsuariosZKLabel" style="width:580px;">
-    <div class="offcanvas-header border-bottom">
-        <div>
-            <h5 class="offcanvas-title fw-bold" id="offcanvasUsuariosZKLabel">Usuarios del biométrico</h5>
-            <small class="text-muted" id="zk-offcanvas-sub">—</small>
+    <!-- ── Tarjeta de Usuarios del Biométrico ──────────────────────────────── -->
+    <div class="component-card-shell">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <div class="component-title-icon-wrapper" style="background-color: var(--navy-50, #eff6ff); color: var(--navy-700, #1e3a8a);">
+                    <span class="material-symbols-outlined">fingerprint</span>
+                </div>
+                <div>
+                    <h5 class="component-card-title mb-0">Usuarios Registrados en el Biométrico</h5>
+                    <small class="text-muted">Mapeo y vinculación entre IDs físicos del reloj y colaboradores del catálogo institucional</small>
+                </div>
+            </div>
+            <div class="component-tools-slot">
+                <button class="btn btn-sm btn-rippling-primary d-inline-flex align-items-center gap-1 shadow-sm" onclick="abrirUsuariosZK();">
+                    <span class="material-symbols-outlined fs-6">manage_search</span>
+                    <span>Ver / Vincular Usuarios</span>
+                </button>
+            </div>
         </div>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        <div class="component-body-shell py-3 px-4 bg-light bg-opacity-50">
+            <div id="zk-resumen-bar" class="d-flex gap-3 align-items-center flex-wrap" style="min-height: 38px;">
+                <span class="text-muted small">Consultando estado de sincronización de usuarios...</span>
+            </div>
+        </div>
     </div>
-    <div class="offcanvas-body p-0">
-        <div class="p-3 border-bottom">
-            <input type="text" class="form-control form-control-sm" id="zk-search"
-                   placeholder="Buscar por ID o nombre..." oninput="filtrarUsuariosZK();">
+
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- ── Offcanvas Usuarios ZK ───────────────────────────────────────────── -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasUsuariosZK"
+     aria-labelledby="offcanvasUsuariosZKLabel" style="width: 580px;">
+    <div class="offcanvas-header border-bottom px-4 py-3 bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 34px; height: 34px;">
+                <span class="material-symbols-outlined" style="font-size: 1.15rem;">fingerprint</span>
+            </div>
+            <div>
+                <h5 class="offcanvas-title fw-bold text-dark mb-0" id="offcanvasUsuariosZKLabel" style="font-size: 1.05rem;">Usuarios del Biométrico</h5>
+                <small class="text-muted" id="zk-offcanvas-sub">—</small>
+            </div>
         </div>
-        <div style="overflow-y:auto; max-height:calc(100vh - 200px);">
-            <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
-                <thead class="table-light sticky-top">
+        <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="offcanvas-body p-0 d-flex flex-column" style="height: calc(100% - 65px);">
+        <div class="p-3 border-bottom bg-white">
+            <div class="input-group">
+                <span class="input-group-text bg-light border-end-0 text-muted"><span class="material-symbols-outlined fs-6">search</span></span>
+                <input type="text" class="form-control form-control-sm border-start-0 ps-0" id="zk-search"
+                       placeholder="Buscar por ID ZK o nombre en reloj..." oninput="filtrarUsuariosZK();" style="height: 38px;">
+            </div>
+        </div>
+        <div class="flex-grow-1 overflow-auto">
+            <table class="table table-hover align-middle mb-0" style="font-size: 0.85rem;">
+                <thead class="rippling-table-header sticky-top bg-light">
                     <tr>
-                        <th class="ps-3" style="width:60px;">ID ZK</th>
-                        <th>Nombre en el reloj</th>
-                        <th>Persona vinculada</th>
-                        <th class="text-end pe-3"></th>
+                        <th class="ps-3" style="width: 70px;">ID ZK</th>
+                        <th>Nombre en Reloj</th>
+                        <th>Persona Vinculada</th>
+                        <th class="text-end pe-3">Acción</th>
                     </tr>
                 </thead>
                 <tbody id="zk-tbody">
-                    <tr><td colspan="4" class="text-center py-4 text-muted">Cargando...</td></tr>
+                    <tr><td colspan="4" class="text-center py-5 text-muted">Cargando usuarios...</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- Modal vincular usuario ZK a persona -->
-<div class="modal fade" id="modalVincularZK" tabindex="-1">
+<!-- ── Modal Vincular Usuario ZK a Persona ─────────────────────────────── -->
+<div class="modal fade" id="modalVincularZK" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header border-0 pb-0">
-                <div>
-                    <h5 class="modal-title fw-bold">Vincular al catálogo</h5>
-                    <p class="text-muted small mb-0" id="vincular-sub">—</p>
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">link</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.05rem;">Vincular al Catálogo</h5>
+                        <p class="text-muted small mb-0" id="vincular-sub">—</p>
+                    </div>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body">
-                <div class="alert alert-light border small mb-3 py-2">
-                    Selecciona la persona del catálogo que corresponde a este usuario del reloj.
-                    Si aún no existe, créala primero en <a href="{{ url_for('people.lista') }}">Personas</a>.
+            <div class="modal-body p-4">
+                <div class="p-3 bg-light rounded-3 border mb-3 small text-muted">
+                    Selecciona el colaborador del catálogo que corresponde a este usuario en el reloj biométrico.
                 </div>
-                <input type="text" class="form-control form-control-sm mb-2" id="vincular-search-persona"
-                       placeholder="Buscar por nombre o cédula..." oninput="filtrarPersonasVincular();">
+                <div class="mb-2">
+                    <input type="text" class="form-control" id="vincular-search-persona"
+                           placeholder="Buscar por nombre o cédula..." oninput="filtrarPersonasVincular();" style="height: 42px;">
+                </div>
                 <div id="vincular-personas-lista"
-                     style="max-height:220px; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px;">
+                     style="max-height: 220px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radius-md);" class="p-1">
                 </div>
-                <div id="vincular-persona-seleccionada" class="mt-2 small text-success fw-semibold" style="display:none;"></div>
+                <div id="vincular-persona-seleccionada" class="mt-2 p-2 bg-success bg-opacity-10 border border-success border-opacity-25 rounded small text-success fw-semibold" style="display:none;"></div>
                 <input type="hidden" id="vincular-persona-id-sel">
                 <input type="hidden" id="vincular-id-usuario-zk">
             </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary btn-sm px-4" onclick="confirmarVincular();"
+            <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-rippling-primary btn-sm px-4 shadow-sm" onclick="confirmarVincular();"
                         id="btn-confirmar-vincular" disabled>Vincular</button>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Modal Formulario -->
-<div class="modal fade" id="dispositivoModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header bg-primary text-white">
-                <h5 class="modal-title" id="dispositivoModalTitle">Nuevo Dispositivo</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+<!-- ── Modal Formulario Dispositivo ────────────────────────────────────── -->
+<div class="modal fade" id="dispositivoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">router</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="dispositivoModalTitle" style="font-size: 1.1rem;">Nuevo Dispositivo</h5>
+                        <p class="text-muted small mb-0">Parámetros de red y protocolo de comunicación con el biométrico.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <div class="modal-body p-4">
                 <form id="dispositivoForm">
                     <input type="hidden" id="disp_id" name="id">
-                    <div class="row g-3">
+                    
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Nombre del Dispositivo</label>
-                            <input type="text" class="form-control" id="disp_nombre" name="nombre" required placeholder="Ej: Portería Principal">
+                            <label class="form-label small fw-bold text-muted mb-1">Nombre del Dispositivo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="disp_nombre" name="nombre" required placeholder="Ej: Portería Principal / Edificio A" style="height: 42px;">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Clase de Driver</label>
-                            <select class="form-select" id="disp_driver" name="tipo_driver">
-                                <option value="zk">ZKTeco (TCP/UDP)</option>
-                                <option value="hikvision">Hikvision ISAPI</option>
+                            <label class="form-label small fw-bold text-muted mb-1">Clase de Driver <span class="text-danger">*</span></label>
+                            <select class="form-select" id="disp_driver" name="tipo_driver" style="height: 42px;">
+                                <option value="zk">ZKTeco (TCP/UDP Standalone)</option>
+                                <option value="hikvision">Hikvision (ISAPI)</option>
                             </select>
                         </div>
-                        
+                    </div>
+
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Dirección IP o Host</label>
-                            <input type="text" class="form-control" id="disp_ip" name="ip" required placeholder="Ej: 192.168.1.100 o 100.x.x.x (Tailscale)">
+                            <label class="form-label small fw-bold text-muted mb-1">Dirección IP o Host <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control font-monospace" id="disp_ip" name="ip" required placeholder="Ej: 192.168.1.201" style="height: 42px;">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Puerto</label>
-                            <input type="number" class="form-control" id="disp_puerto" name="puerto" required value="4370">
+                            <label class="form-label small fw-bold text-muted mb-1">Puerto <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control font-monospace" id="disp_puerto" name="puerto" required value="4370" style="height: 42px;">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Protocolo</label>
-                            <select class="form-select" id="disp_protocolo" name="protocolo">
+                            <label class="form-label small fw-bold text-muted mb-1">Protocolo</label>
+                            <select class="form-select" id="disp_protocolo" name="protocolo" style="height: 42px;">
                                 <option value="tcp">TCP</option>
                                 <option value="udp">UDP</option>
                                 <option value="http">HTTP (Hik)</option>
                             </select>
                         </div>
+                    </div>
 
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Contraseña del Sistema (Opcional)</label>
-                            <input type="password" class="form-control" id="disp_pwd" name="password_enc" placeholder="* * * * *">
-                            <small class="text-muted">Desencriptada en caliente. Vacío = no usar.</small>
+                            <label class="form-label small fw-bold text-muted mb-1">Contraseña de Conexión (Opcional)</label>
+                            <input type="password" class="form-control" id="disp_pwd" name="password_enc" placeholder="Dejar en blanco si no tiene clave" style="height: 42px;">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Capacidad Máx</label>
-                            <input type="number" class="form-control" id="disp_capacidad" name="capacidad_max" required value="100000">
+                            <label class="form-label small fw-bold text-muted mb-1">Capacidad Máx.</label>
+                            <input type="number" class="form-control" id="disp_capacidad" name="capacidad_max" required value="100000" style="height: 42px;">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label fw-bold">Timeout (Seg)</label>
-                            <input type="number" class="form-control" id="disp_timeout" name="timeout_seg" value="120">
+                            <label class="form-label small fw-bold text-muted mb-1">Timeout (Seg)</label>
+                            <input type="number" class="form-control" id="disp_timeout" name="timeout_seg" value="120" style="height: 42px;">
                         </div>
-                        <div class="col-md-3 mt-3">
-                            <label class="form-label fw-bold">Prioridad (1-10)</label>
-                            <input type="number" class="form-control" id="disp_prioridad" name="prioridad" value="5" min="1" max="10">
-                            <small class="text-muted">>7: Rápido</small>
+                    </div>
+
+                    <div class="row g-3 align-items-center">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Prioridad en Cola (1-10)</label>
+                            <input type="number" class="form-control" id="disp_prioridad" name="prioridad" value="5" min="1" max="10" style="height: 42px;">
+                            <small class="text-muted" style="font-size: 0.75rem;">Valores mayores a 7 tienen prioridad de descarga rápida.</small>
                         </div>
-                        
-                        <div class="col-12 mt-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="disp_activo" name="activo" checked>
-                                <label class="form-check-label" for="disp_activo">Dispositivo Habilitado</label>
+                        <div class="col-md-6 pt-3">
+                            <div class="form-check form-switch p-3 bg-light rounded-3 border">
+                                <input class="form-check-input ms-0 me-2" type="checkbox" id="disp_activo" name="activo" checked style="cursor: pointer;">
+                                <label class="form-check-label fw-bold text-dark" for="disp_activo" style="cursor: pointer;">
+                                    Dispositivo Habilitado
+                                </label>
+                                <p class="text-muted small mb-0" style="font-size: 0.75rem;">Permite que el worker daemon consulte marcaciones automáticamente.</p>
                             </div>
                         </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer bg-light">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="guardarDispositivo()">Guardar</button>
+            <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-rippling-primary btn-sm px-4 shadow-sm" onclick="guardarDispositivo();">
+                    <span class="material-symbols-outlined fs-6">save</span>
+                    <span>Guardar Dispositivo</span>
+                </button>
             </div>
         </div>
     </div>
@@ -214,8 +336,6 @@
 {% block extra_js %}
 <script>
     let timerSync = null;
-
-    // Almacén global para evitar problemas con JSON.stringify en inline HTML attributes
     let _dispositivosCache = {};
 
     function renderDispositivos(data) {
@@ -223,75 +343,104 @@
         tbody.innerHTML = '';
         _dispositivosCache = {}; 
         
+        let total = (data || []).length;
+        let activos = 0;
+        let inactivos = 0;
+
         if (!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No hay dispositivos configurados.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5">No hay dispositivos configurados en este tenant.</td></tr>';
+            actualizarKpisDispositivos(0, 0, 0);
             return;
         }
 
         data.forEach(d => {
             _dispositivosCache[d.id] = d;
+            if (d.activo) activos++; else inactivos++;
+
             const row = document.createElement('tr');
             if(!d.activo) row.classList.add('table-light', 'text-muted');
             
-            // Logica de sync progress
-            let statusBadge = '<span class="badge bg-secondary">Idle</span>';
+            // Lógica de badge de sync
+            let statusBadge = '<span class="rippling-pill rippling-pill-slate" style="font-size:0.72rem;">Idle</span>';
             let syncEstado = d.sync_estado || { estado: 'idle', progreso_pct: 0, mensaje: '' };
-            if (syncEstado.estado === 'sincronizando' || syncEstado.estado === 'procesando' || syncEstado.estado === 'descargando_marcaciones' || syncEstado.estado === 'obteniendo_usuarios') {
-                statusBadge = `<div class="progress" style="height: 15px;">
-                                 <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: ${syncEstado.progreso_pct}%;">${syncEstado.progreso_pct}%</div>
-                               </div><small>${syncEstado.estado}</small>`;
+            if (['sincronizando', 'procesando', 'descargando_marcaciones', 'obteniendo_usuarios'].includes(syncEstado.estado)) {
+                statusBadge = `<div class="progress" style="height: 12px; border-radius: 6px;">
+                                 <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: ${syncEstado.progreso_pct}%; font-size: 0.65rem;">${syncEstado.progreso_pct}%</div>
+                               </div><small class="text-muted" style="font-size:0.7rem;">${syncEstado.estado}</small>`;
             } else if (syncEstado.estado === 'error') {
-                statusBadge = `<span class="badge bg-danger">Error</span> <small>${syncEstado.mensaje || ''}</small>`;
+                statusBadge = `<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25" style="font-size:0.72rem;">Error</span> <small class="text-danger d-block" style="font-size:0.7rem;">${syncEstado.mensaje || ''}</small>`;
             } else if (syncEstado.estado === 'completado') {
-                statusBadge = `<span class="badge bg-success">Completado</span>`;
+                statusBadge = `<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25" style="font-size:0.72rem;">Sincronizado</span>`;
             }
 
+            const pctOcupado = d.porcentaje_ocupado || 0;
+            const barColor = pctOcupado > 90 ? 'bg-danger' : (pctOcupado > 75 ? 'bg-warning' : 'bg-success');
+
             row.innerHTML = `
-                <td class="ps-4 fw-bold">
-                    ${d.nombre}
-                    ${!d.activo ? ' <span class="badge bg-danger ms-2">Inactivo</span>' : ''}
-                </td>
-                <td>
-                    <code>${d.ip}:${d.puerto}</code><br>
-                    <small class="text-muted text-uppercase">${d.protocolo}</small>
-                </td>
-                <td><span class="badge bg-primary">${d.tipo_driver}</span></td>
-                <td>
-                    Pri: <strong>${d.prioridad}</strong> / To: ${d.timeout_seg}s
-                </td>
-                <td>
-                    ${d.watermark_ultima_fecha ? new Date(d.watermark_ultima_fecha).toLocaleString() : '<span class="text-muted">Nunca</span>'}
-                </td>
-                <td>
-                    <div class="progress mb-1" style="height: 6px; max-width: 120px;">
-                        <div class="progress-bar ${d.porcentaje_ocupado > 90 ? 'bg-danger' : d.porcentaje_ocupado > 75 ? 'bg-warning' : 'bg-success'}" 
-                             role="progressbar" style="width: ${d.porcentaje_ocupado}%"></div>
+                <td class="ps-4">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined ${d.activo ? 'text-primary' : 'text-muted'}" style="font-size:1.25rem;">router</span>
+                        <div>
+                            <div class="fw-bold text-dark">${escapeHtml(d.nombre)}</div>
+                            ${!d.activo ? '<span class="badge bg-secondary bg-opacity-10 text-secondary border" style="font-size:0.65rem;">Inactivo</span>' : '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25" style="font-size:0.65rem;">Online</span>'}
+                        </div>
                     </div>
-                    <small class="text-muted">${(d.registros_en_dispositivo || 0).toLocaleString()} / ${(d.capacidad_max || 100000).toLocaleString()}</small>
                 </td>
-                <td style="width: 200px;">
+                <td>
+                    <code class="text-dark fw-semibold" style="font-size:0.82rem;">${escapeHtml(d.ip)}:${d.puerto}</code><br>
+                    <span class="badge bg-light text-muted border text-uppercase" style="font-size:0.65rem;">${escapeHtml(d.protocolo)}</span>
+                </td>
+                <td><span class="rippling-pill rippling-pill-navy" style="font-size:0.75rem;">${escapeHtml(d.tipo_driver).toUpperCase()}</span></td>
+                <td class="small">
+                    <span class="text-muted">Prioridad:</span> <strong>${d.prioridad}</strong><br>
+                    <span class="text-muted">Timeout:</span> ${d.timeout_seg}s
+                </td>
+                <td class="small">
+                    ${d.watermark_ultima_fecha ? '<span class="material-symbols-outlined text-success align-middle fs-6">done</span> ' + new Date(d.watermark_ultima_fecha).toLocaleString() : '<span class="text-muted">— Nunca —</span>'}
+                </td>
+                <td>
+                    <div class="progress mb-1" style="height: 6px; max-width: 120px; border-radius: 3px;">
+                        <div class="progress-bar ${barColor}" 
+                             role="progressbar" style="width: ${pctOcupado}%"></div>
+                    </div>
+                    <small class="text-muted" style="font-size:0.72rem;">${(d.registros_en_dispositivo || 0).toLocaleString()} / ${(d.capacidad_max || 100000).toLocaleString()}</small>
+                </td>
+                <td style="min-width: 150px;">
                     ${statusBadge}
                 </td>
                 <td class="text-end pe-4">
-                    <button class="btn btn-sm btn-outline-info me-1" onclick="testDispositivo('${d.id}')" title="Probar Conexión">
-                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">wifi_tethering</span>
-                    </button>
-                    <button class="btn btn-sm btn-outline-success me-1" onclick="syncDispositivo('${d.id}')" title="Sincronizar">
-                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">sync</span>
-                    </button>
-                    <button class="btn btn-sm btn-outline-warning me-1" onclick="limpiarDispositivo('${d.id}', '${escapeHtml(d.nombre)}')" title="Limpiar Registros">
-                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">cleaning_services</span>
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary me-1" onclick="clicEditar('${d.id}')" title="Editar">
-                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">edit</span>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="eliminarDispositivo('${d.id}', '${escapeHtml(d.nombre)}')" title="Eliminar">
-                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">delete</span>
-                    </button>
+                    <div class="btn-group shadow-sm">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="testDispositivo('${d.id}')" title="Probar Conexión">
+                            <span class="material-symbols-outlined" style="font-size:1rem;">wifi_tethering</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="syncDispositivo('${d.id}')" title="Forzar Sincronización">
+                            <span class="material-symbols-outlined text-success" style="font-size:1rem;">sync</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="limpiarDispositivo('${d.id}', '${escapeHtml(d.nombre)}')" title="Limpiar Memoria">
+                            <span class="material-symbols-outlined text-warning" style="font-size:1rem;">cleaning_services</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="clicEditar('${d.id}')" title="Editar">
+                            <span class="material-symbols-outlined text-primary" style="font-size:1rem;">edit</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="eliminarDispositivo('${d.id}', '${escapeHtml(d.nombre)}')" title="Eliminar">
+                            <span class="material-symbols-outlined text-danger" style="font-size:1rem;">delete</span>
+                        </button>
+                    </div>
                 </td>
             `;
             tbody.appendChild(row);
         });
+
+        actualizarKpisDispositivos(total, activos, inactivos);
+    }
+
+    function actualizarKpisDispositivos(total, activos, inactivos) {
+        const tEl = document.getElementById('kpi-total-disp');
+        const aEl = document.getElementById('kpi-activos-disp');
+        const iEl = document.getElementById('kpi-inactivos-disp');
+        if (tEl) tEl.textContent = total;
+        if (aEl) aEl.textContent = activos;
+        if (iEl) iEl.textContent = inactivos;
     }
 
     function clicEditar(id) {
@@ -333,7 +482,7 @@
         document.getElementById('disp_capacidad').value = d.capacidad_max || 100000;
         document.getElementById('disp_prioridad').value = d.prioridad;
         document.getElementById('disp_activo').checked = d.activo;
-        document.getElementById('disp_pwd').value = ''; // nunca mostramos la contraseña
+        document.getElementById('disp_pwd').value = '';
         new bootstrap.Modal(document.getElementById('dispositivoModal')).show();
     }
 
@@ -430,9 +579,8 @@
     function iniciarPollSync() {
         if(timerSync) clearInterval(timerSync);
         timerSync = setInterval(() => {
-            // Poll simple updateing solo donde importa
             cargarDispositivos();
-        }, 2000);
+        }, 3000);
     }
     
     document.addEventListener('DOMContentLoaded', () => {
@@ -458,25 +606,36 @@
 
     function renderResumenZK(data) {
         const bar = document.getElementById('zk-resumen-bar');
-        if (!bar) return;
+        const kpiVinc = document.getElementById('kpi-zk-vinc');
+        const kpiSub = document.getElementById('kpi-zk-subtext');
+
         const total = data.total || 0;
         const vinc  = data.vinculados || 0;
         const sinv  = data.sin_vincular || 0;
         const pct   = total > 0 ? Math.round(vinc / total * 100) : 0;
+
+        if (kpiVinc) kpiVinc.textContent = `${pct}%`;
+        if (kpiSub) kpiSub.textContent = `${vinc} vinculados de ${total} en reloj`;
+
+        if (!bar) return;
         bar.innerHTML = `
-            <span class="badge bg-secondary bg-opacity-10 text-secondary border">${total} usuarios en el reloj</span>
-            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
-                <span class="material-symbols-outlined" style="font-size:0.75rem;vertical-align:-1px;">link</span>
-                ${vinc} vinculados
-            </span>
-            ${sinv > 0 ? `<span class="badge bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25">
-                <span class="material-symbols-outlined" style="font-size:0.75rem;vertical-align:-1px;">link_off</span>
-                ${sinv} sin vincular
-            </span>` : ''}
-            <div class="progress flex-grow-1" style="height:6px; max-width:160px;">
-                <div class="progress-bar bg-success" style="width:${pct}%;" title="${pct}% vinculados"></div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="rippling-pill rippling-pill-slate"><strong>${total}</strong> usuarios en reloj</span>
+                <span class="rippling-pill rippling-pill-green">
+                    <span class="material-symbols-outlined fs-6">link</span>
+                    <strong>${vinc}</strong> vinculados al catálogo
+                </span>
+                ${sinv > 0 ? `<span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined fs-6">link_off</span>
+                    <strong>${sinv}</strong> sin vincular
+                </span>` : ''}
             </div>
-            <small class="text-muted">${pct}% vinculado</small>
+            <div class="d-flex align-items-center gap-2 ms-auto">
+                <div class="progress flex-grow-1" style="height: 8px; width: 140px; border-radius: 4px;">
+                    <div class="progress-bar bg-success" style="width: ${pct}%;" title="${pct}% vinculados"></div>
+                </div>
+                <span class="small fw-bold text-dark">${pct}% vinculado</span>
+            </div>
         `;
     }
 
@@ -506,14 +665,14 @@
                 : `<span class="badge bg-warning bg-opacity-15 text-warning border border-warning border-opacity-25 fw-normal">Sin vincular</span>`;
             const accion = vinculado
                 ? `<span class="text-muted small">—</span>`
-                : `<button class="btn btn-sm btn-outline-primary py-0 px-2"
+                : `<button class="btn btn-sm btn-rippling-primary py-1 px-2 d-inline-flex align-items-center gap-1 shadow-sm"
                           onclick='abrirModalVincular(${JSON.stringify(u.id_usuario)}, ${JSON.stringify(u.nombre_zk)})'>
-                       <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:-2px;">link</span>
-                       Vincular
+                       <span class="material-symbols-outlined fs-6">link</span>
+                       <span>Vincular</span>
                    </button>`;
             return `<tr data-search-upper="${escapeHtml((u.id_usuario + ' ' + (u.nombre_zk || '')).toUpperCase())}">
-                <td class="ps-3 fw-bold text-primary">${escapeHtml(u.id_usuario)}</td>
-                <td>${escapeHtml(u.nombre_zk || '—')}</td>
+                <td class="ps-3 fw-bold text-primary font-monospace">${escapeHtml(u.id_usuario)}</td>
+                <td class="fw-semibold">${escapeHtml(u.nombre_zk || '—')}</td>
                 <td>${personaCell}</td>
                 <td class="text-end pe-3">${accion}</td>
             </tr>`;
@@ -537,7 +696,6 @@
         document.getElementById('btn-confirmar-vincular').disabled = true;
         document.getElementById('vincular-search-persona').value = '';
 
-        // Cargar personas si no están en caché
         if (!_personasCatalogo.length) {
             fetch(_BASE + '/api/personas-lista').then(r => r.json()).then(data => {
                 _personasCatalogo = data.personas || [];
@@ -560,7 +718,7 @@
             <div class="d-flex align-items-center gap-2 px-3 py-2 border-bottom vincular-persona-item"
                  style="cursor:pointer;" onclick="seleccionarPersonaVincular('${p.id}', '${escapeHtml(p.nombre)}', '${escapeHtml(p.identificacion || '')}')">
                 <div class="flex-grow-1">
-                    <div class="fw-semibold" style="font-size:0.85rem;">${escapeHtml(p.nombre)}</div>
+                    <div class="fw-semibold text-dark" style="font-size:0.85rem;">${escapeHtml(p.nombre)}</div>
                     ${p.identificacion ? `<small class="text-muted">${escapeHtml(p.identificacion)}</small>` : ''}
                 </div>
                 ${p.id_usuario_zk ? `<span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.7rem;">ZK: ${p.id_usuario_zk}</span>` : ''}
@@ -579,7 +737,7 @@
         document.getElementById('vincular-persona-id-sel').value = id;
         document.getElementById('btn-confirmar-vincular').disabled = false;
         const label = document.getElementById('vincular-persona-seleccionada');
-        label.textContent = `Seleccionada: ${nombre}${identificacion ? ' · ' + identificacion : ''}`;
+        label.innerHTML = `<span class="material-symbols-outlined fs-6 align-middle">check_circle</span> Seleccionada: <strong>${nombre}</strong>${identificacion ? ' · ' + identificacion : ''}`;
         label.style.display = '';
         document.querySelectorAll('.vincular-persona-item').forEach(el => el.classList.remove('bg-light'));
     }
@@ -602,22 +760,21 @@
         .then(data => {
             if (data.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('modalVincularZK')).hide();
-                _personasCatalogo = [];  // invalidar caché
-                showToast('Usuario vinculado correctamente', 'success');
-                // Recargar lista ZK fresca
+                _personasCatalogo = [];
+                alert('Usuario vinculado correctamente');
                 fetch(_BASE + '/api/usuarios-zk').then(r => r.json()).then(data => {
                     _zkUsuarios = data.usuarios || [];
                     renderResumenZK(data);
                     renderTablaZK(_zkUsuarios);
                 });
             } else {
-                showToast('Error: ' + (data.error || 'desconocido'), 'danger');
+                alert('Error: ' + (data.error || 'desconocido'));
                 btn.disabled = false;
                 btn.textContent = 'Vincular';
             }
         })
         .catch(() => {
-            showToast('Error de red', 'danger');
+            alert('Error de red');
             btn.disabled = false;
             btn.textContent = 'Vincular';
         });

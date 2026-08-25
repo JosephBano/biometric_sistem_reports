@@ -2,7 +2,10 @@ let _horariosCache = [];
 let offcanvasHorario = null;
 
 document.addEventListener('DOMContentLoaded', () => {
-    offcanvasHorario = new bootstrap.Offcanvas(document.getElementById('offcanvas-horario'));
+    const elOffcanvas = document.getElementById('offcanvas-horario');
+    if (elOffcanvas) {
+        offcanvasHorario = new bootstrap.Offcanvas(elOffcanvas);
+    }
     
     // Listeners for uploads
     const hi = document.getElementById('horarios-input');
@@ -292,9 +295,12 @@ function guardarHorario() {
         body: JSON.stringify(payload)
     })
     .then(data => {
-        offcanvasHorario.hide();
+        if (offcanvasHorario) offcanvasHorario.hide();
         showSuccess(`Horario de ${nombre} ${modo === 'crear' ? 'creado' : 'actualizado'} correctamente.`);
         cargarHorarios();
+        if (typeof window.onHorarioGuardadoExitoso === 'function') {
+            window.onHorarioGuardadoExitoso(payload);
+        }
     })
     .catch(err => errMh(err.message));
 }
@@ -332,26 +338,31 @@ function cargarFeriados() {
             // pero mantenemos la lista plana elegante por ahora
             
             const badges = {
-                'nacional': '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-2">Nacional</span>',
-                'local': '<span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2">Local</span>',
-                'institucional': '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-2">Institucional</span>'
+                'nacional': '<span class="rippling-pill rippling-pill-green" style="font-size: 0.72rem;">Nacional</span>',
+                'local': '<span class="rippling-pill rippling-pill-navy" style="font-size: 0.72rem;">Local</span>',
+                'institucional': '<span class="rippling-pill rippling-pill-gold" style="font-size: 0.72rem;">Institucional</span>'
             };
 
-            let html = '<table class="table table-sm table-hover align-middle bg-white mb-0 border rounded overflow-hidden"><tbody>';
+            let html = '<div class="table-responsive border rounded-3"><table class="table table-hover align-middle mb-0"><thead class="rippling-table-header"><tr><th class="ps-4">Fecha Inhábil</th><th>Descripción del Feriado</th><th>Ámbito / Tipo</th><th class="text-end pe-4">Acción</th></tr></thead><tbody>';
             data.feriados.forEach(f => {
-                const b = badges[f.tipo] || `<span class="badge bg-secondary">${f.tipo}</span>`;
+                const b = badges[f.tipo] || `<span class="rippling-pill rippling-pill-slate" style="font-size: 0.72rem;">${f.tipo}</span>`;
                 html += `
                     <tr>
-                        <td style="width: 120px;" class="fw-semibold">${f.fecha}</td>
-                        <td>${f.descripcion}</td>
-                        <td style="width: 100px;">${b}</td>
-                        <td class="text-end" style="width: 60px;">
-                            <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="eliminarFeriado('${f.fecha}')" title="Eliminar"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">delete</span></button>
+                        <td class="ps-4 fw-bold text-dark font-monospace" style="width: 140px;">
+                            <span class="material-symbols-outlined fs-6 align-middle text-primary me-1">calendar_today</span>
+                            ${f.fecha}
+                        </td>
+                        <td class="fw-semibold text-dark">${f.descripcion}</td>
+                        <td style="width: 140px;">${b}</td>
+                        <td class="text-end pe-4" style="width: 80px;">
+                            <button class="btn btn-sm btn-outline-danger py-1 px-2 d-inline-flex align-items-center justify-content-center shadow-xs" onclick="eliminarFeriado('${f.fecha}')" title="Eliminar Feriado">
+                                <span class="material-symbols-outlined fs-6">delete</span>
+                            </button>
                         </td>
                     </tr>
                 `;
             });
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
             listaDiv.innerHTML = html;
         });
 }

@@ -95,7 +95,7 @@ def estado_sync():
 # ── CRUD de dispositivos ─────────────────────────────────────────────────
 
 @bp.get("/api/dispositivos")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def api_get_dispositivos():
     try:
         dispositivos = get_dispositivos_activos()
@@ -163,13 +163,13 @@ def api_eliminar_dispositivo(id: str):
 
 
 @bp.get("/api/dispositivos/<id>/test")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def api_test_dispositivo(id: str):
     return jsonify({"ok": schedule_svc.ping_dispositivo(id)})
 
 
 @bp.post("/api/dispositivos/<id>/sync")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def api_sync_dispositivo(id: str):
     tenant_schema = g.tenant_schema
     _set_thread_tenant_and_run(
@@ -182,7 +182,7 @@ def api_sync_dispositivo(id: str):
 # ── Usuarios ZK ──────────────────────────────────────────────────────────
 
 @bp.get("/api/usuarios-zk")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def api_usuarios_zk():
     try:
         usuarios = get_usuarios_zk_con_estado()
@@ -212,7 +212,7 @@ def api_vincular_usuario_zk(id_usuario: str):
 
 
 @bp.get("/api/personas-lista")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def api_personas_lista():
     try:
         personas = listar_personas(activo=None)
@@ -229,7 +229,7 @@ def api_personas_lista():
 # ── Sync global ──────────────────────────────────────────────────────────
 
 @bp.get("/api/sync/estado")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def api_sync_estado():
     try:
         return jsonify(get_estado_sync_ui())
@@ -238,7 +238,7 @@ def api_sync_estado():
 
 
 @bp.post("/api/sincronizar")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def sincronizar():
     data = request.json or {}
     fecha_inicio_str = data.get("fecha_inicio")

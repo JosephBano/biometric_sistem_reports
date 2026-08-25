@@ -1,130 +1,337 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="page-header mb-4">
-    <h3>Panel de Control</h3>
-    <p>Visión general y estado rápido del sistema de asistencia.</p>
-</div>
+{% block extra_css %}
+<style>
+    .kpi-grid-compact {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+    @media (max-width: 992px) {
+        .kpi-grid-compact {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .kpi-grid-compact {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
 
-<div class="row g-4 mb-4">
-    <div class="col-md-6">
-        <div class="status-card h-100">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="fw-bold mb-0">Dispositivos biométricos</h5>
-                <a href="{{ url_for('admin.admin_dispositivos') }}" class="btn btn-outline-secondary btn-sm">
-                    <span class="material-symbols-outlined" style="font-size:1rem;">settings</span>
+{% block content %}
+<div class="page-shell" style="gap: 1rem;">
+    <!-- ── 1. Page Header Compacto ───────────────────────────────────────── -->
+    <div class="page-header-shell" style="padding-bottom: 0.875rem;">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Monitoreo en Tiempo Real</span>
+                <span class="rippling-pill rippling-pill-slate">Última Sync: <b id="status-ultima-sync" class="ms-1">—</b></span>
+            </div>
+            <h2 class="title-hero" style="font-size: 1.5rem;">Panel General de Asistencia</h2>
+            <p class="page-header-subtitle">
+                Detección inmediata de personal en riesgo, métricas de puntualidad, analítica y terminales biométricos.
+            </p>
+        </div>
+
+        <div class="page-actions-slot">
+            <button class="btn btn-rippling-primary btn-sm" id="btn-sync" onclick="iniciarSync();">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">sync</span>
+                <span>Sincronizar Biométricos</span>
+            </button>
+            <a href="{{ url_for('dashboard.reportes') }}" class="btn btn-rippling-secondary btn-sm">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">description</span>
+                <span>Generación de Reportes</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Barra de Progreso de Sincronización Global -->
+    <div id="sync-progress" class="sync-progress-box shadow-sm mb-2" style="display:none; padding: 0.75rem 1rem;">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <div class="d-flex align-items-center gap-2">
+                <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                <span id="sync-progress-text" class="small fw-bold text-dark">Conectando con biométricos...</span>
+            </div>
+            <span class="text-muted small" id="sync-progress-detail"></span>
+        </div>
+        <div class="progress" style="height: 6px;">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="sync-progress-bar" style="width:0%"></div>
+        </div>
+    </div>
+
+    <!-- ── 2. Top KPIs Ejecutivos Compactos (4 Columnas) ─────────────────── -->
+    <div class="kpi-grid-compact">
+        <!-- KPI 1: Personas Registradas -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">group</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Personas en Base</div>
+                <div class="dashboard-kpi-value" id="status-personas">—</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Total Registros -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-gold">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">dataset</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Marcaciones en DB</div>
+                <div class="dashboard-kpi-value" id="status-total">—</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Personal en Riesgo por Retrasos Severos -->
+        <div class="dashboard-kpi-card" style="border-left: 3px solid #ef4444;">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-red">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">warning</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-danger">En Riesgo (Atrasos)</div>
+                <div class="dashboard-kpi-value text-danger" id="kpi-risk-count">0</div>
+            </div>
+            <span class="rippling-pill" id="kpi-risk-badge" style="background:#fef2f2; color:#b91c1c; border-color:#fecaca;">≥3 Severos</span>
+        </div>
+
+        <!-- KPI 4: Capacidad de Terminales -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">storage</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Ocupación Terminal</div>
+                <div class="d-flex align-items-baseline gap-1">
+                    <span class="dashboard-kpi-value" id="status-capacidad-pct">0%</span>
+                    <span class="text-muted small" style="font-size:0.75rem;">(<span id="status-capacidad-ocupada">0</span>/<span id="status-capacidad-max">0</span>)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. ALTA PRIORIDAD: PERSONAL EN RIESGO POR RETRASOS SEVEROS ────── -->
+    <div class="component-card-shell risk-card">
+        <div class="component-header-shell" style="padding: 0.75rem 1.25rem;">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined text-danger" style="font-size: 1.3rem;">error_outline</span>
+                <span style="font-size: 0.9375rem; font-weight: 700; color: #1e293b;">Personal en Riesgo por Retrasos Severos y Reincidencias</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <input type="text" id="filter-risk-search" class="form-control form-control-sm" placeholder="Buscar funcionario..." style="max-width: 220px; font-size: 0.78rem; padding: 0.25rem 0.5rem;" onkeyup="filtrarTablaRiesgo()">
+                <button class="btn btn-sm btn-outline-secondary" onclick="fetchPersonalEnRiesgo()" title="Actualizar lista de riesgo">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">refresh</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive" style="max-height: 280px; overflow-y: auto;">
+                <table class="table table-hover table-compact mb-0" id="tabla-personal-riesgo">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th>Persona / Funcionario</th>
+                            <th class="text-center">Tardanzas Severas</th>
+                            <th>Nivel de Criticidad</th>
+                            <th class="text-end">Acciones Rápidas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="risk-tbody">
+                        <tr>
+                            <td colspan="4" class="text-center py-3 text-muted small">
+                                <div class="spinner-border spinner-border-sm text-danger me-1" role="status"></div>
+                                Analizando registros de personal en riesgo...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="component-footer-shell" style="padding: 0.5rem 1.25rem; font-size: 0.75rem;">
+            <div class="text-muted d-flex align-items-center gap-1">
+                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #dc2626;">info</span>
+                <span>Se consideran funcionarios en riesgo aquellos con <strong>3 o más atrasos severos</strong> en el período activo.</span>
+            </div>
+            <a href="{{ url_for('dashboard.reportes') }}" class="fw-bold text-decoration-none" style="color: var(--token-color-navy-900);">
+                Ver todos los reportes &rarr;
+            </a>
+        </div>
+    </div>
+
+    <!-- ── 4. GRID ASIMÉTRICO: ESTADÍSTICAS EN GRÁFICOS & DISPOSITIVOS ────── -->
+    <div class="component-grid-shell grid-main-side" style="gap: 0.875rem;">
+        <!-- Columna Izquierda: Gráficos Estadísticos -->
+        <div class="component-card-shell">
+            <div class="component-header-shell" style="padding: 0.75rem 1.25rem;">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="color: var(--token-color-navy-900);">query_stats</span>
+                    <span>Distribución y Tendencia de Asistencia</span>
+                </div>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn btn-outline-secondary active py-1 px-2" id="btn-tab-dist" onclick="switchChartTab('dist')">Puntualidad</button>
+                    <button type="button" class="btn btn-outline-secondary py-1 px-2" id="btn-tab-trend" onclick="switchChartTab('trend')">Tendencia Semanal</button>
+                </div>
+            </div>
+
+            <div class="component-body-shell p-3">
+                <!-- Vista Gráfico 1: Donut de Distribución -->
+                <div id="chart-view-dist" class="row align-items-center">
+                    <div class="col-sm-6 text-center">
+                        <div class="chart-wrapper-compact" style="height: 190px;">
+                            <canvas id="chartPuntualidad"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="d-flex flex-column gap-2" style="font-size: 0.8125rem;">
+                            <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light border">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; display:inline-block;"></span>
+                                    <span class="fw-semibold">Puntual / Válido</span>
+                                </div>
+                                <span class="fw-bold" id="stat-chart-puntual">--%</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light border">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; display:inline-block;"></span>
+                                    <span class="fw-semibold">Atraso Leve</span>
+                                </div>
+                                <span class="fw-bold text-warning" id="stat-chart-leve">--%</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center p-2 rounded bg-light border">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span style="width: 10px; height: 10px; border-radius: 50%; background: #ef4444; display:inline-block;"></span>
+                                    <span class="fw-semibold">Atraso Severo / Falta</span>
+                                </div>
+                                <span class="fw-bold text-danger" id="stat-chart-severo">--%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista Gráfico 2: Tendencia Semanal -->
+                <div id="chart-view-trend" class="d-none">
+                    <div class="chart-wrapper-compact" style="height: 190px;">
+                        <canvas id="chartTendencia"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna Derecha: Dispositivos Biométricos en Lista Compacta -->
+        <div class="component-card-shell">
+            <div class="component-header-shell" style="padding: 0.75rem 1.25rem;">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="color: var(--token-color-navy-900);">router</span>
+                    <span>Dispositivos Biométricos</span>
+                </div>
+                <a href="{{ url_for('admin.admin_dispositivos') }}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;">
                     Gestionar
                 </a>
             </div>
 
-            <div id="dispositivos-container" class="mb-3">
-                <div class="text-muted small text-center py-2">
-                    <div class="spinner-border spinner-border-sm" role="status"></div> Cargando...
-                </div>
-            </div>
-
-            <div class="d-flex flex-wrap gap-3 text-muted small mb-3 border-top pt-2">
-                <span><b id="status-total">—</b> registros en base</span>
-                <span>·</span>
-                <span><b id="status-personas">—</b> personas</span>
-                <span class="w-100">Última sync: <b id="status-ultima-sync">—</b></span>
-            </div>
-
-            <div class="border-top pt-2">
-                <div class="small text-muted d-flex justify-content-between">
-                    <span>Ocupación (<span id="status-capacidad-ocupada">0</span>/<span id="status-capacidad-max">0</span>)</span>
-                    <span class="fw-bold" id="status-capacidad-pct">0%</span>
-                </div>
-                <div class="progress mt-1" style="height: 8px;">
-                    <div class="progress-bar bg-primary" id="status-capacidad-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <div class="small text-warning mt-1 d-none" id="status-capacidad-warning" style="font-size: 0.75rem;">
-                    <span class="material-symbols-outlined align-bottom" style="font-size: 0.95rem;">warning</span>
-                    Quedan aprox. <b id="status-capacidad-dias">0</b> días para llenado.
-                </div>
-            </div>
-
-            <div class="mt-3">
-                <button class="btn btn-primary btn-sm" id="btn-sync" onclick="iniciarSync();">
-                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-2px;">sync</span>
-                    <span>Sincronizar todos</span>
-                </button>
-            </div>
-
-            <div id="sync-progress" class="sync-progress-box mt-3" style="display:none">
-                <div class="d-flex align-items-center gap-2">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                    <span id="sync-progress-text" class="small fw-semibold">Conectando...</span>
-                </div>
-                <div class="progress mt-2" style="height:5px">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="sync-progress-bar" style="width:0%"></div>
-                </div>
-                <div class="text-muted small mt-1" id="sync-progress-detail"></div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-6">
-        <div class="horarios-card h-100">
-            <h5 class="fw-bold mb-3">Horarios del personal</h5>
-            <div class="d-flex align-items-center gap-2 mb-2">
-                <span class="status-dot dot-gray" id="horarios-dot"></span>
-                <span class="fw-bold small" id="horarios-status-text">Verificando horarios...</span>
-            </div>
-            <div id="horarios-detalles" class="mb-4" style="display:none">
-                <div class="d-flex flex-wrap gap-2 mb-2">
-                    <span id="stat-semana" class="badge bg-light text-dark fw-normal border">0 semanal</span>
-                    <span id="stat-mes" class="badge bg-light text-dark fw-normal border">0 mensual</span>
-                    <span id="stat-almuerzo" class="badge bg-light text-dark fw-normal border">0 con almuerzo</span>
-                </div>
-                <div class="text-muted small">
-                    <span class="material-symbols-outlined" style="font-size: 0.9rem; vertical-align: middle;">schedule</span>
-                    Actualizado: <span id="stat-actualizado">—</span>
-                </div>
-            </div>
-            <a href="{{ url_for('people.lista') }}?tab=horarios" class="btn btn-outline-secondary btn-sm">Gestionar horarios</a>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
-        <div class="danger-zone">
-            <details>
-                <summary class="text-danger fw-semibold small p-1">
-                    <span class="material-symbols-outlined" style="font-size: 1.1rem; vertical-align: text-bottom;">warning</span>
-                    Mantenimiento del dispositivo (Limpiar log)
-                </summary>
-                <div class="mt-3 border-top pt-3">
-                    <p class="small text-muted mb-2">
-                        Borra el log de marcaciones <strong>directamente en el dispositivo ZK</strong>.
-                        Solo usar después de una sincronización exitosa y verificada.
-                        Esta acción es <strong>irreversible</strong>.
-                    </p>
-                    <button class="btn btn-sm btn-outline-danger" id="btn-limpiar" onclick="mostrarConfirmLimpiar();">
-                        Limpiar log del dispositivo
-                    </button>
-                    <div id="confirm-limpiar" style="display:none" class="mt-3 p-3 bg-white border border-danger rounded">
-                        <p class="small text-danger fw-bold mb-2">
-                            ¿Confirma que desea eliminar TODOS los registros del dispositivo?
-                            Esta acción no se puede deshacer.
-                        </p>
-                        <div class="mb-2">
-                            <label class="form-label small fw-semibold">Contraseña de administrador</label>
-                            <input type="password" class="form-control form-control-sm" id="limpiar-password"
-                                placeholder="Ingrese la contraseña" style="max-width:260px">
-                        </div>
-                        <div id="limpiar-error" class="small text-danger mb-2" style="display:none"></div>
-                        <button class="btn btn-sm btn-danger me-2" onclick="ejecutarLimpiar();">Sí, limpiar el log</button>
-                        <button class="btn btn-sm btn-secondary" onclick="cancelarLimpiar();">Cancelar</button>
+            <div class="component-body-shell p-2">
+                <!-- Lista de Dispositivos -->
+                <div id="dispositivos-container" class="d-flex flex-column gap-1 mb-2" style="max-height: 160px; overflow-y: auto;">
+                    <div class="text-muted small text-center py-3">
+                        <div class="spinner-border spinner-border-sm" role="status"></div> Cargando terminales...
                     </div>
                 </div>
-            </details>
+
+                <!-- Barra de Ocupación -->
+                <div class="border-top pt-2 px-1">
+                    <div class="d-flex justify-content-between small text-muted mb-1" style="font-size:0.75rem;">
+                        <span>Capacidad del Equipo</span>
+                        <span class="fw-bold text-dark" id="status-capacidad-bar-text">0%</span>
+                    </div>
+                    <div class="progress" style="height: 5px;">
+                        <div class="progress-bar bg-success" id="status-capacidad-bar" role="progressbar" style="width: 0%;"></div>
+                    </div>
+                    <div class="small text-danger mt-1 d-none" id="status-capacidad-warning" style="font-size: 0.72rem;">
+                        <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">warning</span>
+                        Quedan aprox. <b id="status-capacidad-dias">0</b> días de memoria.
+                    </div>
+                </div>
+            </div>
+
+            <div class="component-footer-shell" style="padding: 0.5rem 1rem;">
+                <button class="btn btn-sm btn-outline-primary w-100 justify-content-center py-1" onclick="fetchDispositivos();">
+                    <span class="material-symbols-outlined" style="font-size: 0.95rem;">refresh</span>
+                    <span>Verificar Conexión</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 5. CONFIGURACIÓN EN LISTA & MANTENIMIENTO PROTEGIDO ────────────── -->
+    <div class="component-card-shell" style="border: 1px solid var(--color-border-subtle);">
+        <div class="component-header-shell" style="padding: 0.65rem 1.25rem; background: var(--token-color-slate-50);">
+            <div class="component-title-slot" style="font-size: 0.84rem;">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem; color: var(--token-color-slate-500);">tune</span>
+                <span>Configuración Rápida de Horarios & Mantenimiento de Hardware</span>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-3">
+            <div class="row g-3 align-items-center">
+                <!-- Horarios en lista compacta -->
+                <div class="col-md-7 border-end">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="status-dot dot-gray" id="horarios-dot"></span>
+                            <span class="fw-bold small" id="horarios-status-text">Verificando horarios...</span>
+                        </div>
+                        <a href="{{ url_for('people.lista') }}?tab=horarios" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size: 0.75rem;">
+                            Configurar Horarios
+                        </a>
+                    </div>
+                    <div id="horarios-detalles" style="display:none">
+                        <div class="d-flex flex-wrap gap-2 align-items-center" style="font-size: 0.75rem;">
+                            <span id="stat-semana" class="badge bg-light text-dark border">0 semanal</span>
+                            <span id="stat-mes" class="badge bg-light text-dark border">0 mensual</span>
+                            <span id="stat-almuerzo" class="badge bg-light text-dark border">0 almuerzo</span>
+                            <span class="text-muted ms-auto">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">update</span>
+                                <span id="stat-actualizado">—</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Mantenimiento de Limpieza Log ZK -->
+                <div class="col-md-5">
+                    <details class="danger-zone py-1 px-2 rounded-2" style="background:#fffaf0; border: 1px solid #fed7aa;">
+                        <summary class="text-warning text-dark fw-bold small" style="cursor: pointer;">
+                            <span class="material-symbols-outlined text-warning align-bottom" style="font-size: 1rem;">settings_backup_restore</span>
+                            <span>Mantenimiento ZK (Limpieza de memoria)</span>
+                        </summary>
+                        <div class="mt-2 border-top pt-2" style="font-size: 0.75rem;">
+                            <p class="text-muted mb-2">Borra el log de marcaciones directamente en el equipo ZK tras sincronizar.</p>
+                            <button class="btn btn-sm btn-outline-danger py-0 px-2" id="btn-limpiar" onclick="mostrarConfirmLimpiar();" style="font-size: 0.75rem;">
+                                Limpiar log del dispositivo
+                            </button>
+                            <div id="confirm-limpiar" style="display:none" class="mt-2 p-2 bg-white border border-danger rounded">
+                                <p class="text-danger fw-bold mb-1" style="font-size: 0.72rem;">¿Confirmar eliminación física de registros?</p>
+                                <input type="password" class="form-control form-control-sm mb-1" id="limpiar-password" placeholder="Contraseña de admin" style="font-size:0.75rem;">
+                                <div id="limpiar-error" class="text-danger mb-1" style="display:none; font-size:0.7rem;"></div>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-danger py-0 px-2" onclick="ejecutarLimpiar();" style="font-size:0.72rem;">Confirmar</button>
+                                    <button class="btn btn-sm btn-secondary py-0 px-2" onclick="cancelarLimpiar();" style="font-size:0.72rem;">Cancelar</button>
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<!-- Chart.js para estadísticas visuales -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=3"></script>
 {% endblock %}

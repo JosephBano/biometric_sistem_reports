@@ -1,77 +1,226 @@
 {% extends "base.html" %}
 
-{% block content %}
-<div class="page-header mb-4">
-    <h3>Gestión de Grupos</h3>
-    <p class="text-muted">Departamentos, facultades o agrupaciones de personas.</p>
-    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrearGrupo">
-        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">group_add</span> Nuevo Grupo
-    </button>
-</div>
+{% block title %}Instituciones y Grupos - {{ super() }}{% endblock %}
 
-<div class="card border-0 shadow-sm">
-    <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-            <thead class="bg-light">
-                <tr>
-                    <th>Nombre</th>
-                    <th>Tipo</th>
-                    <th>Estado</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for g in grupos %}
-                <tr>
-                    <td class="fw-bold">{{ g.nombre }}</td>
-                    <td>{{ g.tipo_grupo }}</td>
-                    <td>
-                        <span class="badge {% if g.activo %}bg-success{% else %}bg-secondary{% endif %}">
-                            {% if g.activo %}Activo{% else %}Inactivo{% endif %}
-                        </span>
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-secondary"
-                                data-bs-toggle="modal"
-                                data-bs-target="#modalEditarGrupo"
-                                data-id="{{ g.id }}"
-                                data-nombre="{{ g.nombre }}"
-                                data-tipo="{{ g.tipo_grupo }}"
-                                data-activo="{{ '1' if g.activo else '0' }}">
-                            Editar
-                        </button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" class="text-center py-5 text-muted">No hay grupos creados.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% block content %}
+<div class="page-shell">
+
+    <!-- ── Header de Página ────────────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span class="rippling-pill rippling-pill-navy">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">domain</span>
+                    Estructura Organizacional
+                </span>
+                <span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">apartment</span>
+                    Sedes e Instituciones
+                </span>
+            </div>
+            <h1 class="title-hero mb-0">Sedes e Instituciones</h1>
+            <p class="page-header-subtitle mb-0">
+                Catálogo de sedes, campus, facultades y departamentos para la asignación institucional del personal.
+            </p>
+        </div>
+
+        <div class="page-actions-slot">
+            <button class="btn btn-rippling-primary shadow-sm d-inline-flex align-items-center gap-2"
+                    data-bs-toggle="modal" data-bs-target="#modalCrearGrupo">
+                <span class="material-symbols-outlined fs-5">domain_add</span>
+                <span>Nueva Institución / Grupo</span>
+            </button>
+        </div>
     </div>
+
+    <!-- ── KPIs Ejecutivos ─────────────────────────────────────────────────── -->
+    {% set total_g = grupos|length %}
+    {% set activos_g = grupos|selectattr('activo')|list|length %}
+    {% set inactivos_g = total_g - activos_g %}
+    {% set deptos_g = grupos|selectattr('tipo_grupo', 'defined')|selectattr('tipo_grupo', 'in', ['departamento', 'area', 'facultad'])|list|length %}
+
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Grupos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">domain</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Instituciones / Sedes</div>
+                <div class="dashboard-kpi-value">{{ total_g }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Grupos Activos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">check_circle</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Sedes Activas</div>
+                <div class="dashboard-kpi-value text-success">{{ activos_g }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inactivos -->
+        <div class="dashboard-kpi-card" {% if inactivos_g > 0 %}style="border-left: 3px solid #f59e0b;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if inactivos_g > 0 %}dashboard-kpi-icon-gold{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">block</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Sedes Inactivas</div>
+                <div class="dashboard-kpi-value">{{ inactivos_g }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Departamentos y Áreas -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">category</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Departamentos / Áreas</div>
+                <div class="dashboard-kpi-value">{{ deptos_g }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tarjeta y Tabla de Grupos ───────────────────────────────────────── -->
+    <div class="component-card-shell">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <div class="component-title-icon-wrapper">
+                    <span class="material-symbols-outlined">view_agenda</span>
+                </div>
+                <div>
+                    <h5 class="component-card-title mb-0">Listado de Instituciones y Sedes</h5>
+                    <small class="text-muted">Directorio de agrupaciones organizacionales registradas en el tenant</small>
+                </div>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <div class="input-group" style="max-width: 240px;">
+                    <span class="input-group-text bg-light border-end-0 text-muted" style="height: 38px;"><span class="material-symbols-outlined fs-6">search</span></span>
+                    <input type="text" class="form-control form-control-sm border-start-0 ps-0" id="search-grupos"
+                           placeholder="Buscar institución..." oninput="filtrarGrupos();" style="height: 38px;">
+                </div>
+                <select class="form-select form-select-sm" id="filter-tipo-grupo" onchange="filtrarGrupos();" style="height: 38px; width: 170px;">
+                    <option value="">Todos los tipos</option>
+                    <option value="general">General</option>
+                    <option value="departamento">Departamento</option>
+                    <option value="facultad">Facultad</option>
+                    <option value="area">Área</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tablaGrupos">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th class="ps-4">Nombre de la Institución / Sede</th>
+                            <th>Tipo de Agrupación</th>
+                            <th>Estado</th>
+                            <th class="text-end pe-4">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for g in grupos %}
+                        <tr class="grupo-row {{ 'opacity-50' if not g.activo else '' }}"
+                            data-nombre-upper="{{ (g.nombre or '')|upper }}"
+                            data-tipo="{{ g.tipo_grupo or 'general' }}">
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-xs"
+                                         style="width: 34px; height: 34px; background: var(--navy-50, #eff6ff); color: var(--navy-700, #1e3a8a); font-size: 0.95rem;">
+                                        <span class="material-symbols-outlined fs-6">
+                                            {% if g.tipo_grupo == 'facultad' %}school
+                                            {% elif g.tipo_grupo == 'departamento' %}corporate_fare
+                                            {% elif g.tipo_grupo == 'area' %}hub
+                                            {% else %}domain{% endif %}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ g.nombre }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="rippling-pill
+                                    {% if g.tipo_grupo == 'facultad' %}rippling-pill-gold
+                                    {% elif g.tipo_grupo == 'departamento' %}rippling-pill-navy
+                                    {% elif g.tipo_grupo == 'area' %}rippling-pill-green
+                                    {% else %}rippling-pill-slate{% endif %}" style="font-size: 0.75rem;">
+                                    {{ g.tipo_grupo|capitalize }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if g.activo %}
+                                <span class="rippling-pill rippling-pill-green" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">check_circle</span>
+                                    Activo
+                                </span>
+                                {% else %}
+                                <span class="rippling-pill rippling-pill-slate" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">cancel</span>
+                                    Inactivo
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm btn-rippling-secondary d-inline-flex align-items-center gap-1"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#modalEditarGrupo"
+                                        data-id="{{ g.id }}"
+                                        data-nombre="{{ g.nombre }}"
+                                        data-tipo="{{ g.tipo_grupo }}"
+                                        data-activo="{{ '1' if g.activo else '0' }}">
+                                    <span class="material-symbols-outlined fs-6">edit</span>
+                                    <span>Editar</span>
+                                </button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">No hay instituciones ni grupos registrados.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
 {% block modals %}
-<!-- Modal Crear Grupo -->
-<div class="modal fade" id="modalCrearGrupo" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Nuevo Grupo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- ── Modal Crear Grupo ────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalCrearGrupo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">domain_add</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Nueva Institución / Grupo</h5>
+                        <p class="text-muted small mb-0">Creación de sede o unidad física organizacional.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form method="POST" action="{{ url_for('groups.crear_grupo') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Nombre <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="nombre" required>
+                        <label class="form-label small fw-bold text-muted mb-1">Nombre de la Institución / Sede <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" required placeholder="Ej: Campus Norte, Sede Central, Facultad de Ingeniería" style="height: 42px;">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Tipo de Grupo</label>
-                        <select class="form-select" name="tipo_grupo">
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-muted mb-1">Tipo de Agrupación</label>
+                        <select class="form-select" name="tipo_grupo" style="height: 42px;">
                             <option value="general">General</option>
                             <option value="departamento">Departamento</option>
                             <option value="facultad">Facultad</option>
@@ -79,50 +228,64 @@
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Crear Grupo</button>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm px-4 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">add</span>
+                        <span>Crear Grupo</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- Modal Editar Grupo -->
-<div class="modal fade" id="modalEditarGrupo" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Editar Grupo</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<!-- ── Modal Editar Grupo ────────────────────────────────────────────────── -->
+<div class="modal fade" id="modalEditarGrupo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">edit</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Editar Institución / Grupo</h5>
+                        <p class="text-muted small mb-0" id="edit_g_subtitulo">—</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form method="POST" id="formEditarGrupo" action="">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body">
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Nombre</label>
-                        <input type="text" class="form-control" name="nombre" id="edit_g_nombre">
+                        <label class="form-label small fw-bold text-muted mb-1">Nombre <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" id="edit_g_nombre" required style="height: 42px;">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Tipo de Grupo</label>
-                        <select class="form-select" name="tipo_grupo" id="edit_g_tipo">
+                        <label class="form-label small fw-bold text-muted mb-1">Tipo de Agrupación</label>
+                        <select class="form-select" name="tipo_grupo" id="edit_g_tipo" style="height: 42px;">
                             <option value="general">General</option>
                             <option value="departamento">Departamento</option>
                             <option value="facultad">Facultad</option>
                             <option value="area">Área</option>
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Estado</label>
-                        <select class="form-select" name="activo" id="edit_g_activo">
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-muted mb-1">Estado</label>
+                        <select class="form-select" name="activo" id="edit_g_activo" style="height: 42px;">
                             <option value="1">Activo</option>
                             <option value="0">Inactivo</option>
                         </select>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm px-4 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">save</span>
+                        <span>Guardar Cambios</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -132,13 +295,34 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('modalEditarGrupo').addEventListener('show.bs.modal', function(e) {
-    const btn = e.relatedTarget;
-    const form = document.getElementById('formEditarGrupo');
-    form.action = (window.APP_BASE || '') + '/admin/grupos/' + btn.dataset.id;
-    document.getElementById('edit_g_nombre').value = btn.dataset.nombre || '';
-    document.getElementById('edit_g_tipo').value   = btn.dataset.tipo || 'general';
-    document.getElementById('edit_g_activo').value = btn.dataset.activo || '1';
-});
+const _modalEditG = document.getElementById('modalEditarGrupo');
+if (_modalEditG) {
+    _modalEditG.addEventListener('show.bs.modal', function(e) {
+        const btn = e.relatedTarget;
+        const form = document.getElementById('formEditarGrupo');
+        form.action = (window.APP_BASE || '') + '/admin/grupos/' + btn.dataset.id;
+        document.getElementById('edit_g_nombre').value = btn.dataset.nombre || '';
+        document.getElementById('edit_g_tipo').value   = btn.dataset.tipo || 'general';
+        document.getElementById('edit_g_activo').value = btn.dataset.activo || '1';
+        const sub = document.getElementById('edit_g_subtitulo');
+        if (sub) sub.textContent = btn.dataset.nombre || '';
+    });
+}
+
+function filtrarGrupos() {
+    const q = (document.getElementById('search-grupos').value || '').toUpperCase();
+    const tipoFiltro = document.getElementById('filter-tipo-grupo').value;
+
+    document.querySelectorAll('.grupo-row').forEach(row => {
+        const nombre = row.dataset.nombreUpper || '';
+        const tipo = row.dataset.tipo || 'general';
+
+        const coincideTexto = nombre.includes(q);
+        const coincideTipo = !tipoFiltro || tipo === tipoFiltro;
+
+        row.style.display = (coincideTexto && coincideTipo) ? '' : 'none';
+    });
+}
 </script>
 {% endblock %}
+

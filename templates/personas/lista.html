@@ -1,335 +1,645 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    /* ── KPI Grid (Mismo de Entradas y Salidas) ── */
+    .kpi-grid-entradas {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+    @media (max-width: 992px) {
+        .kpi-grid-entradas {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .kpi-grid-entradas {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Avatar Circle ── */
+    .avatar-circle {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background-color: var(--token-color-navy-50, #f4f6fa);
+        color: var(--token-color-navy-900, #253259);
+        border: 1px solid var(--token-color-slate-200, #e2e8f0);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+
+    /* ── Sub-tabs de la Tarjeta ── */
+    .component-nav-tab {
+        border-radius: var(--radius-md, 8px) !important;
+        padding: 0.35rem 0.85rem !important;
+        font-size: 0.8125rem !important;
+        font-weight: 600 !important;
+        color: var(--token-color-slate-500, #656F8C) !important;
+        border: 1px solid transparent !important;
+        background: transparent !important;
+        transition: all 0.15s ease-in-out;
+    }
+    .component-nav-tab:hover {
+        color: var(--token-color-navy-900, #253259) !important;
+        background-color: var(--token-color-navy-50, #f4f6fa) !important;
+    }
+    .component-nav-tab.active {
+        background-color: var(--token-color-navy-900, #253259) !important;
+        color: #ffffff !important;
+    }
+
+    /* ── Sin ID del reloj ── */
+    .personas-sin-id {
+        display: inline-flex; align-items: center; gap: .3rem;
+        color: #b45309; font-size: .82rem; font-weight: 500;
+    }
+    .personas-sin-id .material-symbols-outlined { font-size: .95rem; }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Personas</h3>
-    <p class="text-muted">Gestión del personal y sus horarios de trabajo.</p>
-    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-    <div id="header-actions-personal" class="mt-3">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
-            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">person_add</span> Nueva Persona
-        </button>
-    </div>
-    <div id="header-actions-horarios" class="mt-3" style="display:none;">
-        <label class="btn btn-outline-secondary mb-0" for="horarios-input" title="Importar horarios masivamente (.csv, .obd, .ods)">
-            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">upload_file</span> Importar
-            <input type="file" id="horarios-input" style="display:none" accept=".obd,.ods,.csv">
-        </label>
-        <button class="btn btn-outline-secondary ms-2" onclick="exportarHorariosCsv();" title="Exportar todos los horarios en CSV">
-            <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">download</span> Exportar CSV
-        </button>
-    </div>
-    {% endif %}
-</div>
-
-<!-- Tabs -->
-<ul class="nav nav-pills mb-4 gap-2" id="personasTabs" role="tablist">
-    <li class="nav-item">
-        <button class="nav-link active fw-bold px-4 py-2 custom-tab shadow-sm" id="tab-personal-btn" data-bs-toggle="tab"
-            data-bs-target="#tab-personal" type="button" onclick="cambiarTab('personal')">
-            <span class="d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined fs-5">group</span>
-                Personal
-                <span class="badge bg-secondary bg-opacity-50 ms-1 fw-normal text-dark" style="font-size:0.75rem;">{{ personas|length }}</span>
-            </span>
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="tab-horarios-btn" data-bs-toggle="tab"
-            data-bs-target="#tab-horarios" type="button" onclick="cambiarTab('horarios')">
-            <span class="d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined fs-5">schedule</span>
-                Horarios
-                <span id="horarios-count-badge" class="badge bg-secondary bg-opacity-50 ms-1 fw-normal text-dark" style="font-size:0.75rem;"></span>
-            </span>
-        </button>
-    </li>
-</ul>
-
-<div class="tab-content">
-
-    <!-- ── TAB: PERSONAL ─────────────────────────────────────────────────── -->
-    <div class="tab-pane fade show active" id="tab-personal">
-
-        <!-- Filtros -->
-<div class="filter-card mb-4">
-    <form class="row g-3 align-items-end" method="GET">
-        <div class="col-md-4">
-            <label class="form-label small text-muted fw-bold mb-2">Búsqueda</label>
-            <input type="text" class="form-control" name="q"
-                placeholder="Buscar por nombre o identificación..." value="{{ busqueda }}">
-        </div>
-        <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold mb-2">Tipo</label>
-            <select class="form-select" name="tipo_persona_id">
-                <option value="">Todos los tipos</option>
-                {% for t in tenant_tipos %}
-                <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-3">
-            <label class="form-label small text-muted fw-bold mb-2">Grupo</label>
-            <select class="form-select" name="grupo_id">
-                <option value="">Todos los grupos</option>
-                {% for g in grupos %}
-                <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
-                {% endfor %}
-            </select>
-        </div>
-        <div class="col-md-2 d-flex gap-2">
-            <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Filtrar</button>
-            <a href="{{ url_for('people.lista') }}" class="btn btn-outline-secondary d-flex align-items-center justify-content-center" style="width: 38px; height: 38px;">✕</a>
-        </div>
-    </form>
-</div>
-
-        <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-                <h5 class="fw-bold mb-0">{{ personas|length }} persona(s)</h5>
-                <a href="{{ url_for('people.historico') }}" class="btn btn-sm btn-outline-secondary">
-                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">history</span> Historial por Cédula
-                </a>
+<div class="page-shell" style="gap: 1.25rem;">
+    <!-- ── 1. Page Header Shell ───────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Gestión de Talento</span>
+                <span class="rippling-pill rippling-pill-gold">Directorio Activo</span>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="bg-light">
-                        <tr>
-                            <th>Nombre</th>
-                            <th>Identificación</th>
-                            <th>ID Biométrico</th>
-                            <th>Tipo</th>
-                            <th>Grupo</th>
-                            <th>Estado</th>
-                            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-                            <th></th>
-                            {% endif %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for p in personas %}
-                        <tr>
-                            <td class="fw-bold">{{ p.nombre }}</td>
-                            <td class="text-muted">{{ p.identificacion or '—' }}</td>
-                            <td>
-                                {% if p.id_usuario_zk %}
-                                <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal">
-                                    {{ p.id_usuario_zk }}
-                                </span>
-                                {% else %}
-                                <span class="text-muted small">Sin asignar</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-muted">{{ p.tipo_persona or '—' }}</td>
-                            <td class="text-muted">{{ p.grupo or '—' }}</td>
-                            <td>
-                                <span class="badge {% if p.activo %}bg-success{% else %}bg-secondary{% endif %}">
-                                    {% if p.activo %}Activo{% else %}Inactivo{% endif %}
-                                </span>
-                            </td>
-                            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
-                            <td>
-                                <button class="btn btn-sm btn-outline-secondary"
-                                    data-bs-toggle="modal" data-bs-target="#modalEditarPersona"
-                                    data-id="{{ p.id }}"
-                                    data-nombre="{{ p.nombre }}"
-                                    data-identificacion="{{ p.identificacion or '' }}"
-                                    data-tipo="{{ p.tipo_persona_id or '' }}"
-                                    data-grupo="{{ p.grupo_id or '' }}"
-                                    data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
-                                    data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
-                                    data-email="{{ p.email or '' }}"
-                                    data-telefono="{{ p.telefono or '' }}"
-                                    data-notas="{{ p.notas or '' }}"
-                                    data-activo="{{ '1' if p.activo else '0' }}"
-                                    data-idzk="{{ p.id_usuario_zk or '' }}">
-                                    Editar
-                                </button>
-                            </td>
-                            {% endif %}
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">No se encontraron personas.</td>
-                        </tr>
+            <h1 class="title-hero">Directorio de Personal</h1>
+            <p class="page-header-subtitle">
+                Gestión centralizada de colaboradores, identificación institucional y sincronización biométrica ZK.
+            </p>
+        </div>
+
+        <div class="page-actions-slot">
+            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+            <div id="header-actions-personal" class="d-flex align-items-center gap-2">
+                <button class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCrearPersona">
+                    <span class="material-symbols-outlined" style="font-size: 1.05rem;">person_add</span>
+                    <span>Nueva Persona</span>
+                </button>
+            </div>
+            <div id="header-actions-horarios" class="align-items-center gap-2" style="display:none;">
+                <label class="btn btn-rippling-secondary btn-sm mb-0 cursor-pointer d-flex align-items-center gap-1" for="horarios-input" title="Importar horarios masivamente (.csv, .obd, .ods)">
+                    <span class="material-symbols-outlined" style="font-size: 1.05rem;">upload_file</span>
+                    <span>Importar Horarios</span>
+                    <input type="file" id="horarios-input" style="display:none" accept=".obd,.ods,.csv">
+                </label>
+                <button class="btn btn-rippling-secondary btn-sm d-flex align-items-center gap-1" onclick="exportarHorariosCsv();" title="Exportar todos los horarios en CSV">
+                    <span class="material-symbols-outlined" style="font-size: 1.05rem;">download</span>
+                    <span>Exportar CSV</span>
+                </button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── 2. KPIs Dinámicos de Personal (Rippling Style) ────────────────── -->
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Personal -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">group</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Total de Colaboradores</div>
+                <div class="dashboard-kpi-value">{{ total_personas }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Personal Activo -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">check_circle</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Colaboradores Activos</div>
+                <div class="dashboard-kpi-value text-success">{{ activos_count }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Sin ID Reloj -->
+        <div class="dashboard-kpi-card" {% if sin_id_count > 0 %}style="border-left: 3px solid #f59e0b;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if sin_id_count > 0 %}dashboard-kpi-icon-gold{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">warning</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label {% if sin_id_count > 0 %}text-warning{% endif %}">Sin ID Reloj Biométrico</div>
+                <div class="dashboard-kpi-value {% if sin_id_count > 0 %}text-warning{% endif %}">{{ sin_id_count }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Conectividad ZK -->
+        <div class="dashboard-kpi-card" style="border-left: 3px solid #10b981;">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">fingerprint</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Listo para Reportes</div>
+                <div class="dashboard-kpi-value" style="font-size: 1.15rem; color: #047857;">
+                    {% if total_personas > 0 %}
+                    {{ (((total_personas - sin_id_count) * 100) / total_personas) | round(0) | int }}%
+                    {% else %}
+                    100%
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. Tarjeta de Filtros de Búsqueda ─────────────────────────────── -->
+    <div class="component-card-shell filter-card-container">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">filter_alt</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Filtros de Búsqueda</span>
+            </div>
+            <div class="component-tools-slot">
+                <span class="rippling-pill rippling-pill-navy" style="font-size:0.75rem;">Directorio</span>
+            </div>
+        </div>
+        <div class="component-body-shell p-3">
+            <form method="GET" class="row g-2 align-items-center">
+                <div class="col-lg-4 col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0 text-muted" style="height: 42px;">
+                            <span class="material-symbols-outlined fs-6">search</span>
+                        </span>
+                        <input type="text" class="form-control border-start-0 ps-0" name="q"
+                            placeholder="Buscar por nombre, cédula o ID reloj..." value="{{ busqueda }}" style="height: 42px;">
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                    <select class="form-select" name="tipo_persona_id" style="height: 42px;">
+                        <option value="">Todos los tipos</option>
+                        {% for t in tenant_tipos %}
+                        <option value="{{ t.id }}" {% if tipo_persona_id == t.id %}selected{% endif %}>{{ t.nombre }}</option>
                         {% endfor %}
-                    </tbody>
-                </table>
+                    </select>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                    <select class="form-select" name="grupo_id" style="height: 42px;">
+                        <option value="">Todos los grupos</option>
+                        {% for g in grupos %}
+                        <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-2 d-flex gap-2">
+                    <button type="submit" class="btn btn-rippling-primary flex-fill d-flex align-items-center justify-content-center gap-1 shadow-sm" style="height: 42px;">
+                        <span class="material-symbols-outlined fs-6">filter_alt</span>
+                        <span>Filtrar</span>
+                    </button>
+                    {% if busqueda or tipo_persona_id or grupo_id %}
+                    <a href="{{ url_for('people.lista') }}" class="btn btn-rippling-secondary d-flex align-items-center justify-content-center px-3" title="Limpiar filtros" style="height: 42px;">
+                        <span class="material-symbols-outlined fs-6">close</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 4. Tarjeta Principal con Pestañas y Resultados ─────────────────── -->
+    <div class="component-card-shell" style="position: relative; z-index: 10;">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">groups</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Registro de Colaboradores</span>
+                <span class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">Pág. {{ page }}/{{ total_pages }}</span>
+            </div>
+            
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <ul class="nav nav-pills gap-1 p-1 bg-light rounded-2" id="personasTabs" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link component-nav-tab active d-flex align-items-center gap-1" id="tab-personal-btn" data-bs-toggle="tab"
+                            data-bs-target="#tab-personal" type="button" onclick="cambiarTab('personal')">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">group</span>
+                            <span>Personal</span>
+                            <span class="badge bg-secondary bg-opacity-25 text-dark ms-1" style="font-size:0.68rem;">{{ total_personas }}</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link component-nav-tab d-flex align-items-center gap-1" id="tab-horarios-btn" data-bs-toggle="tab"
+                            data-bs-target="#tab-horarios" type="button" onclick="cambiarTab('horarios')">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">schedule</span>
+                            <span>Horarios individuales</span>
+                            <span id="horarios-count-badge" class="badge bg-secondary bg-opacity-25 text-dark ms-1" style="font-size:0.68rem;"></span>
+                        </button>
+                    </li>
+                </ul>
             </div>
         </div>
 
-    </div><!-- /tab-personal -->
+        <div class="component-body-shell p-0">
+            <div class="tab-content">
+                <!-- ── TAB: PERSONAL ─────────────────────────────────────────── -->
+                <div class="tab-pane fade show active" id="tab-personal">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="rippling-table-header">
+                                <tr>
+                                    <th style="min-width: 230px;">Persona</th>
+                                    <th>Identificación</th>
+                                    <th>ID del Reloj</th>
+                                    <th>Tipo de Persona</th>
+                                    <th>Grupo</th>
+                                    <th>Estado</th>
+                                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                                    <th class="text-end" style="min-width: 100px;">Acciones</th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in personas %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-circle">
+                                                {{ (p.nombre_mostrar or p.nombre or 'P')[0] | upper }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.88rem;">{{ p.nombre_mostrar or p.nombre }}</div>
+                                                {% if p.email %}
+                                                <div class="text-muted small" style="font-size:0.75rem;">{{ p.email }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="fw-semibold text-secondary" style="font-size:0.85rem;">{{ p.identificacion or '—' }}</span>
+                                    </td>
+                                    <td>
+                                        {% if p.id_usuario_zk %}
+                                        <span class="rippling-pill rippling-pill-navy" style="font-size:0.75rem;">
+                                            <span class="material-symbols-outlined" style="font-size:0.85rem;">fingerprint</span>
+                                            ID: {{ p.id_usuario_zk }}
+                                        </span>
+                                        {% else %}
+                                        <span class="rippling-pill" style="background-color: #fef2f2; color: #b91c1c; border-color: #fecaca; font-size:0.75rem;" title="Sin ID del reloj: no se pueden generar reportes de asistencia">
+                                            <span class="material-symbols-outlined" style="font-size:0.85rem;">warning</span>
+                                            Sin asignar
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if p.tipo_persona %}
+                                        <span class="rippling-pill rippling-pill-slate" style="font-size:0.72rem; padding: 2px 8px;">{{ p.tipo_persona }}</span>
+                                        {% else %}
+                                        <span class="text-muted small">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if p.grupo %}
+                                        <span class="rippling-pill rippling-pill-navy" style="font-size:0.72rem; padding: 2px 8px;">{{ p.grupo }}</span>
+                                        {% else %}
+                                        <span class="text-muted small">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if p.activo %}
+                                        <span class="rippling-pill" style="background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; font-size:0.75rem;">
+                                            Activo
+                                        </span>
+                                        {% else %}
+                                        <span class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">
+                                            Inactivo
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                                    <td class="text-end">
+                                        <button class="btn btn-sm btn-rippling-secondary d-inline-flex align-items-center gap-1 py-1 px-2"
+                                            data-bs-toggle="modal" data-bs-target="#modalEditarPersona"
+                                            data-id="{{ p.id }}"
+                                            data-nombre="{{ p.nombre }}"
+                                            data-identificacion="{{ p.identificacion or '' }}"
+                                            data-tipo="{{ p.tipo_persona_id or '' }}"
+                                            data-grupo="{{ p.grupo_id or '' }}"
+                                            data-grupo-funcional="{{ p.grupo_funcional_id or '' }}"
+                                            data-email="{{ p.email or '' }}"
+                                            data-telefono="{{ p.telefono or '' }}"
+                                            data-notas="{{ p.notas or '' }}"
+                                            data-activo="{{ '1' if p.activo else '0' }}"
+                                            data-idzk="{{ p.id_usuario_zk or '' }}">
+                                            <span class="material-symbols-outlined fs-6">edit</span>
+                                            <span>Editar</span>
+                                        </button>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="text-center py-4 px-3">
+                                            <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 56px; height: 56px;">
+                                                <span class="material-symbols-outlined text-muted" style="font-size: 2rem;">person_search</span>
+                                            </div>
+                                            <h6 class="fw-bold text-dark mb-1">No se encontraron personas</h6>
+                                            <p class="text-muted small mb-0">Prueba ajustando los filtros de búsqueda o agrega un nuevo colaborador.</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
 
-    <!-- ── TAB: HORARIOS ─────────────────────────────────────────────────── -->
-    <div class="tab-pane fade" id="tab-horarios">
+                    <!-- Paginación de Personal -->
+                    <div class="card-footer bg-light bg-opacity-50 border-top p-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <small class="text-muted">
+                                Mostrando <strong>{{ start_idx + 1 if total_personas > 0 else 0 }}</strong> - <strong>{{ end_idx }}</strong> de <strong>{{ total_personas }}</strong> personas
+                            </small>
+                            <div class="d-flex align-items-center gap-1">
+                                <label class="small text-muted mb-0">Por pág:</label>
+                                <select class="form-select form-select-sm" style="width: auto;" onchange="location.href=this.value;">
+                                    {% for n in [10, 15, 25, 50] %}
+                                    <option value="{{ url_for('people.lista', page=1, per_page=n, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id) }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
 
-        <div class="alert alert-light border d-flex align-items-start gap-2 mb-3 py-2" style="font-size:0.85rem;">
-            <span class="material-symbols-outlined text-primary flex-shrink-0" style="font-size:1.1rem;margin-top:2px;">info</span>
-            <span>
-                Los <strong>horarios</strong> definen la jornada de cada persona: días activos, hora de entrada y salida.
-                Para editar o asignar el horario de una persona, esta debe tener un <strong>ID del biométrico</strong> asignado —
-                configúralo desde el botón <em>Editar</em> en la pestaña Personal.
-            </span>
-        </div>
+                        {% if total_pages > 1 %}
+                        <nav aria-label="Paginación de personal">
+                            <ul class="pagination pagination-sm mb-0 gap-1">
+                                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                                    <a class="page-link rounded" href="{{ url_for('people.lista', page=page-1, per_page=per_page, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id) }}" aria-label="Anterior">
+                                        <span class="material-symbols-outlined fs-6" style="vertical-align: middle;">chevron_left</span>
+                                    </a>
+                                </li>
+                                {% for p_num in range(1, total_pages + 1) %}
+                                    {% if p_num == 1 or p_num == total_pages or (p_num >= page - 2 and p_num <= page + 2) %}
+                                    <li class="page-item {% if p_num == page %}active{% endif %}">
+                                        <a class="page-link rounded" href="{{ url_for('people.lista', page=p_num, per_page=per_page, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id) }}">{{ p_num }}</a>
+                                    </li>
+                                    {% elif p_num == page - 3 or p_num == page + 3 %}
+                                    <li class="page-item disabled"><span class="page-link rounded border-0">…</span></li>
+                                    {% endif %}
+                                {% endfor %}
+                                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                                    <a class="page-link rounded" href="{{ url_for('people.lista', page=page+1, per_page=per_page, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id) }}" aria-label="Siguiente">
+                                        <span class="material-symbols-outlined fs-6" style="vertical-align: middle;">chevron_right</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    </div>
+                </div>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-0">
-                <div class="p-3 border-bottom">
-                    <div id="horarios-upload-progress" style="display:none" class="mb-2">
-                        <div class="d-flex align-items-center gap-2 small text-muted">
+                <!-- ── TAB: HORARIOS INDIVIDUALES ────────────────────────────── -->
+                <div class="tab-pane fade" id="tab-horarios">
+                    <div class="p-3 bg-light bg-opacity-50 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="input-group input-group-sm" style="max-width: 380px;">
+                            <span class="input-group-text bg-white border-end-0 text-muted">
+                                <span class="material-symbols-outlined fs-6">search</span>
+                            </span>
+                            <input type="text" class="form-control border-start-0 ps-0" id="search-horarios-personas"
+                                placeholder="Buscar en esta página..." oninput="filtrarHorariosPersonas();">
+                        </div>
+                        <div id="horarios-upload-progress" style="display:none" class="align-items-center gap-2 small text-muted">
                             <div class="spinner-border spinner-border-sm" role="status"></div>
                             <span>Importando horarios...</span>
                         </div>
                     </div>
-                    <input type="text" class="form-control form-control-sm" id="search-horarios-personas"
-                        placeholder="Buscar persona..." oninput="filtrarHorariosPersonas();">
-                </div>
-                <div class="table-responsive" style="max-height:520px;overflow-y:auto;">
-                    <table class="table table-hover align-middle mb-0" style="font-size:0.87rem;">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th>Persona</th>
-                                <th>ID Biométrico</th>
-                                <th>Horario configurado</th>
-                                <th class="text-end">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody id="horarios-personas-tbody">
-                            {% for p in personas %}
-                            <tr data-nombre-upper="{{ p.nombre|upper }}"
-                                data-nombre="{{ p.nombre }}"
-                                data-idzk="{{ p.id_usuario_zk or '' }}">
-                                <td class="fw-semibold">{{ p.nombre }}</td>
-                                <td>
-                                    {% if p.id_usuario_zk %}
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal">
-                                        {{ p.id_usuario_zk }}
-                                    </span>
-                                    {% else %}
-                                    <span class="text-muted small d-flex align-items-center gap-1">
-                                        <span class="material-symbols-outlined text-warning" style="font-size:0.9rem;">warning</span>
-                                        Sin asignar
-                                    </span>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="rippling-table-header">
+                                <tr>
+                                    <th style="min-width: 230px;">Persona</th>
+                                    <th>ID Biométrico</th>
+                                    <th>Horario configurado</th>
+                                    <th class="text-end" style="min-width: 120px;">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody id="horarios-personas-tbody">
+                                {% for p in personas %}
+                                <tr data-nombre-upper="{{ (p.nombre_mostrar or p.nombre)|upper }}"
+                                    data-nombre="{{ p.nombre_mostrar or p.nombre }}"
+                                    data-idzk="{{ p.id_usuario_zk or '' }}">
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-circle">
+                                                {{ (p.nombre_mostrar or p.nombre or 'P')[0] | upper }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.88rem;">{{ p.nombre_mostrar or p.nombre }}</div>
+                                                {% if p.identificacion %}
+                                                <div class="text-muted small" style="font-size:0.75rem;">C.I: {{ p.identificacion }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if p.id_usuario_zk %}
+                                        <span class="rippling-pill rippling-pill-navy" style="font-size:0.75rem;">
+                                            ID: {{ p.id_usuario_zk }}
+                                        </span>
+                                        {% else %}
+                                        <span class="rippling-pill" style="background-color: #fef2f2; color: #b91c1c; border-color: #fecaca; font-size:0.75rem;">
+                                            <span class="material-symbols-outlined" style="font-size:0.85rem;">warning</span>
+                                            Sin asignar
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="horario-resumen-cell text-muted small">
+                                        <span class="spinner-border spinner-border-sm text-secondary" style="width:.65rem;height:.65rem;" role="status"></span>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if p.id_usuario_zk %}
+                                        <button class="btn btn-sm btn-rippling-secondary py-1 px-2 d-inline-flex align-items-center gap-1"
+                                            onclick="abrirHorarioDePersona('{{ p.nombre_mostrar or p.nombre }}', '{{ p.id_usuario_zk }}')"
+                                            title="Ver / editar horario">
+                                            <span class="material-symbols-outlined fs-6">edit_calendar</span>
+                                            <span>Horario</span>
+                                        </button>
+                                        {% else %}
+                                        <span class="text-muted small" title="Asigna primero el ID del biométrico en Editar persona">Sin ID</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="4" class="text-center py-5 text-muted">No hay personas en esta página.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Paginación de Horarios -->
+                    <div class="card-footer bg-light bg-opacity-50 border-top p-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div class="d-flex align-items-center gap-3">
+                            <small class="text-muted">
+                                Mostrando <strong>{{ start_idx + 1 if total_personas > 0 else 0 }}</strong> - <strong>{{ end_idx }}</strong> de <strong>{{ total_personas }}</strong> personas
+                            </small>
+                            <div class="d-flex align-items-center gap-1">
+                                <label class="small text-muted mb-0">Por pág:</label>
+                                <select class="form-select form-select-sm" style="width: auto;" onchange="location.href=this.value;">
+                                    {% for n in [10, 15, 25, 50] %}
+                                    <option value="{{ url_for('people.lista', page=1, per_page=n, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id, tab='horarios') }}" {% if per_page == n %}selected{% endif %}>{{ n }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+
+                        {% if total_pages > 1 %}
+                        <nav aria-label="Paginación de horarios">
+                            <ul class="pagination pagination-sm mb-0 gap-1">
+                                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                                    <a class="page-link rounded" href="{{ url_for('people.lista', page=page-1, per_page=per_page, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id, tab='horarios') }}" aria-label="Anterior">
+                                        <span class="material-symbols-outlined fs-6" style="vertical-align: middle;">chevron_left</span>
+                                    </a>
+                                </li>
+                                {% for p_num in range(1, total_pages + 1) %}
+                                    {% if p_num == 1 or p_num == total_pages or (p_num >= page - 2 and p_num <= page + 2) %}
+                                    <li class="page-item {% if p_num == page %}active{% endif %}">
+                                        <a class="page-link rounded" href="{{ url_for('people.lista', page=p_num, per_page=per_page, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id, tab='horarios') }}">{{ p_num }}</a>
+                                    </li>
+                                    {% elif p_num == page - 3 or p_num == page + 3 %}
+                                    <li class="page-item disabled"><span class="page-link rounded border-0">…</span></li>
                                     {% endif %}
-                                </td>
-                                <td class="horario-resumen-cell text-muted small">
-                                    <span class="spinner-border spinner-border-sm text-secondary" style="width:.65rem;height:.65rem;" role="status"></span>
-                                </td>
-                                <td class="text-end">
-                                    {% if p.id_usuario_zk %}
-                                    <button class="btn btn-sm btn-outline-primary py-0 px-2"
-                                        onclick="abrirHorarioDePersona('{{ p.nombre }}', '{{ p.id_usuario_zk }}')"
-                                        title="Ver / editar horario">
-                                        <span class="material-symbols-outlined" style="font-size:0.9rem;vertical-align:-2px;">edit</span>
-                                        Horario
-                                    </button>
-                                    {% else %}
-                                    <span class="text-muted small" title="Asigna primero el ID del biométrico en Editar persona">Sin ID</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr><td colspan="4" class="text-center py-5 text-muted">No hay personas en el catálogo.</td></tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="p-2 border-top text-muted small">
-                    <span id="horarios-count">0</span> horarios configurados de {{ personas|length }} personas
+                                {% endfor %}
+                                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                                    <a class="page-link rounded" href="{{ url_for('people.lista', page=page+1, per_page=per_page, q=busqueda, tipo_persona_id=tipo_persona_id, grupo_id=grupo_id, tab='horarios') }}" aria-label="Siguiente">
+                                        <span class="material-symbols-outlined fs-6" style="vertical-align: middle;">chevron_right</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
-
-    </div><!-- /tab-horarios -->
-
-</div><!-- /tab-content -->
+    </div>
+</div>
 {% endblock %}
 
 {% block modals %}
 {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
 
 <!-- ── Modal Nueva Persona ─────────────────────────────────────────────── -->
-<div class="modal fade" id="modalCrearPersona" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <div>
-                    <h5 class="modal-title fw-bold">Nueva Persona</h5>
-                    <p class="text-muted small mb-0">Datos de identidad y vínculo con el dispositivo biométrico.</p>
+<div class="modal fade" id="modalCrearPersona" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">person_add</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Nueva Persona</h5>
+                        <p class="text-muted small mb-0">Registro de identidad, adscripción institucional y vínculo biométrico.</p>
+                    </div>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form method="POST" action="{{ url_for('people.crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-body pt-3">
+                <div class="modal-body p-4">
 
+                    <!-- Fila 1: Datos Personales -->
                     <div class="row g-3 mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-semibold">Nombre completo <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" name="nombre" required placeholder="Apellidos, Nombres">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold text-muted mb-1">Nombre Completo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nombre" required placeholder="Apellidos, Nombres" style="height: 42px;">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold">Identificación</label>
-                            <input type="text" class="form-control" name="identificacion" placeholder="Cédula / Pasaporte">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold text-muted mb-1">Identificación / Cédula</label>
+                            <input type="text" class="form-control" name="identificacion" placeholder="Cédula / Pasaporte" style="height: 42px;">
                         </div>
                     </div>
 
+                    <!-- Fila 2: Biometría ZK -->
                     <div class="p-3 bg-light rounded-3 border mb-3">
-                        <label class="form-label fw-semibold d-flex align-items-center gap-1 mb-1">
+                        <label class="form-label small fw-bold text-muted d-flex align-items-center gap-1 mb-1">
                             <span class="material-symbols-outlined text-primary" style="font-size:1.1rem;">fingerprint</span>
-                            ID en el biométrico
+                            ID en el biométrico (Reloj ZK)
                         </label>
-                        <div class="row g-2 align-items-end">
+                        <div class="row g-2 align-items-center">
                             <div class="col-md-4">
-                                <input type="number" class="form-control" name="id_usuario_zk" min="1" placeholder="Ej: 12">
+                                <input type="number" class="form-control" name="id_usuario_zk" min="1" placeholder="Ej: 12" style="height: 42px;">
                             </div>
                             <div class="col-md-8">
-                                <p class="text-muted small mb-0">
-                                    Número de usuario del dispositivo ZK. Se puede consultar en
-                                    <a href="{{ url_for('admin.admin_dispositivos') }}" target="_blank">Dispositivos</a>
-                                    o en la pantalla del reloj.
-                                    <strong>Necesario para generar informes.</strong>
+                                <p class="text-muted small mb-0" style="font-size: 0.78rem;">
+                                    Número asignado en el dispositivo físico ZK. <strong>Necesario para procesar marcaciones y reportes.</strong>
                                 </p>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Fila 3: Clasificación Organizacional -->
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Tipo de Persona</label>
-                            <select class="form-select" name="tipo_persona_id">
-                                <option value="">Sin tipo</option>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted mb-1">Tipo de Personal</label>
+                            <select class="form-select" name="tipo_persona_id" id="crear_tipo_persona_id" style="height: 42px;">
+                                <option value="">Sin tipo específico</option>
                                 {% for t in tenant_tipos %}
                                 <option value="{{ t.id }}">{{ t.nombre }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Grupo</label>
-                            <select class="form-select" name="grupo_id">
-                                <option value="">Sin grupo</option>
-                                {% for g in grupos %}
-                                <option value="{{ g.id }}">{{ g.nombre }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted mb-1">Institución / Sede (Grupo)</label>
+                            <div class="input-group">
+                                <select class="form-select select-grupo-institucion" name="grupo_id" id="crear_grupo_id" style="height: 42px;">
+                                    <option value="">Sin institución</option>
+                                    {% for g in grupos %}
+                                    <option value="{{ g.id }}">{{ g.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-rippling-secondary" onclick="abrirCrearGrupoRapido('crear_grupo_id');" title="Crear nueva institución / sede" style="height: 42px;">
+                                    <span class="material-symbols-outlined fs-6">add</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted mb-1">Grupo de Trabajo / Turno</label>
+                            <div class="input-group">
+                                <select class="form-select select-grupo-funcional" name="grupo_funcional_id" id="crear_grupo_funcional_id" style="height: 42px;">
+                                    <option value="">Sin grupo de trabajo</option>
+                                    {% for gf in grupos_funcionales %}
+                                    <option value="{{ gf.id }}">{{ gf.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-rippling-secondary" onclick="abrirCrearGFRapido('crear_grupo_funcional_id');" title="Crear nuevo grupo de trabajo" style="height: 42px;">
+                                    <span class="material-symbols-outlined fs-6">add</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="row g-3">
+                    <!-- Fila 4: Contacto -->
+                    <div class="row g-3 mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Email</label>
-                            <input type="email" class="form-control" name="email">
+                            <label class="form-label small fw-bold text-muted mb-1">Email</label>
+                            <input type="email" class="form-control" name="email" placeholder="correo@institucion.edu" style="height: 42px;">
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-semibold">Teléfono</label>
-                            <input type="text" class="form-control" name="telefono">
+                            <label class="form-label small fw-bold text-muted mb-1">Teléfono</label>
+                            <input type="text" class="form-control" name="telefono" placeholder="Ej: 0991234567" style="height: 42px;">
                         </div>
+                    </div>
+
+                    <!-- Fila 5: Notas -->
+                    <div class="mb-1">
+                        <label class="form-label small fw-bold text-muted mb-1">Notas u Observaciones</label>
+                        <textarea class="form-control" name="notas" rows="2" placeholder="Opcional"></textarea>
                     </div>
 
                 </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Crear Persona</button>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">person_add</span>
+                        <span>Crear Persona</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -337,105 +647,216 @@
 </div>
 
 <!-- ── Modal Editar Persona ────────────────────────────────────────────── -->
-<div class="modal fade" id="modalEditarPersona" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <div>
-                    <h5 class="modal-title fw-bold">Editar Persona</h5>
-                    <p class="text-muted small mb-0" id="edit_subtitulo">—</p>
+<div class="modal fade" id="modalEditarPersona" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">edit</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Editar Persona</h5>
+                        <p class="text-muted small mb-0" id="edit_subtitulo">—</p>
+                    </div>
                 </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form method="POST" id="formEditarPersona" action="">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="id_usuario_zk" id="edit_idzk_hidden">
-                <div class="modal-body pt-3">
+                <div class="modal-body p-4">
 
+                    <!-- Fila 1: Datos Personales -->
                     <div class="row g-3 mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label fw-semibold">Nombre completo</label>
-                            <input type="text" class="form-control" name="nombre" id="edit_nombre">
+                        <div class="col-md-7">
+                            <label class="form-label small fw-bold text-muted mb-1">Nombre Completo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="nombre" id="edit_nombre" style="height: 42px;">
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label fw-semibold">Identificación</label>
-                            <input type="text" class="form-control" name="identificacion" id="edit_identificacion">
+                        <div class="col-md-5">
+                            <label class="form-label small fw-bold text-muted mb-1">Identificación / Cédula</label>
+                            <input type="text" class="form-control" name="identificacion" id="edit_identificacion" style="height: 42px;">
                         </div>
                     </div>
 
+                    <!-- Fila 2: Biometría ZK -->
                     <div class="p-3 bg-light rounded-3 border mb-3">
-                        <label class="form-label fw-semibold d-flex align-items-center gap-1 mb-1">
-                            <span class="material-symbols-outlined text-primary" style="font-size:1.1rem;">fingerprint</span>
-                            ID en el biométrico
-                        </label>
-                        <div class="row g-2 align-items-end">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label small fw-bold text-muted d-flex align-items-center gap-1 mb-0">
+                                <span class="material-symbols-outlined text-primary" style="font-size:1.1rem;">fingerprint</span>
+                                ID en el biométrico (Reloj ZK)
+                            </label>
+                            <span id="zk_locked_badge" class="rippling-pill rippling-pill-navy" style="font-size:0.7rem; display:none;">
+                                <span class="material-symbols-outlined" style="font-size:0.8rem;">lock</span>
+                                Asignado (No editable)
+                            </span>
+                        </div>
+                        <div class="row g-2 align-items-center">
                             <div class="col-md-4">
-                                <input type="number" class="form-control" id="edit_idzk" min="1" placeholder="Ej: 12"
+                                <input type="number" class="form-control" id="edit_idzk" min="1" placeholder="Ej: 12" style="height: 42px;"
                                     oninput="document.getElementById('edit_idzk_hidden').value = this.value;">
                             </div>
                             <div class="col-md-8">
-                                <p class="text-muted small mb-0">
-                                    Número de usuario del dispositivo ZK. Dejar vacío para desvincular.
+                                <p class="text-muted small mb-0" id="zk_help_text" style="font-size: 0.78rem;">
+                                    Número de usuario del dispositivo ZK.
                                 </p>
                             </div>
                         </div>
                     </div>
 
+                    <!-- Fila 3: Clasificación Organizacional y Estado -->
                     <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Tipo de Persona</label>
-                            <select class="form-select" name="tipo_persona_id" id="edit_tipo">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted mb-1">Tipo de Personal</label>
+                            <select class="form-select" name="tipo_persona_id" id="edit_tipo" style="height: 42px;">
                                 <option value="">Sin tipo</option>
                                 {% for t in tenant_tipos %}
                                 <option value="{{ t.id }}">{{ t.nombre }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Grupo</label>
-                            <select class="form-select" name="grupo_id" id="edit_grupo">
-                                <option value="">Sin grupo</option>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted mb-1">Institución / Sede</label>
+                            <select class="form-select select-grupo-institucion" name="grupo_id" id="edit_grupo" style="height: 42px;">
+                                <option value="">Sin institución</option>
                                 {% for g in grupos %}
                                 <option value="{{ g.id }}">{{ g.nombre }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Grupo Funcional</label>
-                            <select class="form-select" name="grupo_funcional_id" id="edit_grupo_funcional">
-                                <option value="">Sin grupo funcional</option>
-                                {% for gf in grupos_funcionales %}
-                                <option value="{{ gf.id }}">{{ gf.nombre }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted mb-1">Grupo de Trabajo</label>
+                            <div class="input-group">
+                                <select class="form-select select-grupo-funcional" name="grupo_funcional_id" id="edit_grupo_funcional" style="height: 42px;">
+                                    <option value="">Sin grupo de trabajo</option>
+                                    {% for gf in grupos_funcionales %}
+                                    <option value="{{ gf.id }}">{{ gf.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                                <button type="button" class="btn btn-rippling-secondary" onclick="abrirCrearGFRapido('edit_grupo_funcional');" title="Crear nuevo grupo de trabajo" style="height: 42px;">
+                                    <span class="material-symbols-outlined fs-6">add</span>
+                                </button>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Email</label>
-                            <input type="email" class="form-control" name="email" id="edit_email">
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label fw-semibold">Estado</label>
-                            <select class="form-select" name="activo" id="edit_activo">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted mb-1">Estado</label>
+                            <select class="form-select" name="activo" id="edit_activo" style="height: 42px;">
                                 <option value="1">Activo</option>
                                 <option value="0">Inactivo</option>
                             </select>
                         </div>
                     </div>
 
+                    <!-- Fila 4: Contacto -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Email</label>
+                            <input type="email" class="form-control" name="email" id="edit_email" style="height: 42px;">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Teléfono</label>
+                            <input type="text" class="form-control" name="telefono" id="edit_telefono" style="height: 42px;">
+                        </div>
+                    </div>
+
+                    <!-- Fila 5: Horario de Trabajo Individual -->
+                    <div class="p-3 bg-light rounded-3 border mb-3" id="edit_seccion_horario">
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                            <label class="form-label small fw-bold text-muted d-flex align-items-center gap-1 mb-0">
+                                <span class="material-symbols-outlined text-primary" style="font-size:1.1rem;">schedule</span>
+                                <span>Horario de Trabajo Individual</span>
+                            </label>
+                            <span id="edit_horario_badge" class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">
+                                Consultando horario...
+                            </span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div id="edit_horario_desc" class="text-muted small">
+                                <!-- JS inyectará el resumen del horario -->
+                            </div>
+                            <button type="button" class="btn btn-sm btn-rippling-primary d-inline-flex align-items-center gap-1 shadow-sm" id="btn-abrir-horario-desde-modal" onclick="abrirHorarioDesdeModalEditar();">
+                                <span class="material-symbols-outlined fs-6" id="btn-abrir-horario-icono">edit_calendar</span>
+                                <span id="btn-abrir-horario-texto">Configurar Horario</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Fila 6: Notas -->
                     <div class="mb-1">
-                        <label class="form-label fw-semibold">Notas</label>
-                        <textarea class="form-control" name="notas" id="edit_notas" rows="2"></textarea>
+                        <label class="form-label small fw-bold text-muted mb-1">Notas u Observaciones</label>
+                        <textarea class="form-control" name="notas" id="edit_notas" rows="2" placeholder="Observaciones o anotaciones adicionales"></textarea>
                     </div>
 
                 </div>
-                <div class="modal-footer border-0">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">save</span>
+                        <span>Guardar cambios</span>
+                    </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Rápido: Crear Institución / Sede (Grupo) ───────────────────── -->
+<div class="modal fade" id="modalCrearGrupoInline" tabindex="-1" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius: var(--radius-lg); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-3 py-2">
+                <h6 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2" style="font-size: 0.95rem;">
+                    <span class="material-symbols-outlined text-primary fs-5">domain</span>
+                    Nueva Institución / Sede
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted mb-1">Nombre de la Institución / Sede <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="inline_grupo_nombre" placeholder="Ej: Sede Central, Matriz, Campus Norte">
+                </div>
+                <div id="inline_grupo_error" class="text-danger small mt-1" style="display:none;"></div>
+            </div>
+            <div class="modal-footer bg-light border-top p-2 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-rippling-primary btn-sm shadow-sm" id="btn-guardar-grupo-inline" onclick="guardarGrupoInline();">Crear</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Modal Rápido: Crear Grupo de Trabajo (Grupo Funcional) ────────────── -->
+<div class="modal fade" id="modalCrearGFInline" tabindex="-1" aria-hidden="true" style="z-index: 1065;">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-lg); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-3 py-2">
+                <h6 class="modal-title fw-bold text-dark mb-0 d-flex align-items-center gap-2" style="font-size: 0.95rem;">
+                    <span class="material-symbols-outlined text-primary fs-5">workspaces</span>
+                    Nuevo Grupo de Trabajo (Turno)
+                </h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="mb-3">
+                    <label class="form-label small fw-bold text-muted mb-1">Nombre del Grupo de Trabajo <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control form-control-sm" id="inline_gf_nombre" placeholder="Ej: Docentes Primaria, Administrativos, Turno Tarde">
+                </div>
+                <div class="mb-2">
+                    <label class="form-label small fw-bold text-muted mb-1">Tipo de Personal (Opcional)</label>
+                    <select class="form-select form-select-sm" id="inline_gf_tipo_persona_id">
+                        <option value="">Cualquier tipo de personal</option>
+                        {% for t in tenant_tipos %}
+                        <option value="{{ t.id }}">{{ t.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="inline_gf_error" class="text-danger small mt-1" style="display:none;"></div>
+            </div>
+            <div class="modal-footer bg-light border-top p-2 d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-rippling-primary btn-sm shadow-sm" id="btn-guardar-gf-inline" onclick="guardarGFInline();">Crear Grupo</button>
+            </div>
         </div>
     </div>
 </div>
@@ -444,31 +865,36 @@
 <!-- ── Offcanvas Horario (solo edición desde tab Horarios) ─────────────── -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvas-horario"
     aria-labelledby="offcanvasHorarioLabel" style="width: 460px;">
-    <div class="offcanvas-header border-bottom">
-        <div>
-            <h5 class="offcanvas-title fw-bold" id="offcanvasHorarioLabel">Horario de trabajo</h5>
-            <small class="text-muted" id="offcanvas-horario-sub"></small>
+    <div class="offcanvas-header border-bottom px-4 py-3 bg-light">
+        <div class="d-flex align-items-center gap-2">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 34px; height: 34px;">
+                <span class="material-symbols-outlined" style="font-size: 1.15rem;">schedule</span>
+            </div>
+            <div>
+                <h5 class="offcanvas-title fw-bold text-dark mb-0" id="offcanvasHorarioLabel" style="font-size: 1.05rem;">Horario de Trabajo</h5>
+                <small class="text-muted" id="offcanvas-horario-sub"></small>
+            </div>
         </div>
         <button type="button" class="btn-close text-reset" data-bs-dismiss="offcanvas"></button>
     </div>
-    <div class="offcanvas-body">
+    <div class="offcanvas-body p-4">
         <input type="hidden" id="mh-modo">
         <div id="mh-error" class="alert alert-danger py-2 small mb-3" style="display:none"></div>
 
         <div class="row g-3 mb-4">
             <div class="col-md-4">
                 <label class="form-label small fw-semibold text-muted">ID ZK</label>
-                <input type="number" class="form-control form-control-sm fw-bold border-0 bg-light"
+                <input type="number" class="form-control form-control-sm fw-bold border bg-light"
                     id="mh-id" min="1" placeholder="Ej: 5">
             </div>
             <div class="col-md-8">
                 <label class="form-label small fw-semibold text-muted">Nombre</label>
-                <input type="text" class="form-control form-control-sm fw-bold border-0 bg-light"
+                <input type="text" class="form-control form-control-sm fw-bold border bg-light"
                     id="mh-nombre" placeholder="Apellidos, Nombres">
             </div>
         </div>
 
-        <h6 class="fw-bold mb-2">Jornada semanal</h6>
+        <h6 class="fw-bold text-dark mb-2" style="font-size: 0.9rem;">Jornada semanal</h6>
         <div class="d-flex gap-1 mb-1" style="padding-left:48px;">
             <small class="text-muted fw-semibold flex-grow-1 text-center" style="font-size:0.7rem;">Entrada</small>
             <small class="text-muted fw-semibold flex-grow-1 text-center" style="font-size:0.7rem;">Salida</small>
@@ -499,7 +925,7 @@
         </div>
 
         <div class="mb-3 p-3 bg-light rounded-3 border">
-            <label class="form-label small fw-bold d-block mb-2">Horas de Contrato</label>
+            <label class="form-label small fw-bold d-block mb-2 text-dark">Horas de Contrato</label>
             <div class="d-flex gap-3 mb-2">
                 <div class="form-check">
                     <input class="form-check-input" type="radio" name="tipoHoras" id="tipoHorasNone" value="none" checked onchange="toggleTipoHoras();">
@@ -529,9 +955,9 @@
             <textarea class="form-control form-control-sm" id="mh-notas" rows="2" placeholder="Opcional"></textarea>
         </div>
     </div>
-    <div class="offcanvas-footer p-3 border-top d-flex justify-content-end gap-2">
-        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="offcanvas">Cancelar</button>
-        <button type="button" class="btn btn-primary btn-sm px-4" onclick="guardarHorario();">Guardar horario</button>
+    <div class="offcanvas-footer p-3 bg-light border-top d-flex justify-content-end gap-2">
+        <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="offcanvas">Cancelar</button>
+        <button type="button" class="btn btn-rippling-primary btn-sm px-4 shadow-sm" onclick="guardarHorario();">Guardar horario</button>
     </div>
 </div>
 {% endblock %}
@@ -551,15 +977,25 @@ function cambiarTab(tab) {
     const aPersonal  = document.getElementById('header-actions-personal');
     const aHorarios  = document.getElementById('header-actions-horarios');
     if (!aPersonal || !aHorarios) return;
-    aPersonal.style.display = tab === 'personal' ? '' : 'none';
-    aHorarios.style.display = tab === 'horarios' ? '' : 'none';
+    aPersonal.style.display = tab === 'personal' ? 'flex' : 'none';
+    aHorarios.style.display = tab === 'horarios' ? 'flex' : 'none';
 }
 
 // ── Modal Editar Persona ───────────────────────────────────────────────────
+let _personaEnEdicion = null;
+
 const _modalEditar = document.getElementById('modalEditarPersona');
 if (_modalEditar) {
     _modalEditar.addEventListener('show.bs.modal', function(e) {
         const btn = e.relatedTarget;
+        if (!btn) return;
+
+        _personaEnEdicion = {
+            id: btn.dataset.id,
+            nombre: btn.dataset.nombre || '',
+            idzk: (btn.dataset.idzk || '').trim()
+        };
+
         document.getElementById('formEditarPersona').action = (window.APP_BASE || '') + '/personas/' + btn.dataset.id;
         document.getElementById('edit_subtitulo').textContent = btn.dataset.nombre || '';
         document.getElementById('edit_nombre').value         = btn.dataset.nombre || '';
@@ -570,22 +1006,118 @@ if (_modalEditar) {
         document.getElementById('edit_email').value          = btn.dataset.email || '';
         document.getElementById('edit_activo').value         = btn.dataset.activo || '1';
         document.getElementById('edit_notas').value          = btn.dataset.notas || '';
-        const zkVal = btn.dataset.idzk || '';
-        document.getElementById('edit_idzk').value         = zkVal;
-        document.getElementById('edit_idzk_hidden').value  = zkVal;
+        
+        const zkVal = (btn.dataset.idzk || '').trim();
+        const idzkInput = document.getElementById('edit_idzk');
+        const idzkHidden = document.getElementById('edit_idzk_hidden');
+        const zkBadge = document.getElementById('zk_locked_badge');
+        const zkHelp = document.getElementById('zk_help_text');
+
+        idzkHidden.value = zkVal;
+        idzkInput.value = zkVal;
+
+        if (zkVal !== '') {
+            idzkInput.readOnly = true;
+            idzkInput.classList.add('bg-white', 'text-muted');
+            idzkInput.style.cursor = 'not-allowed';
+            if (zkBadge) zkBadge.style.display = 'inline-flex';
+            if (zkHelp) zkHelp.innerHTML = '<span class="text-secondary fw-semibold"><span class="material-symbols-outlined fs-6 align-middle">lock</span> El ID biométrico es permanente y no se puede modificar una vez creado.</span>';
+        } else {
+            idzkInput.readOnly = false;
+            idzkInput.classList.remove('bg-white', 'text-muted');
+            idzkInput.style.cursor = '';
+            if (zkBadge) zkBadge.style.display = 'none';
+            if (zkHelp) zkHelp.innerHTML = 'Asigna el número de usuario del dispositivo ZK (una vez guardado no se podrá modificar).';
+        }
+
+        actualizarInfoHorarioEnModal(btn.dataset.nombre || '', zkVal);
     });
+}
+
+function actualizarInfoHorarioEnModal(nombre, idZk) {
+    const badge = document.getElementById('edit_horario_badge');
+    const desc = document.getElementById('edit_horario_desc');
+    const btn = document.getElementById('btn-abrir-horario-desde-modal');
+    const btnIcon = document.getElementById('btn-abrir-horario-icono');
+    const btnTexto = document.getElementById('btn-abrir-horario-texto');
+    if (!badge || !desc || !btn) return;
+
+    if (!idZk) {
+        badge.className = 'rippling-pill';
+        badge.style = 'background-color: #fffbeb; color: #b45309; border-color: #fde68a; font-size:0.75rem;';
+        badge.innerHTML = '<span class="material-symbols-outlined" style="font-size:0.8rem;">warning</span> Sin ID Reloj';
+        desc.innerHTML = '<span class="text-muted">Asigna primero el ID biométrico arriba y guarda para configurar su turno individual.</span>';
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+        if (btnTexto) btnTexto.textContent = 'Requiere ID ZK';
+        return;
+    }
+
+    btn.disabled = false;
+    btn.classList.remove('opacity-50');
+
+    const DIAS = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+    const DIAS_LABEL = {lunes:'Lun', martes:'Mar', miercoles:'Mié', jueves:'Jue', viernes:'Vie', sabado:'Sáb', domingo:'Dom'};
+    const h = (_horariosCache || []).find(item => String(item.id_usuario) === String(idZk));
+
+    if (h) {
+        badge.className = 'rippling-pill';
+        badge.style = 'background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; font-size:0.75rem;';
+        badge.innerHTML = '<span class="material-symbols-outlined" style="font-size:0.8rem;">check_circle</span> Horario configurado';
+        
+        const diasActivos = DIAS.filter(d => h[d]).map(d => DIAS_LABEL[d]);
+        const entrada = h.lunes || h.martes || h.miercoles || h.jueves || h.viernes || '';
+        const salida = h.lunes_salida || h.martes_salida || h.miercoles_salida || h.jueves_salida || h.viernes_salida || '';
+        const horarioStr = entrada ? (salida ? `${entrada} a ${salida}` : `Entrada: ${entrada}`) : 'Jornada personalizada';
+        const almuerzoStr = h.almuerzo_min ? ` · Almuerzo: ${h.almuerzo_min} min` : '';
+
+        desc.innerHTML = `<strong>${diasActivos.join(' ')}</strong> · ${horarioStr}${almuerzoStr}`;
+        if (btnIcon) btnIcon.textContent = 'edit_calendar';
+        if (btnTexto) btnTexto.textContent = 'Editar Horario';
+    } else {
+        badge.className = 'rippling-pill';
+        badge.style = 'background-color: #fffbeb; color: #b45309; border-color: #fde68a; font-size:0.75rem;';
+        badge.innerHTML = '<span class="material-symbols-outlined" style="font-size:0.8rem;">schedule</span> Sin horario individual';
+        desc.innerHTML = '<span class="text-muted">Hereda horario de su grupo o no tiene turno individual definido.</span>';
+        if (btnIcon) btnIcon.textContent = 'add_alarm';
+        if (btnTexto) btnTexto.textContent = '+ Asignar Horario';
+    }
+}
+
+function abrirHorarioDesdeModalEditar() {
+    if (!_personaEnEdicion || !_personaEnEdicion.idzk) {
+        const idzkInput = document.getElementById('edit_idzk');
+        if (idzkInput && idzkInput.value) {
+            _personaEnEdicion.idzk = idzkInput.value.trim();
+        }
+    }
+    if (!_personaEnEdicion || !_personaEnEdicion.idzk) {
+        alert('Por favor ingresa primero el ID del reloj biométrico y guarda los cambios.');
+        return;
+    }
+    
+    // Ocultar modal de edición temporalmente
+    const modalEl = document.getElementById('modalEditarPersona');
+    const modalInst = bootstrap.Modal.getInstance(modalEl);
+    if (modalInst) modalInst.hide();
+
+    const nombre = document.getElementById('edit_nombre').value || _personaEnEdicion.nombre;
+    const idzk = _personaEnEdicion.idzk;
+
+    // Abrir offcanvas de horario
+    abrirHorarioDePersona(nombre, idzk);
 }
 
 // ── Horarios tab: poblar resúmenes desde _horariosCache ───────────────────
 document.addEventListener('DOMContentLoaded', () => {
-    // cargarHorarios() ya se llama en configuracion.js DOMContentLoaded.
-    // Esperamos a que termine para pintar los badges.
     const orig = window.renderTablaHorarios;
     window.renderTablaHorarios = function(lista) {
         orig(lista);
         actualizarResumenesHorarios(lista);
+        if (_personaEnEdicion && _personaEnEdicion.idzk) {
+            actualizarInfoHorarioEnModal(_personaEnEdicion.nombre, _personaEnEdicion.idzk);
+        }
     };
-    // Llamada inicial en caso de que ya haya datos
     actualizarResumenesHorarios(_horariosCache || []);
 });
 
@@ -626,13 +1158,11 @@ function abrirHorarioDePersona(nombre, idZk) {
     if (existente) {
         abrirOffcanvasEditar(existente);
     } else {
-        // Sin horario previo: modo crear, con nombre e ID pre-rellenados y bloqueados
         abrirOffcanvasCrear();
         document.getElementById('mh-nombre').value = nombre;
         document.getElementById('mh-id').value     = idZk;
         document.getElementById('mh-id').readOnly  = true;
     }
-    // Mostrar subtítulo con el nombre
     document.getElementById('offcanvas-horario-sub').textContent = nombre;
 }
 
@@ -644,19 +1174,165 @@ function filtrarHorariosPersonas() {
     });
 }
 
+// ── Creación Rápida Inline de Institución/Grupo ─────────────────────────────
+let _targetSelectGrupo = null;
+function abrirCrearGrupoRapido(targetSelectId) {
+    _targetSelectGrupo = targetSelectId;
+    document.getElementById('inline_grupo_nombre').value = '';
+    document.getElementById('inline_grupo_error').style.display = 'none';
+    const modal = new bootstrap.Modal(document.getElementById('modalCrearGrupoInline'));
+    modal.show();
+}
+
+async function guardarGrupoInline() {
+    const nombre = (document.getElementById('inline_grupo_nombre').value || '').trim();
+    const errDiv = document.getElementById('inline_grupo_error');
+    const btn = document.getElementById('btn-guardar-grupo-inline');
+
+    if (!nombre) {
+        errDiv.textContent = 'Ingresa el nombre de la institución / sede.';
+        errDiv.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creando...';
+
+    try {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const resp = await fetch((window.APP_BASE || '') + '/admin/grupos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ nombre: nombre, tipo_grupo: 'general' })
+        });
+
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+            throw new Error(data.error || 'Error al crear la institución.');
+        }
+
+        const nuevoGrupo = data.grupo;
+
+        // Añadir a todos los selects de grupo en la página
+        document.querySelectorAll('select.select-grupo-institucion, select[name="grupo_id"]').forEach(sel => {
+            const opt = document.createElement('option');
+            opt.value = nuevoGrupo.id;
+            opt.textContent = nuevoGrupo.nombre;
+            sel.appendChild(opt);
+        });
+
+        // Seleccionar en el select origen
+        if (_targetSelectGrupo) {
+            const targetEl = document.getElementById(_targetSelectGrupo);
+            if (targetEl) targetEl.value = nuevoGrupo.id;
+        }
+
+        // Cerrar modal
+        const modalEl = document.getElementById('modalCrearGrupoInline');
+        const modalInst = bootstrap.Modal.getInstance(modalEl);
+        if (modalInst) modalInst.hide();
+
+    } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Crear';
+    }
+}
+
+// ── Creación Rápida Inline de Grupo de Trabajo (Grupo Funcional) ───────────
+let _targetSelectGF = null;
+function abrirCrearGFRapido(targetSelectId) {
+    _targetSelectGF = targetSelectId;
+    document.getElementById('inline_gf_nombre').value = '';
+    document.getElementById('inline_gf_tipo_persona_id').value = '';
+    document.getElementById('inline_gf_error').style.display = 'none';
+    const modal = new bootstrap.Modal(document.getElementById('modalCrearGFInline'));
+    modal.show();
+}
+
+async function guardarGFInline() {
+    const nombre = (document.getElementById('inline_gf_nombre').value || '').trim();
+    const tipoPersonaId = document.getElementById('inline_gf_tipo_persona_id').value || null;
+    const errDiv = document.getElementById('inline_gf_error');
+    const btn = document.getElementById('btn-guardar-gf-inline');
+
+    if (!nombre) {
+        errDiv.textContent = 'Ingresa el nombre del grupo de trabajo.';
+        errDiv.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Creando...';
+
+    try {
+        const csrfToken = document.querySelector('input[name="csrf_token"]')?.value || '';
+        const resp = await fetch((window.APP_BASE || '') + '/admin/grupos-funcionales', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ nombre: nombre, tipo_persona_id: tipoPersonaId })
+        });
+
+        const data = await resp.json();
+        if (!resp.ok || !data.ok) {
+            throw new Error(data.error || 'Error al crear el grupo de trabajo.');
+        }
+
+        const nuevoGF = data.grupo_funcional;
+
+        // Añadir a todos los selects de grupos funcionales en la página
+        document.querySelectorAll('select.select-grupo-funcional, select[name="grupo_funcional_id"]').forEach(sel => {
+            const opt = document.createElement('option');
+            opt.value = nuevoGF.id;
+            opt.textContent = nuevoGF.nombre;
+            sel.appendChild(opt);
+        });
+
+        // Seleccionar en el select origen
+        if (_targetSelectGF) {
+            const targetEl = document.getElementById(_targetSelectGF);
+            if (targetEl) targetEl.value = nuevoGF.id;
+        }
+
+        // Cerrar modal
+        const modalEl = document.getElementById('modalCrearGFInline');
+        const modalInst = bootstrap.Modal.getInstance(modalEl);
+        if (modalInst) modalInst.hide();
+
+    } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Crear Grupo';
+    }
+}
+
 // ── Al guardar horario, actualizar resúmenes ───────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const origGuardar = window.guardarHorario;
     window.guardarHorario = function() {
         origGuardar();
-        // cargarHorarios() en configuracion.js llamará renderTablaHorarios -> actualizarResumenesHorarios
     };
-    // Desbloquear mh-id al cerrar el offcanvas (por si se abrió bloqueado)
     document.getElementById('offcanvas-horario').addEventListener('hidden.bs.offcanvas', () => {
         document.getElementById('mh-id').readOnly = false;
         document.getElementById('offcanvas-horario-sub').textContent = '';
     });
+
+    // Activar tooltips de Bootstrap
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+        new bootstrap.Tooltip(el);
+    });
 });
 </script>
-
 {% endblock %}

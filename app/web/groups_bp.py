@@ -11,16 +11,16 @@ Rutas (6):
 """
 from __future__ import annotations
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 
 from app.domain.groups import (
-    actualizar_grupo,
-    actualizar_grupo_funcional,
-    crear_grupo,
-    crear_grupo_funcional,
+    actualizar_grupo as svc_actualizar_grupo,
+    actualizar_grupo_funcional as svc_actualizar_grupo_funcional,
+    crear_grupo as svc_crear_grupo,
+    crear_grupo_funcional as svc_crear_grupo_funcional,
+    listar_grupos as svc_listar_grupos,
+    listar_grupos_funcionales as svc_listar_grupos_funcionales,
 )
-from app.domain.groups import listar_grupos as svc_listar_grupos
-from app.domain.groups import listar_grupos_funcionales as svc_listar_grupos_funcionales
 from app.domain.rbac import require_role
 
 bp = Blueprint("groups", __name__)
@@ -38,17 +38,29 @@ def listar_grupos():
 
 
 @bp.post("/admin/grupos")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def crear_grupo():
-    nombre = request.form.get("nombre", "").strip()
-    tipo_grupo = request.form.get("tipo_grupo", "general")
+    is_ajax = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.headers.get("Accept") == "application/json"
+    if request.is_json:
+        data = request.get_json() or {}
+        nombre = str(data.get("nombre", "")).strip()
+        tipo_grupo = str(data.get("tipo_grupo", "general"))
+    else:
+        nombre = request.form.get("nombre", "").strip()
+        tipo_grupo = request.form.get("tipo_grupo", "general")
     if not nombre:
+        if is_ajax:
+            return jsonify({"ok": False, "error": "El nombre del grupo es requerido"}), 400
         flash("El nombre del grupo es requerido", "danger")
         return redirect(url_for("groups.listar_grupos"))
     try:
-        crear_grupo(nombre=nombre, tipo_grupo=tipo_grupo)
+        nuevo = svc_crear_grupo(nombre=nombre, tipo_grupo=tipo_grupo)
+        if is_ajax:
+            return jsonify({"ok": True, "grupo": nuevo})
         flash("Grupo creado exitosamente", "success")
     except Exception as e:  # noqa: BLE001
+        if is_ajax:
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(f"Error: {e}", "danger")
     return redirect(url_for("groups.listar_grupos"))
 
@@ -65,7 +77,7 @@ def actualizar_grupo(id: str):
     if activo_val is not None:
         datos["activo"] = activo_val == "1"
     try:
-        actualizar_grupo(id, datos)
+        svc_actualizar_grupo(id, datos)
         flash("Grupo actualizado", "success")
     except Exception as e:  # noqa: BLE001
         flash(f"Error: {e}", "danger")
@@ -88,17 +100,29 @@ def listar_grupos_funcionales():
 
 
 @bp.post("/admin/grupos-funcionales")
-@require_role("admin", "superadmin")
+@require_role("admin", "superadmin", "gestor")
 def crear_grupo_funcional():
-    nombre = request.form.get("nombre", "").strip()
-    tipo_persona_id = request.form.get("tipo_persona_id") or None
+    is_ajax = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.headers.get("Accept") == "application/json"
+    if request.is_json:
+        data = request.get_json() or {}
+        nombre = str(data.get("nombre", "")).strip()
+        tipo_persona_id = data.get("tipo_persona_id") or None
+    else:
+        nombre = request.form.get("nombre", "").strip()
+        tipo_persona_id = request.form.get("tipo_persona_id") or None
     if not nombre:
+        if is_ajax:
+            return jsonify({"ok": False, "error": "El nombre del grupo funcional es requerido"}), 400
         flash("El nombre del grupo funcional es requerido", "danger")
         return redirect(url_for("groups.listar_grupos_funcionales"))
     try:
-        crear_grupo_funcional(nombre=nombre, tipo_persona_id=tipo_persona_id)
+        nuevo = svc_crear_grupo_funcional(nombre=nombre, tipo_persona_id=tipo_persona_id)
+        if is_ajax:
+            return jsonify({"ok": True, "grupo_funcional": nuevo})
         flash("Grupo funcional creado exitosamente", "success")
     except Exception as e:  # noqa: BLE001
+        if is_ajax:
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(f"Error: {e}", "danger")
     return redirect(url_for("groups.listar_grupos_funcionales"))
 
@@ -113,7 +137,7 @@ def actualizar_grupo_funcional(id: str):
     if activo_val is not None:
         datos["activo"] = activo_val == "1"
     try:
-        actualizar_grupo_funcional(id, datos)
+        svc_actualizar_grupo_funcional(id, datos)
         flash("Grupo funcional actualizado", "success")
     except Exception as e:  # noqa: BLE001
         flash(f"Error: {e}", "danger")

@@ -29,6 +29,7 @@ class BaseConfig:
     PERMANENT_SESSION_LIFETIME = int(os.environ.get("SESSION_LIFETIME_HOURS", "8")) * 3600
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
+    SESSION_COOKIE_PATH = "/"
 
     # ── Archivos ──────────────────────────────────────────────────────
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "data/uploads")

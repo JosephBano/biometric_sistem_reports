@@ -197,9 +197,14 @@ def actualizar_persona(id: str, datos: dict) -> dict | None:
                 text(f"UPDATE personas SET {', '.join(sets)} WHERE id = CAST(:id AS uuid) RETURNING id::text, nombre, identificacion, activo"),
                 params,
             ).fetchone()
-            result = dict(row._mapping) if row else None
-        if has_zk_update:
-            _upsert_zk_id(conn, id, id_usuario_zk or None)
+        if has_zk_update and id_usuario_zk:
+            # Una vez asignado el ID del biométrico, es inmutable (no se puede editar ni reescribir)
+            existing_zk = conn.execute(
+                text("SELECT id_en_dispositivo FROM personas_dispositivos WHERE persona_id = CAST(:pid AS uuid) AND activo = true AND es_principal = true LIMIT 1"),
+                {"pid": id},
+            ).fetchone()
+            if not existing_zk or not existing_zk[0]:
+                _upsert_zk_id(conn, id, id_usuario_zk)
     return result
 
 

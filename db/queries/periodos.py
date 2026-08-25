@@ -238,6 +238,30 @@ def agregar_personas_a_periodo_bulk(periodo_id: str, personas_ids: list[str]) ->
         return {"exito": True, "creados": creados}
 
 
+def remover_persona_de_periodo(periodo_id: str, persona_id: str) -> bool:
+    """Elimina la asociación de una persona con un período específico."""
+    with get_connection() as conn:
+        gp = conn.execute(
+            text("SELECT nombre, fecha_inicio, fecha_fin FROM grupos_periodo WHERE id = CAST(:id AS uuid)"),
+            {"id": periodo_id},
+        ).fetchone()
+        if not gp:
+            return False
+        d = dict(gp._mapping)
+        res = conn.execute(
+            text("""
+                DELETE FROM periodos_vigencia
+                WHERE persona_id = CAST(:persona_id AS uuid)
+                  AND nombre = :nombre
+                  AND fecha_inicio = CAST(:fi AS date)
+                  AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
+            """),
+            {"persona_id": persona_id, "nombre": d["nombre"],
+             "fi": d["fecha_inicio"], "ff": d["fecha_fin"]},
+        )
+        return res.rowcount > 0
+
+
 def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_id: str) -> dict:
     """
     Procesa CSV con columnas: identificacion, nombre, grupo, categoria,

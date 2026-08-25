@@ -626,6 +626,9 @@ listar_overrides_horario_persona = listar_overrides_por_persona
 
 __all__ = list(__all__) + [
     "listar_overrides_horario_persona",
+    "listar_personas_detalladas_en_grupo_funcional",
+    "asignar_personas_masivo_a_grupo_funcional",
+    "procesar_csv_personas_grupo_funcional",
 ]
 
 
@@ -645,3 +648,180 @@ def _default_tenant_schema() -> str:
 
 # Alias de compatibilidad con código antiguo que llamara `_tenant_default()`.
 _tenant_default = _default_tenant_schema
+
+
+def listar_personas_detalladas_en_grupo_funcional(
+    grupo_funcional_id: str, schema: str | None = None,
+) -> list[dict]:
+    """Retorna las personas vigentes asignadas a un grupo funcional con nombre, ident, id_zk, etc."""
+    with get_connection(schema) as conn:
+        rows = conn.execute(
+            text("""
+                SELECT p.id::text AS persona_id, p.nombre, p.identificacion, p.activo, p.email, p.telefono,
+                       gfp.id::text AS vinculo_id, gfp.es_principal, gfp.fecha_inicio, gfp.fecha_fin,
+                       pd.id_en_dispositivo AS id_usuario_zk
+                FROM grupos_funcionales_personas gfp
+                JOIN personas p ON p.id = gfp.persona_id
+                LEFT JOIN LATERAL (
+                    SELECT id_en_dispositivo FROM personas_dispositivos
+                    WHERE persona_id = p.id AND activo = true
+                    ORDER BY es_principal DESC LIMIT 1
+                ) pd ON true
+                WHERE gfp.grupo_funcional_id = CAST(:gfid AS uuid)
+                  AND (gfp.fecha_fin IS NULL OR gfp.fecha_fin >= CURRENT_DATE)
+                ORDER BY p.nombre ASC
+            """),
+            {"gfid": grupo_funcional_id},
+        ).fetchall()
+        return [dict(r._mapping) for r in rows]
+
+
+def asignar_personas_masivo_a_grupo_funcional(
+    grupo_funcional_id: str,
+    persona_ids: list[str],
+    fecha_inicio: date,
+    es_principal: bool = True,
+    schema: str | None = None,
+) -> int:
+    """Asigna una lista de personas a un grupo funcional."""
+    if not persona_ids:
+        return 0
+    count = 0
+    with get_connection(schema) as conn:
+        for pid in persona_ids:
+            if es_principal:
+                conn.execute(
+                    text("UPDATE grupos_funcionales_personas SET es_principal = false WHERE persona_id = CAST(:pid AS uuid)"),
+                    {"pid": pid},
+                )
+                conn.execute(
+                    text("UPDATE personas SET grupo_funcional_id = CAST(:gfid AS uuid) WHERE id = CAST(:pid AS uuid)"),
+                    {"pid": pid, "gfid": grupo_funcional_id},
+                )
+            conn.execute(
+                text("""
+                    INSERT INTO grupos_funcionales_personas (persona_id, grupo_funcional_id, fecha_inicio, es_principal)
+                    VALUES (CAST(:pid AS uuid), CAST(:gfid AS uuid), :fi, :ep)
+                    ON CONFLICT (persona_id, grupo_funcional_id, fecha_inicio)
+                    DO UPDATE SET es_principal = EXCLUDED.es_principal, fecha_fin = NULL
+                """),
+                {"pid": pid, "gfid": grupo_funcional_id, "fi": fecha_inicio, "ep": es_principal},
+            )
+            count += 1
+    return count
+
+
+def procesar_csv_personas_grupo_funcional(
+    filepath: str,
+    grupo_funcional_id: str,
+    fecha_inicio: date,
+    schema: str | None = None,
+) -> dict:
+    """Procesa un CSV con personas y las vincula a este grupo funcional."""
+    import csv as _csv
+    procesadas = nuevas = asociadas = 0
+    errores = []
+    with get_connection(schema) as conn:
+        gf = conn.execute(
+            text("SELECT id, nombre FROM grupos_funcionales WHERE id = CAST(:id AS uuid)"),
+            {"id": grupo_funcional_id},
+        ).fetchone()
+        if not gf:
+            return {"exito": False, "error": "Grupo no encontrado"}
+        try:
+            with open(filepath, newline="", encoding="utf-8-sig") as f:
+                reader = _csv.DictReader(f)
+                for idx, row in enumerate(reader, start=1):
+                    try:
+                        nombre_p = str(row.get("nombre", "") or row.get("Nombre", "")).strip()
+                        identif = str(row.get("identificacion", "") or row.get("Identificacion", "") or row.get("cedula", "") or row.get("Cedula", "")).strip()
+                        id_zk = str(row.get("id_biometrico", "") or row.get("id_zk", "") or row.get("ID_ZK", "") or row.get("id_reloj", "")).strip()
+                        email = str(row.get("email", "") or row.get("correo", "")).strip() or None
+                        telefono = str(row.get("telefono", "") or row.get("celular", "")).strip() or None
+
+                        if not nombre_p and not identif:
+                            continue
+
+                        persona_id = None
+                        if identif:
+                            p_row = conn.execute(
+                                text("SELECT id::text FROM personas WHERE identificacion = :ident LIMIT 1"),
+                                {"ident": identif},
+                            ).fetchone()
+                            if p_row:
+                                persona_id = str(p_row[0])
+                        
+                        if not persona_id and nombre_p:
+                            p_row = conn.execute(
+                                text("SELECT id::text FROM personas WHERE UPPER(TRIM(nombre)) = UPPER(TRIM(:n)) LIMIT 1"),
+                                {"n": nombre_p},
+                            ).fetchone()
+                            if p_row:
+                                persona_id = str(p_row[0])
+
+                        if persona_id:
+                            conn.execute(
+                                text("""
+                                    UPDATE personas
+                                    SET grupo_funcional_id = CAST(:gfid AS uuid),
+                                        activo = true
+                                    WHERE id = CAST(:pid AS uuid)
+                                """),
+                                {"gfid": grupo_funcional_id, "pid": persona_id},
+                            )
+                            asociadas += 1
+                        else:
+                            p_new = conn.execute(
+                                text("""
+                                    INSERT INTO personas (nombre, identificacion, grupo_funcional_id, email, telefono, activo)
+                                    VALUES (:n, :ident, CAST(:gfid AS uuid), :email, :tel, true)
+                                    RETURNING id::text
+                                """),
+                                {
+                                    "n": nombre_p, "ident": identif or None,
+                                    "gfid": grupo_funcional_id, "email": email, "tel": telefono,
+                                },
+                            ).fetchone()
+                            persona_id = str(p_new[0])
+                            nuevas += 1
+
+                        if id_zk and persona_id:
+                            dev = conn.execute(
+                                text("SELECT id::text FROM dispositivos WHERE activo = true ORDER BY prioridad ASC LIMIT 1")
+                            ).fetchone()
+                            if dev:
+                                conn.execute(
+                                    text("""
+                                        INSERT INTO personas_dispositivos (persona_id, dispositivo_id, id_en_dispositivo, es_principal, activo)
+                                        VALUES (CAST(:pid AS uuid), CAST(:did AS uuid), :zk, true, true)
+                                        ON CONFLICT (dispositivo_id, id_en_dispositivo) DO NOTHING
+                                    """),
+                                    {"pid": persona_id, "did": dev[0], "zk": id_zk},
+                                )
+
+                        conn.execute(
+                            text("UPDATE grupos_funcionales_personas SET es_principal = false WHERE persona_id = CAST(:pid AS uuid)"),
+                            {"pid": persona_id},
+                        )
+                        conn.execute(
+                            text("""
+                                INSERT INTO grupos_funcionales_personas (persona_id, grupo_funcional_id, fecha_inicio, es_principal)
+                                VALUES (CAST(:pid AS uuid), CAST(:gfid AS uuid), :fi, true)
+                                ON CONFLICT (persona_id, grupo_funcional_id, fecha_inicio)
+                                DO UPDATE SET es_principal = true, fecha_fin = NULL
+                            """),
+                            {"pid": persona_id, "gfid": grupo_funcional_id, "fi": fecha_inicio},
+                        )
+                        procesadas += 1
+                    except Exception as ex:
+                        errores.append(f"Fila {idx}: {ex}")
+        except Exception as e:
+            return {"exito": False, "error": f"Error al leer CSV: {e}"}
+
+    return {
+        "exito": True,
+        "procesadas": procesadas,
+        "nuevas": nuevas,
+        "asociadas": asociadas,
+        "errores": errores,
+    }

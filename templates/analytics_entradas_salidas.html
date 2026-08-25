@@ -1,70 +1,333 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    /* ── TomSelect Enterprise Styling & Dropdown Fix ── */
+    .filter-card-container {
+        overflow: visible !important;
+        position: relative;
+        z-index: 30;
+    }
+    .filter-card-body {
+        overflow: visible !important;
+    }
+    .ts-wrapper {
+        position: relative;
+        z-index: 35;
+        width: 100%;
+    }
+    .ts-control {
+        border: 1.5px solid var(--color-border) !important;
+        border-radius: var(--radius-md) !important;
+        padding: 0.55rem 0.875rem !important;
+        font-size: 0.875rem !important;
+        background-color: var(--color-bg-surface) !important;
+        box-shadow: none !important;
+        min-height: 42px !important;
+        display: flex !important;
+        align-items: center !important;
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        cursor: text;
+    }
+    .ts-wrapper.focus .ts-control {
+        border-color: var(--token-color-navy-900) !important;
+        box-shadow: 0 0 0 3px rgba(37, 50, 89, 0.12) !important;
+    }
+    .ts-dropdown {
+        border: 1px solid var(--color-border) !important;
+        border-radius: var(--radius-md) !important;
+        box-shadow: var(--shadow-dropdown) !important;
+        margin-top: 4px !important;
+        background: #ffffff !important;
+        z-index: 9999 !important;
+        position: absolute !important;
+        max-height: 280px !important;
+    }
+    .ts-dropdown .option {
+        padding: 0.625rem 0.875rem !important;
+        border-bottom: 1px solid var(--color-border-subtle);
+        cursor: pointer !important;
+    }
+    .ts-dropdown .option:last-child {
+        border-bottom: none;
+    }
+    .ts-dropdown .option.active, .ts-dropdown .option:hover {
+        background-color: var(--token-color-navy-50) !important;
+        color: var(--token-color-navy-900) !important;
+    }
+
+    /* ── KPI Grid ── */
+    .kpi-grid-entradas {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+    @media (max-width: 992px) {
+        .kpi-grid-entradas {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .kpi-grid-entradas {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Tabla de Resumen Diario ── */
+    .tr-clickable {
+        cursor: pointer;
+        transition: background-color var(--transition-fast);
+    }
+    .tr-clickable:hover td {
+        background-color: var(--token-color-navy-50) !important;
+    }
+
+    .time-badge {
+        font-family: var(--font-family-primary);
+        font-weight: 700;
+        font-size: 0.8125rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .time-badge-in {
+        background-color: #ecfdf5;
+        color: #059669;
+        border: 1px solid #a7f3d0;
+    }
+    .time-badge-out {
+        background-color: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+    }
+    .time-badge-empty {
+        color: var(--token-color-slate-400, #94a3b8);
+        font-weight: 500;
+    }
+
+    /* ── Status Pills Semánticos ── */
+    .pill-status-ok {
+        background-color: #ecfdf5;
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+    .pill-status-alert {
+        background-color: #fef2f2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+    }
+    .pill-status-warning {
+        background-color: #fffbeb;
+        color: #b45309;
+        border: 1px solid #fde68a;
+    }
+    .pill-status-empty {
+        background-color: var(--token-color-slate-100);
+        color: var(--token-color-slate-500);
+        border: 1px solid var(--token-color-slate-200);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Analitica de Entradas y Salidas</h3>
-    <p class="text-muted">Resumen por dia: primer y ultimo marcaje, tiempo dentro de la institucion y validacion del marcaje. Haz clic en una fila para ver el detalle del dia.</p>
-</div>
+<div class="page-shell" style="gap: 1.25rem;">
+    <!-- ── 1. Page Header Shell ───────────────────────────────────────────── -->
+    <div class="page-header-shell" style="padding-bottom: 0.875rem;">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Control de Asistencia</span>
+                <span class="rippling-pill rippling-pill-gold">Marcaciones Diarias</span>
+            </div>
+            <h1 class="title-hero" style="font-size: 1.625rem;">Entradas y Salidas</h1>
+            <p class="page-header-subtitle">
+                Monitoreo individualizado por persona: primer y último marcaje, cálculo de permanencia, horas efectivas y auditoría de anomalías.
+            </p>
+        </div>
 
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-body">
-        <form class="row g-3 align-items-end" method="GET" id="formEntradasSalidas">
-            <div class="col-md-4">
-                <label class="form-label small fw-bold text-muted mb-2">Persona</label>
-                <select name="persona_id" id="inputPersonaId" placeholder="Nombre, cedula o ID biometrico...">
-                    <option value="">Selecciona una persona...</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-2">Fecha inicio</label>
-                <input type="date" class="form-control" name="fecha_inicio" id="inputFechaInicio"
-                       value="{{ fecha_inicio }}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-2">Fecha fin</label>
-                <input type="date" class="form-control" name="fecha_fin" id="inputFechaFin"
-                       value="{{ fecha_fin }}">
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-fill" style="height: 38px;">Consultar</button>
-                <button type="button" class="btn btn-outline-secondary" id="btnLimpiar" style="height: 38px;">X</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="card border-0 shadow-sm">
-    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold mb-0">Resultados</h5>
-        <span class="badge bg-primary bg-opacity-10 text-primary" id="badgeTotal">Total: 0</span>
-    </div>
-    <div class="card-body p-0">
-        <div id="resultadosContainer" class="p-3 text-muted small">
-            Selecciona una persona y un rango de fechas para ver el resumen diario.
+        <div class="page-actions-slot">
+            <button type="button" class="btn btn-rippling-secondary btn-sm" id="btnRecargarVista" onclick="if(currentPersonaId){ consultar(currentPage); } else { showToast('Selecciona una persona para consultar', 'info'); }">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">refresh</span>
+                <span>Refrescar</span>
+            </button>
         </div>
     </div>
-    <div class="card-footer d-flex justify-content-between align-items-center" id="paginationFooter" style="display:none !important;">
-        <small class="text-muted" id="paginationInfo"></small>
-        <div>
-            <button class="btn btn-sm btn-outline-secondary" id="btnPrev">Anterior</button>
-            <button class="btn btn-sm btn-outline-secondary ms-1" id="btnNext">Siguiente</button>
+
+    <!-- ── 2. KPIs Dinámicos de la Consulta ──────────────────────────────── -->
+    <div class="kpi-grid-entradas" id="kpiCardsRow">
+        <!-- KPI 1: Días Consultados -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">calendar_month</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Días en Rango</div>
+                <div class="dashboard-kpi-value" id="kpi-total-dias">—</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Días con Asistencia OK -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">check_circle</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Jornadas Completas</div>
+                <div class="dashboard-kpi-value text-success" id="kpi-dias-ok">—</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inconsistencias / Alertas -->
+        <div class="dashboard-kpi-card" style="border-left: 3px solid #ef4444;">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-red">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">error</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-danger">Con Anomalía / Impar</div>
+                <div class="dashboard-kpi-value text-danger" id="kpi-dias-alerta">—</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Total de Registros -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-gold">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">fingerprint</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Marcaciones Totales</div>
+                <div class="dashboard-kpi-value" id="kpi-total-marcaciones">—</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. Component Card: Filtros de Búsqueda ───────────────────────── -->
+    <div class="component-card-shell filter-card-container">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">filter_alt</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Filtros de Consulta</span>
+            </div>
+            <div class="component-tools-slot">
+                <span class="rippling-pill rippling-pill-slate">Búsqueda Rápida</span>
+            </div>
+        </div>
+
+        <div class="component-body-shell filter-card-body p-3 p-md-4">
+            <form class="row g-3 align-items-end" method="GET" id="formEntradasSalidas">
+                <div class="col-lg-5 col-md-12" style="position: relative; z-index: 40;">
+                    <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">person</span>
+                        <span>Persona</span>
+                    </label>
+                    <select name="persona_id" id="inputPersonaId" placeholder="Buscar por nombre, cédula o ID biométrico...">
+                        <option value="">Selecciona una persona...</option>
+                    </select>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">event</span>
+                        <span>Fecha Desde</span>
+                    </label>
+                    <input type="date" class="form-control" name="fecha_inicio" id="inputFechaInicio" value="{{ fecha_inicio }}" style="height: 42px;">
+                </div>
+                <div class="col-lg-2 col-md-6">
+                    <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">event_available</span>
+                        <span>Fecha Hasta</span>
+                    </label>
+                    <input type="date" class="form-control" name="fecha_fin" id="inputFechaFin" value="{{ fecha_fin }}" style="height: 42px;">
+                </div>
+                <div class="col-lg-2 col-md-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-rippling-primary flex-fill" style="height: 42px; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 1.15rem;">search</span>
+                        <span>Consultar</span>
+                    </button>
+                    <button type="button" class="btn btn-rippling-secondary" id="btnLimpiar" title="Limpiar filtros" style="height: 42px; width: 44px; justify-content: center; padding: 0;">
+                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">backspace</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 4. Component Card: Grid de Resultados Diarios ────────────────── -->
+    <div class="component-card-shell" style="position: relative; z-index: 10;">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">calendar_view_day</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Resumen Diario de Asistencia</span>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <span class="rippling-pill rippling-pill-navy" id="badgeTotal">0 días</span>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div id="resultadosContainer" class="p-0">
+                <!-- Estado Inicial Vacío -->
+                <div class="text-center py-5 px-3">
+                    <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 64px; height: 64px;">
+                        <span class="material-symbols-outlined text-muted" style="font-size: 2rem;">person_search</span>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-1">Sin consulta activa</h5>
+                    <p class="text-muted small mb-0" style="max-width: 420px; margin: 0 auto;">
+                        Selecciona un colaborador y define el rango de fechas para desglosar sus entradas, salidas, tiempos de permanencia y validación de anomalías.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Paginación Shell Footer -->
+        <div class="p-3 border-top d-flex justify-content-between align-items-center bg-white" id="paginationFooter" style="display:none !important; border-bottom-left-radius: var(--radius-lg); border-bottom-right-radius: var(--radius-lg);">
+            <div class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-muted" style="font-size: 1.1rem;">info</span>
+                <small class="text-muted fw-semibold" id="paginationInfo">—</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-rippling-secondary btn-sm" id="btnPrev">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">chevron_left</span>
+                    <span>Anterior</span>
+                </button>
+                <button class="btn btn-rippling-secondary btn-sm" id="btnNext">
+                    <span>Siguiente</span>
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">chevron_right</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block modals %}
+<!-- Modal Enterprise de Detalle del Día -->
 <div class="modal fade" id="modalDetalleDia" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <div>
-                    <h5 class="modal-title mb-0" id="modalDetalleTitulo">Detalle del dia</h5>
-                    <small class="text-muted" id="modalDetalleEstado"></small>
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">event_note</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="modalDetalleTitulo" style="font-size: 1.1rem;">Detalle del Día</h5>
+                        <div id="modalDetalleSubtitulo" class="small text-muted mt-1 d-flex align-items-center gap-2"></div>
+                    </div>
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
-            <div class="modal-body" id="modalDetalleBody"></div>
+
+            <div class="modal-body p-4" id="modalDetalleBody"></div>
+
+            <div class="modal-footer bg-light border-top px-4 py-2 d-flex justify-content-between">
+                <small class="text-muted d-flex align-items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">fingerprint</span>
+                    <span>Marcajes registrados directamente en los terminales biométricos</span>
+                </small>
+                <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">
+                    <span>Cerrar</span>
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -81,14 +344,35 @@
     const btnPrev = document.getElementById('btnPrev');
     const btnNext = document.getElementById('btnNext');
     const btnLimpiar = document.getElementById('btnLimpiar');
-    let currentPage = 1;
-    let currentPersonaId = '';
-    let currentFechaInicio = '';
-    let currentFechaFin = '';
 
-    // ── Selector de persona ────────────────────────────────────────────
-    // El endpoint expone el UUID; el operador busca por nombre, cedula o
-    // ID del biometrico, que son los datos que si conoce.
+    const kpiTotalDias = document.getElementById('kpi-total-dias');
+    const kpiDiasOk = document.getElementById('kpi-dias-ok');
+    const kpiDiasAlerta = document.getElementById('kpi-dias-alerta');
+    const kpiTotalMarcaciones = document.getElementById('kpi-total-marcaciones');
+
+    let currentPage = 1;
+
+    function formatearApellidoNombre(nombre) {
+        if (!nombre || typeof nombre !== 'string') return '';
+        const trimmed = nombre.trim();
+        if (trimmed.includes(',')) return trimmed;
+        const partes = trimmed.split(/\s+/);
+        if (partes.length <= 1) return trimmed;
+        if (partes.length === 2) return `${partes[1]} ${partes[0]}`;
+        if (partes.length === 3) return `${partes[1]} ${partes[2]} ${partes[0]}`;
+        if (partes.length >= 4) {
+            const nombres = partes.slice(0, -2).join(' ');
+            const apellidos = partes.slice(-2).join(' ');
+            return `${apellidos} ${nombres}`;
+        }
+        return trimmed;
+    }
+
+    window.currentPersonaId = '';
+    window.currentPage = 1;
+    window.consultar = consultar;
+
+    // ── Selector de persona con TomSelect ───────────────────────────────
     const PERSONA_PRESELECCIONADA = {{ persona_id | tojson }};
 
     const tsPersona = new TomSelect('#inputPersonaId', {
@@ -97,121 +381,197 @@
         searchField: ['nombre', 'identificacion', 'id_usuario_zk'],
         maxOptions: 1000,
         create: false,
-        placeholder: 'Nombre, cedula o ID biometrico...',
+        placeholder: 'Buscar por nombre, cédula o ID biométrico...',
         render: {
             option: function(d, escape) {
+                const nombreMostrar = formatearApellidoNombre(d.nombre);
                 const meta = [
-                    d.identificacion ? 'CI ' + escape(d.identificacion) : '',
-                    d.id_usuario_zk ? 'ZK ' + escape(d.id_usuario_zk) : '',
-                    d.activo ? '' : 'inactivo',
+                    d.identificacion ? 'CI: ' + escape(d.identificacion) : '',
+                    d.id_usuario_zk ? 'ZK ID: ' + escape(d.id_usuario_zk) : '',
                 ].filter(Boolean).join(' &middot; ');
                 return '<div class="py-1">'
-                    + '<div class="fw-bold">' + escape(d.nombre) + '</div>'
-                    + (meta ? '<div class="text-muted small">' + meta + '</div>' : '')
+                    + '<div class="fw-bold text-dark">' + escape(nombreMostrar) + '</div>'
+                    + (meta ? '<div class="text-muted small mt-1">' + meta + '</div>' : '')
                     + '</div>';
             },
             item: function(d, escape) {
-                const zk = d.id_usuario_zk ? ' (ZK ' + escape(d.id_usuario_zk) + ')' : '';
-                return '<div>' + escape(d.nombre) + zk + '</div>';
+                const nombreMostrar = formatearApellidoNombre(d.nombre);
+                const zk = d.id_usuario_zk ? ' <span class="text-muted small">(ZK ' + escape(d.id_usuario_zk) + ')</span>' : '';
+                return '<div class="fw-semibold text-dark">' + escape(nombreMostrar) + zk + '</div>';
             },
             no_results: function() {
-                return '<div class="p-2 text-muted small">Sin coincidencias.</div>';
+                return '<div class="p-3 text-muted small text-center">No se encontraron personas activas con ese criterio.</div>';
             },
         },
     });
 
     tsPersona.on('change', function() {
-        // Limpiar el aviso de "selecciona una persona" al elegir.
-        if (tsPersona.getValue() && container.classList.contains('text-warning')) {
-            container.className = 'p-3 text-muted small';
-            container.textContent = 'Pulsa Consultar para ver las marcaciones.';
-        }
+        window.currentPersonaId = tsPersona.getValue();
     });
 
-    fetch(_BASE + '/api/personas/buscar')
+    // Cargar catálogo de personas activas
+    fetch(_BASE + '/api/personas/buscar?activo=true')
         .then(function(r) { return r.ok ? r.json() : { personas: [] }; })
         .then(function(data) {
-            tsPersona.addOptions(data.personas || []);
+            const personas = (data.personas || []).filter(function(p) { return p.activo !== false; });
+            tsPersona.addOptions(personas);
             if (PERSONA_PRESELECCIONADA) {
-                tsPersona.setValue(PERSONA_PRESELECCIONADA, true);
+                let targetId = PERSONA_PRESELECCIONADA;
+                const found = personas.find(function(p) {
+                    if (p.id === PERSONA_PRESELECCIONADA) return true;
+                    const q = String(PERSONA_PRESELECCIONADA).trim().toLowerCase();
+                    return (p.nombre && p.nombre.toLowerCase() === q)
+                        || (p.identificacion && p.identificacion.toLowerCase() === q)
+                        || (p.id_usuario_zk && String(p.id_usuario_zk).toLowerCase() === q)
+                        || (p.nombre && p.nombre.toLowerCase().includes(q));
+                });
+                if (found) {
+                    targetId = found.id;
+                }
+                tsPersona.setValue(targetId, true);
                 consultar(1);
             }
         })
         .catch(function() {
-            container.className = 'p-3 text-danger small';
-            container.textContent = 'No se pudo cargar el listado de personas.';
+            showToast('No se pudo cargar el listado de personas', 'danger');
         });
 
-    // Los datos vienen de la BD (tipo_raw, fuente): escapar siempre.
     function esc(v) {
         return String(v === null || v === undefined ? '' : v)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
 
+    function renderSkeletonLoading() {
+        container.innerHTML =
+            '<div class="p-3">'
+            + '  <div class="skeleton-shimmer mb-3" style="height: 38px; width: 100%; border-radius: var(--radius-md);"></div>'
+            + '  <div class="d-flex flex-column gap-2">'
+            + '    <div class="skeleton-shimmer" style="height: 48px; width: 100%; border-radius: var(--radius-sm);"></div>'
+            + '    <div class="skeleton-shimmer" style="height: 48px; width: 100%; border-radius: var(--radius-sm);"></div>'
+            + '    <div class="skeleton-shimmer" style="height: 48px; width: 100%; border-radius: var(--radius-sm);"></div>'
+            + '    <div class="skeleton-shimmer" style="height: 48px; width: 100%; border-radius: var(--radius-sm);"></div>'
+            + '    <div class="skeleton-shimmer" style="height: 48px; width: 100%; border-radius: var(--radius-sm);"></div>'
+            + '  </div>'
+            + '</div>';
+    }
+
     function tipoBadge(tipo, tipoRaw) {
         if (tipo === 'entrada') {
-            return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">Entrada</span>';
+            return '<span class="rippling-pill pill-status-ok"><span class="material-symbols-outlined" style="font-size:0.9rem;">login</span> Entrada</span>';
         }
         if (tipo === 'salida') {
-            return '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">Salida</span>';
+            return '<span class="rippling-pill rippling-pill-navy"><span class="material-symbols-outlined" style="font-size:0.9rem;">logout</span> Salida</span>';
         }
-        return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">'
-            + esc(tipoRaw || tipo) + '</span>';
+        return '<span class="rippling-pill rippling-pill-slate">' + esc(tipoRaw || tipo) + '</span>';
     }
 
     function estadoBadge(dia) {
         if (dia.estado === 'ok') {
-            return '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">&check; OK</span>';
+            return '<span class="rippling-pill pill-status-ok"><span class="material-symbols-outlined" style="font-size:0.95rem;">check_circle</span> Correcto</span>';
         }
         if (dia.estado === 'sin_marcaciones') {
-            return '<span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25">Sin marcaciones</span>';
+            return '<span class="rippling-pill pill-status-empty"><span class="material-symbols-outlined" style="font-size:0.95rem;">block</span> Sin registros</span>';
         }
-        return '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25">&#9888; '
-            + esc(dia.mensaje) + '</span>';
+        return '<span class="rippling-pill pill-status-alert"><span class="material-symbols-outlined" style="font-size:0.95rem;">warning</span> '
+            + esc(dia.mensaje || 'Anomalía') + '</span>';
     }
 
-    // Los dias de la pagina actual, indexados por fecha, para el popup:
-    // vienen embebidos en la respuesta, asi que el modal no pide nada al server.
     let diasPorFecha = {};
 
     function renderResumen(data) {
         diasPorFecha = {};
-        badgeTotal.textContent = 'Dias: ' + (data.total_dias || 0);
+        const totalDias = data.total_dias || 0;
+        badgeTotal.textContent = totalDias + (totalDias === 1 ? ' día' : ' días');
+
+        // Actualizar KPIs superiores
+        kpiTotalDias.textContent = totalDias;
+        let conteoOk = 0;
+        let conteoAlertas = 0;
+        let sumaMarcaciones = 0;
+
+        if (data.dias && data.dias.length > 0) {
+            data.dias.forEach(function(d) {
+                if (d.estado === 'ok') conteoOk++;
+                if (d.con_alerta || d.estado === 'impar') conteoAlertas++;
+                sumaMarcaciones += (d.total_marcaciones || 0);
+            });
+            kpiDiasOk.textContent = conteoOk;
+            kpiDiasAlerta.textContent = conteoAlertas;
+            kpiTotalMarcaciones.textContent = sumaMarcaciones;
+        } else {
+            kpiDiasOk.textContent = '0';
+            kpiDiasAlerta.textContent = '0';
+            kpiTotalMarcaciones.textContent = '0';
+        }
+
         if (!data.dias || data.dias.length === 0) {
-            container.className = 'p-3 text-muted small';
-            container.innerHTML = 'No hay dias en el rango indicado.';
+            container.innerHTML =
+                '<div class="text-center py-5 px-3">'
+                + '<div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 56px; height: 56px;">'
+                + '  <span class="material-symbols-outlined text-muted" style="font-size: 1.75rem;">search_off</span>'
+                + '</div>'
+                + '<h6 class="fw-bold text-dark mb-1">Sin registros en el rango</h6>'
+                + '<p class="text-muted small mb-0">No se encontraron marcaciones para el período seleccionado.</p>'
+                + '</div>';
             paginationFooter.style.display = 'none';
             return;
         }
+
         paginationFooter.style.display = 'flex';
-        paginationInfo.textContent = 'Pagina ' + data.page + ' de ' + data.total_pages
-            + ' (' + data.total_dias + ' dias en el rango)';
+        paginationInfo.textContent = 'Página ' + data.page + ' de ' + data.total_pages
+            + ' (' + totalDias + ' días en el rango)';
         btnPrev.disabled = data.page <= 1;
         btnNext.disabled = data.page >= data.total_pages;
 
         const rows = data.dias.map(function(d) {
             diasPorFecha[d.fecha] = d;
             const vacio = d.total_marcaciones === 0;
-            return '<tr role="button" data-fecha="' + esc(d.fecha) + '"'
-                + (vacio ? ' class="text-muted"' : '') + '>'
-                + '<td class="text-nowrap">' + esc(d.fecha) + '</td>'
-                + '<td class="text-nowrap fw-bold">' + esc(d.primer_marcaje || '—') + '</td>'
-                + '<td class="text-nowrap fw-bold">' + esc(d.ultimo_marcaje || '—') + '</td>'
-                + '<td class="text-nowrap">' + esc(d.permanencia || '—') + '</td>'
-                + '<td class="text-nowrap">' + esc(d.efectivo || '—') + '</td>'
-                + '<td class="text-center">' + d.total_marcaciones + '</td>'
+
+            const entradaHtml = d.primer_marcaje
+                ? '<span class="time-badge time-badge-in"><span class="material-symbols-outlined" style="font-size:0.9rem;">login</span>' + esc(d.primer_marcaje) + '</span>'
+                : '<span class="time-badge-empty">—</span>';
+
+            const salidaHtml = d.ultimo_marcaje
+                ? '<span class="time-badge time-badge-out"><span class="material-symbols-outlined" style="font-size:0.9rem;">logout</span>' + esc(d.ultimo_marcaje) + '</span>'
+                : '<span class="time-badge-empty">—</span>';
+
+            return '<tr class="tr-clickable ' + (vacio ? 'opacity-50' : '') + '" data-fecha="' + esc(d.fecha) + '">'
+                + '<td class="text-nowrap fw-bold text-dark" style="font-size: 0.875rem;">'
+                + '  <div class="d-flex align-items-center gap-2">'
+                + '    <span class="material-symbols-outlined text-muted" style="font-size:1.1rem;">calendar_today</span>'
+                + '    <span>' + esc(d.fecha) + '</span>'
+                + '  </div>'
+                + '</td>'
+                + '<td class="text-nowrap">' + entradaHtml + '</td>'
+                + '<td class="text-nowrap">' + salidaHtml + '</td>'
+                + '<td class="text-nowrap fw-semibold text-dark">' + esc(d.permanencia || '—') + '</td>'
+                + '<td class="text-nowrap fw-semibold text-primary">' + esc(d.efectivo || '—') + '</td>'
+                + '<td class="text-center">'
+                + '  <span class="rippling-pill ' + (d.total_marcaciones > 0 ? 'rippling-pill-navy' : 'rippling-pill-slate') + '" style="font-size: 0.75rem;">'
+                +      d.total_marcaciones
+                + '  </span>'
+                + '</td>'
                 + '<td>' + estadoBadge(d) + '</td>'
+                + '<td class="text-end">'
+                + '  <button type="button" class="btn btn-sm btn-outline-secondary py-1 px-2" title="Ver detalle del día" onclick="event.stopPropagation(); abrirDetalle(\'' + esc(d.fecha) + '\');">'
+                + '    <span class="material-symbols-outlined" style="font-size: 1.05rem;">visibility</span>'
+                + '  </button>'
+                + '</td>'
                 + '</tr>';
         }).join('');
 
-        container.className = '';
         container.innerHTML =
             '<div class="table-responsive"><table class="table table-hover align-middle mb-0">'
-            + '<thead class="bg-light"><tr>'
-            + '<th>Fecha</th><th>1&ordf; entrada</th><th>Ultima salida</th>'
-            + '<th>Permanencia</th><th>Efectivo</th>'
-            + '<th class="text-center">Marc.</th><th>Estado</th>'
+            + '<thead class="rippling-table-header"><tr>'
+            + '<th>Fecha</th>'
+            + '<th>1ª Entrada</th>'
+            + '<th>Última Salida</th>'
+            + '<th>Permanencia</th>'
+            + '<th>T. Efectivo</th>'
+            + '<th class="text-center">Marcaciones</th>'
+            + '<th>Estado / Diagnóstico</th>'
+            + '<th class="text-end">Acción</th>'
             + '</tr></thead>'
             + '<tbody>' + rows + '</tbody>'
             + '</table></div>';
@@ -221,74 +581,104 @@
         });
     }
 
-    // ── Popup de detalle del dia ───────────────────────────────────────
+    // ── Popup de Detalle del Día ───────────────────────────────────────
     const modalEl = document.getElementById('modalDetalleDia');
     const modalDetalle = new bootstrap.Modal(modalEl);
 
-    function abrirDetalle(fecha) {
+    window.abrirDetalle = function(fecha) {
         const dia = diasPorFecha[fecha];
         if (!dia) return;
-        document.getElementById('modalDetalleTitulo').textContent = 'Marcajes del ' + fecha;
-        const estadoEl = document.getElementById('modalDetalleEstado');
-        estadoEl.textContent = dia.mensaje || '';
-        estadoEl.className = dia.con_alerta ? 'text-danger' : 'text-muted';
+
+        document.getElementById('modalDetalleTitulo').textContent = 'Marcaciones del ' + fecha;
+        const subEl = document.getElementById('modalDetalleSubtitulo');
+
+        const badgeHtml = dia.con_alerta
+            ? '<span class="rippling-pill pill-status-alert"><span class="material-symbols-outlined" style="font-size:0.9rem;">warning</span> ' + esc(dia.mensaje || 'Anomalía') + '</span>'
+            : '<span class="rippling-pill pill-status-ok"><span class="material-symbols-outlined" style="font-size:0.9rem;">check_circle</span> Jornada regular</span>';
+
+        subEl.innerHTML = badgeHtml + '<span class="text-muted">&middot; ' + dia.total_marcaciones + ' marcaciones registradas</span>';
 
         const body = document.getElementById('modalDetalleBody');
         if (!dia.marcaciones || dia.marcaciones.length === 0) {
-            body.innerHTML = '<p class="text-muted small mb-0">Este dia no tiene marcajes registrados.</p>';
+            body.innerHTML =
+                '<div class="text-center py-4 text-muted small">'
+                + '<span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; color: var(--token-color-slate-400);">event_busy</span>'
+                + 'Este día no cuenta con registros de marcación en los biométricos.'
+                + '</div>';
         } else {
-            // Se resalta el marcaje que rompe la alternancia: es el que hay
-            // que ir a corregir al biometrico.
             const filas = dia.marcaciones.map(function(m, i) {
                 const previo = i > 0 ? dia.marcaciones[i - 1] : null;
                 const conflicto = previo && previo.tipo === m.tipo;
                 return '<tr' + (conflicto ? ' class="table-danger"' : '') + '>'
-                    + '<td class="fw-bold text-nowrap">' + esc(m.hora) + '</td>'
+                    + '<td class="fw-bold text-dark text-nowrap">'
+                    + '  <div class="d-flex align-items-center gap-1">'
+                    + '    <span class="material-symbols-outlined text-muted" style="font-size: 1rem;">schedule</span>'
+                    + '    <span>' + esc(m.hora) + '</span>'
+                    + '  </div>'
+                    + '</td>'
                     + '<td>' + tipoBadge(m.tipo, m.tipo_raw) + '</td>'
-                    + '<td class="text-muted small">' + esc(m.tipo_raw) + '</td>'
-                    + '<td class="text-muted small">' + esc(m.fuente) + '</td>'
+                    + '<td class="text-muted small">' + esc(m.tipo_raw || '—') + '</td>'
+                    + '<td class="text-muted small"><span class="rippling-pill rippling-pill-slate" style="font-size:0.7rem;">' + esc(m.fuente || 'Biométrico') + '</span></td>'
                     + '</tr>';
             }).join('');
+
             body.innerHTML =
-                '<table class="table table-sm align-middle mb-3">'
-                + '<thead><tr><th>Hora</th><th>Tipo</th><th>Dato crudo</th><th>Fuente</th></tr></thead>'
-                + '<tbody>' + filas + '</tbody></table>'
-                + '<div class="d-flex gap-4 small text-muted">'
-                + '<span>Permanencia: <strong>' + esc(dia.permanencia || '—') + '</strong></span>'
-                + '<span>Efectivo: <strong>' + esc(dia.efectivo || '—') + '</strong></span>'
+                '<div class="row g-3 mb-4">'
+                + '  <div class="col-6">'
+                + '    <div class="p-3 bg-light rounded-3 border">'
+                + '      <div class="text-muted small fw-semibold mb-1">Tiempo de Permanencia</div>'
+                + '      <div class="fw-bold text-dark" style="font-size: 1.15rem;">' + esc(dia.permanencia || '—') + '</div>'
+                + '    </div>'
+                + '  </div>'
+                + '  <div class="col-6">'
+                + '    <div class="p-3 bg-light rounded-3 border">'
+                + '      <div class="text-muted small fw-semibold mb-1">Tiempo Efectivo Calculado</div>'
+                + '      <div class="fw-bold text-primary" style="font-size: 1.15rem;">' + esc(dia.efectivo || '—') + '</div>'
+                + '    </div>'
+                + '  </div>'
+                + '</div>'
+                + '<h6 class="fw-bold text-dark mb-2" style="font-size: 0.875rem;">Secuencia Cronológica de Marcaciones</h6>'
+                + '<div class="table-responsive border rounded-3 overflow-hidden">'
+                + '  <table class="table table-sm table-hover align-middle mb-0">'
+                + '    <thead class="rippling-table-header"><tr><th>Hora</th><th>Tipo</th><th>Dato Original</th><th>Dispositivo</th></tr></thead>'
+                + '    <tbody>' + filas + '</tbody>'
+                + '  </table>'
                 + '</div>';
         }
         modalDetalle.show();
-    }
+    };
 
     function consultar(pagina) {
         const personaId = tsPersona.getValue();
         const fechaInicio = document.getElementById('inputFechaInicio').value;
         const fechaFin = document.getElementById('inputFechaFin').value;
+
         if (!personaId) {
-            container.className = 'p-3 text-warning small';
-            container.textContent = 'Selecciona una persona.';
-            paginationFooter.style.display = 'none';
+            showToast('Por favor selecciona una persona para consultar', 'warning');
             return;
         }
         if (!fechaInicio || !fechaFin) {
-            container.className = 'p-3 text-warning small';
-            container.textContent = 'Selecciona rango de fechas valido.';
-            paginationFooter.style.display = 'none';
+            showToast('Selecciona un rango de fechas válido', 'warning');
             return;
         }
+
         currentPersonaId = personaId;
+        window.currentPersonaId = personaId;
         currentFechaInicio = fechaInicio;
         currentFechaFin = fechaFin;
         currentPage = pagina || 1;
+        window.currentPage = currentPage;
+
         const params = new URLSearchParams({
             persona_id: personaId,
             fecha_inicio: fechaInicio,
             fecha_fin: fechaFin,
             page: String(currentPage),
         });
-        container.className = 'p-3 text-muted small';
-        container.textContent = 'Cargando...';
+
+        renderSkeletonLoading();
+        paginationFooter.style.display = 'none';
+
         fetch(_BASE + '/api/analytics/entradas-salidas/resumen-diario?' + params.toString())
             .then(function(r) {
                 if (!r.ok) {
@@ -300,9 +690,13 @@
             })
             .then(renderResumen)
             .catch(function(err) {
-                container.className = 'p-3 text-danger small';
-                container.textContent = 'Error: ' + err.message;
+                container.innerHTML =
+                    '<div class="p-4 text-center text-danger small">'
+                    + '<span class="material-symbols-outlined d-block mb-1" style="font-size: 2rem;">error</span>'
+                    + 'Error al cargar los datos: ' + esc(err.message)
+                    + '</div>';
                 paginationFooter.style.display = 'none';
+                showToast('Error al consultar datos: ' + err.message, 'danger');
             });
     }
 
@@ -310,20 +704,36 @@
         e.preventDefault();
         consultar(1);
     });
-    btnPrev.addEventListener('click', function() { if (currentPage > 1) consultar(currentPage - 1); });
-    btnNext.addEventListener('click', function() { if (currentPage < 999) consultar(currentPage + 1); });
+
+    btnPrev.addEventListener('click', function() {
+        if (currentPage > 1) consultar(currentPage - 1);
+    });
+
+    btnNext.addEventListener('click', function() {
+        if (currentPage < 999) consultar(currentPage + 1);
+    });
+
     btnLimpiar.addEventListener('click', function() {
         tsPersona.clear();
         document.getElementById('inputFechaInicio').value = '';
         document.getElementById('inputFechaFin').value = '';
-        container.className = 'p-3 text-muted small';
-        container.innerHTML = 'Selecciona una persona y un rango de fechas para ver el resumen diario.';
+        kpiTotalDias.textContent = '—';
+        kpiDiasOk.textContent = '—';
+        kpiDiasAlerta.textContent = '—';
+        kpiTotalMarcaciones.textContent = '—';
+        badgeTotal.textContent = '0 días';
+        container.innerHTML =
+            '<div class="text-center py-5 px-3">'
+            + '<div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 64px; height: 64px;">'
+            + '  <span class="material-symbols-outlined text-muted" style="font-size: 2rem;">person_search</span>'
+            + '</div>'
+            + '<h5 class="fw-bold text-dark mb-1">Sin consulta activa</h5>'
+            + '<p class="text-muted small mb-0" style="max-width: 420px; margin: 0 auto;">'
+            + '  Selecciona un colaborador y define el rango de fechas para desglosar sus entradas, salidas, tiempos de permanencia y validación de anomalías.'
+            + '</p>'
+            + '</div>';
         paginationFooter.style.display = 'none';
     });
-
-    // La consulta automatica al llegar con ?persona_id=... se dispara al
-    // terminar de cargar el catalogo (ver el fetch de arriba), no aqui:
-    // antes de eso `tsPersona.getValue()` estaria vacio.
 })();
 </script>
 {% endblock %}

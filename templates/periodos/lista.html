@@ -1,207 +1,611 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    /* ── TomSelect / Filter Container ── */
+    .filter-card-container {
+        overflow: visible !important;
+        position: relative;
+        z-index: 30;
+    }
+    .filter-card-body {
+        overflow: visible !important;
+    }
+
+    /* ── KPI Grid (Mismo de Entradas y Salidas) ── */
+    .kpi-grid-entradas {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+    @media (max-width: 992px) {
+        .kpi-grid-entradas {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .kpi-grid-entradas {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Tabla de Períodos Enterprise ── */
+    .tr-clickable {
+        cursor: pointer;
+        transition: background-color var(--transition-fast, 0.15s ease);
+    }
+    .tr-clickable:hover td {
+        background-color: var(--token-color-navy-50) !important;
+    }
+
+    .time-badge {
+        font-family: var(--font-family-primary);
+        font-weight: 700;
+        font-size: 0.8125rem;
+        padding: 0.2rem 0.55rem;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .time-badge-in {
+        background-color: #ecfdf5;
+        color: #059669;
+        border: 1px solid #a7f3d0;
+    }
+    .time-badge-out {
+        background-color: #eff6ff;
+        color: #2563eb;
+        border: 1px solid #bfdbfe;
+    }
+    .time-badge-gold {
+        background-color: var(--token-color-gold-100, #faf7f2);
+        color: var(--token-color-gold-800, #8e6f36);
+        border: 1px solid var(--token-color-gold-400, #BFA473);
+    }
+    .time-badge-empty {
+        color: var(--token-color-slate-400, #94a3b8);
+        font-weight: 500;
+    }
+
+    /* ── Status Pills Semánticos ── */
+    .pill-status-ok {
+        background-color: #ecfdf5;
+        color: #047857;
+        border: 1px solid #a7f3d0;
+    }
+    .pill-status-alert {
+        background-color: #fef2f2;
+        color: #b91c1c;
+        border: 1px solid #fecaca;
+    }
+    .pill-status-warning {
+        background-color: #fffbeb;
+        color: #b45309;
+        border: 1px solid #fde68a;
+    }
+    .pill-status-empty {
+        background-color: var(--token-color-slate-100);
+        color: var(--token-color-slate-500);
+        border: 1px solid var(--token-color-slate-200);
+    }
+
+    /* ── Dropdown de Acciones ── */
+    .custom-periodo-dropdown {
+        min-width: 230px;
+        border-radius: var(--radius-md, 8px);
+        box-shadow: var(--shadow-dropdown, 0 10px 25px rgba(0,0,0,0.12)) !important;
+    }
+    .custom-periodo-dropdown .dropdown-item {
+        font-size: 0.86rem;
+        font-weight: 500;
+        color: var(--token-color-charcoal, #253259);
+        border: none;
+        background: transparent;
+        width: 100%;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .custom-periodo-dropdown .dropdown-item:hover {
+        background-color: var(--token-color-navy-50, #f4f6fa);
+        color: var(--token-color-navy-900, #253259);
+    }
+    .custom-periodo-dropdown .dropdown-item.text-danger:hover {
+        background-color: #fef2f2;
+        color: #dc2626 !important;
+    }
+    .custom-periodo-dropdown .dropdown-item.text-warning-emphasis:hover {
+        background-color: #fffbeb;
+        color: #b45309 !important;
+    }
+
+    /* ── Tabs Estilizadas dentro del Component Tools ── */
+    .nav-tabs-slot .nav-link {
+        border-radius: var(--radius-md) !important;
+        font-weight: 600;
+        font-size: 0.8125rem;
+        padding: 0.35rem 0.75rem;
+        color: var(--token-color-slate-500);
+        border: 1px solid transparent;
+        transition: all 0.15s ease;
+    }
+    .nav-tabs-slot .nav-link:hover {
+        color: var(--token-color-navy-900);
+        background-color: var(--token-color-slate-50);
+    }
+    .nav-tabs-slot .nav-link.active {
+        color: #ffffff !important;
+        background-color: var(--token-color-navy-900) !important;
+        border-color: var(--token-color-navy-900) !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Períodos de Vigencia</h3>
-    <p class="text-muted">Gestión de períodos de prácticas, contratistas y vigencias.</p>
-    <button class="btn btn-primary mt-3 d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#modalCrearPeriodo">
-        <span class="material-symbols-outlined">add</span> Nuevo Período
-    </button>
-</div>
-
-<div class="filter-card mb-4">
-    <form class="row g-3 align-items-end" method="GET">
-        <div class="col-md-4">
-            <label class="form-label small text-muted fw-bold mb-2">Tipo de Persona</label>
-            <select class="form-select" name="tipo_persona_id">
-                <option value="">Todos los tipos</option>
-                {% for t in tenant_tipos %}
-                <option value="{{ t.id }}" {% if request.args.get('tipo_persona_id') == t.id %}selected{% endif %}>{{ t.nombre }}</option>
-                {% endfor %}
-            </select>
+<div class="page-shell" style="gap: 1.25rem;">
+    <!-- ── 1. Page Header Shell (Mismo de Entradas y Salidas) ─────────────── -->
+    <div class="page-header-shell" style="padding-bottom: 0.875rem;">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Gestión Temporal</span>
+                <span class="rippling-pill rippling-pill-gold">Control de Asistencia</span>
+            </div>
+            <h1 class="title-hero" style="font-size: 1.625rem;">Períodos de Seguimiento</h1>
+            <p class="page-header-subtitle">
+                Monitoreo y administración de cohortes temporales (practicantes, contratos, proyectos) con auditoría de asistencia diaria.
+            </p>
         </div>
-        <div class="col-md-2">
-            <button type="submit" class="btn btn-primary w-100 d-flex align-items-center justify-content-center gap-1" style="height: 38px;">
-                <span class="material-symbols-outlined">filter_alt</span> Filtrar
+
+        <div class="page-actions-slot">
+            <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-toggle="collapse" data-bs-target="#guiaRapidaCollapse" aria-expanded="false">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">help_outline</span>
+                <span>¿Cómo funciona?</span>
             </button>
+            {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+            <button type="button" class="btn btn-rippling-primary btn-sm shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCrearPeriodo">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">add_circle</span>
+                <span>Nuevo Período</span>
+            </button>
+            {% endif %}
         </div>
-    </form>
-</div>
+    </div>
 
-<!-- Tabs -->
-<ul class="nav nav-pills mb-4 gap-2" id="periodosTab" role="tablist">
-    <li class="nav-item">
-        <button class="nav-link active fw-bold px-4 py-2 custom-tab shadow-sm" id="activos-tab" data-bs-toggle="tab" data-bs-target="#activos" type="button" role="tab">
-            <span class="d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined fs-5">event_available</span>
-                Activos
-                <span class="badge bg-secondary bg-opacity-50 ms-1 fw-normal text-dark" style="font-size:0.75rem;">{{ periodos_activos|length }}</span>
-            </span>
-        </button>
-    </li>
-    <li class="nav-item">
-        <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="historial-tab" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">
-            <span class="d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined fs-5">history</span>
-                Historial
-                <span class="badge bg-secondary bg-opacity-50 ms-1 fw-normal text-dark" style="font-size:0.75rem;">{{ periodos_historial|length }}</span>
-            </span>
-        </button>
-    </li>
-</ul>
+    <!-- ── 2. KPIs Dinámicos de la Consulta (Rippling Style) ──────────────── -->
+    {% set total_activos = periodos_activos|length %}
+    {% set total_historial = periodos_historial|length %}
+    {% set ns = namespace(personas_activas=0) %}
+    {% for p in periodos_activos %}
+        {% set ns.personas_activas = ns.personas_activas + (p.total_personas or 0) %}
+    {% endfor %}
 
-<div class="tab-content" id="periodosTabContent">
-    <!-- Activos -->
-    <div class="tab-pane fade show active" id="activos" role="tabpanel">
-        <div class="row row-cols-1 row-cols-md-3 g-4">
-            {% for p in periodos_activos %}
-            <div class="col">
-                <div class="card border-0 shadow-sm h-100 card-hover">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-                            <span class="badge bg-success-subtle text-success">Activo</span>
-                            <div class="dropdown">
-                                <button class="btn btn-sm btn-icon" data-bs-toggle="dropdown">
-                                    <span class="material-symbols-outlined">more_vert</span>
-                                </button>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item d-flex align-items-center gap-2" href="{{ url_for('periods.detalle', id=p.id) }}">
-                                        <span class="material-symbols-outlined fs-6">visibility</span> Ver Detalle</a>
-                                    </li>
-                                    <li><hr class="dropdown-menu-divider"></li>
-                                    <li>
-                                        <form method="POST" action="{{ url_for('periods.cerrar', id=p.id) }}">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger">
-                                                <span class="material-symbols-outlined fs-6">lock</span> Cerrar Período
-                                            </button>
-                                        </form>
-                                    </li>
-                                    {% if 'superadmin' in session.get('roles', []) %}
-                                    <li><hr class="dropdown-menu-divider"></li>
-                                    <li>
-                                        <form method="POST" action="{{ url_for('periods.eliminar', id=p.id) }}"
-                                              onsubmit="return confirm('¿Eliminar permanentemente el período «{{ p.nombre }}» y todas sus personas asociadas? Esta acción no se puede deshacer.')">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 text-danger fw-bold">
-                                                <span class="material-symbols-outlined fs-6">delete_forever</span> Eliminar Permanentemente
-                                            </button>
-                                        </form>
-                                    </li>
-                                    {% endif %}
-                                </ul>
+    <div class="kpi-grid-entradas" id="kpiCardsRow">
+        <!-- KPI 1: Períodos Activos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">event_available</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Períodos Activos</div>
+                <div class="dashboard-kpi-value">{{ total_activos }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Personas en Seguimiento -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-gold">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">groups</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Personas Asignadas</div>
+                <div class="dashboard-kpi-value">{{ ns.personas_activas }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Historial / Cerrados -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">history</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Historial / Cerrados</div>
+                <div class="dashboard-kpi-value">{{ total_historial }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Estado Operativo -->
+        <div class="dashboard-kpi-card" style="border-left: 3px solid #10b981;">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">verified</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Estado del Módulo</div>
+                <div class="dashboard-kpi-value text-success" style="font-size: 1.25rem;">Sincronizado</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Guía Rápida Colapsable ────────────────────────────────────────── -->
+    <div class="collapse" id="guiaRapidaCollapse">
+        <div class="component-card-shell" style="background-color: var(--token-color-navy-50); border-color: #dbe2ef;">
+            <div class="component-header-shell bg-transparent">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined text-primary" style="font-size: 1.25rem;">lightbulb</span>
+                    <span style="font-size: 0.95rem;">Flujo de Trabajo para Gestión de Cohortes Temporales</span>
+                </div>
+                <button type="button" class="btn-close btn-sm" data-bs-toggle="collapse" data-bs-target="#guiaRapidaCollapse" aria-label="Cerrar"></button>
+            </div>
+            <div class="component-body-shell p-3 p-md-4 pt-0">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="p-3 bg-white rounded-3 border h-100 shadow-sm d-flex flex-column gap-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary text-white rounded-circle" style="width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem;">1</span>
+                                <strong class="text-dark">Crear el Período</strong>
                             </div>
+                            <p class="text-muted small mb-0">Define el nombre de la cohorte y el rango de vigencia (ej: Practicantes 2026-I).</p>
                         </div>
-                        <h5 class="card-title fw-bold text-truncate">{{ p.nombre }}</h5>
-                        <p class="text-muted small mb-2 d-flex align-items-center gap-1">
-                            <span class="material-symbols-outlined fs-6">calendar_today</span>
-                            {{ p.fecha_inicio.strftime('%d/%m/%Y') }} — {{ p.fecha_fin.strftime('%d/%m/%Y') if p.fecha_fin else 'Indefinido' }}
-                        </p>
-                        <p class="text-muted small mb-3 d-flex align-items-center gap-1">
-                            <span class="material-symbols-outlined fs-6">group</span>
-                            {{ p.total_personas }} personas
-                        </p>
                     </div>
-                    <div class="card-footer bg-transparent border-top-0 d-flex justify-content-between">
-                        <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-outline-primary w-100">Administrar</a>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-white rounded-3 border h-100 shadow-sm d-flex flex-column gap-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge bg-primary text-white rounded-circle" style="width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem;">2</span>
+                                <strong class="text-dark">Asignar Personal</strong>
+                            </div>
+                            <p class="text-muted small mb-0">Vincula personas desde el directorio existente, crea nuevas fichas o importa por CSV.</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="p-3 bg-white rounded-3 border h-100 shadow-sm d-flex flex-column gap-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="badge text-white rounded-circle" style="background-color: var(--token-color-gold-700); width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; font-size:0.75rem;">3</span>
+                                <strong class="text-dark">Auditar Asistencia</strong>
+                            </div>
+                            <p class="text-muted small mb-0">Monitorea el cumplimiento de horarios, ausencias, tardanzas y consolida reportes.</p>
+                        </div>
                     </div>
                 </div>
             </div>
-            {% else %}
-            <p class="text-muted text-center py-4">No hay períodos activos.</p>
-            {% endfor %}
         </div>
     </div>
 
-    <!-- Historial -->
-    <div class="tab-pane fade" id="historial" role="tabpanel">
-        <div class="row row-cols-1 row-cols-md-3 g-4">
-            {% for p in periodos_historial %}
-            <div class="col">
-                <div class="card border-0 shadow-sm h-100 opacity-75">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between mb-3">
-                            <span class="badge bg-secondary-subtle text-secondary">{{ p.estado | capitalize }}</span>
-                            <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-icon"><span class="material-symbols-outlined">visibility</span></a>
+    <!-- ── 3. Component Card: Filtros de Búsqueda ───────────────────────── -->
+    <div class="component-card-shell filter-card-container">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">filter_alt</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Filtros de Búsqueda</span>
+            </div>
+            <div class="component-tools-slot">
+                <span class="rippling-pill rippling-pill-slate">Búsqueda Rápida</span>
+            </div>
+        </div>
+
+        <div class="component-body-shell filter-card-body p-3 p-md-4">
+            <form class="row g-3 align-items-end" method="GET">
+                <div class="col-lg-6 col-md-5">
+                    <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">search</span>
+                        <span>Buscar Período</span>
+                    </label>
+                    <input type="text" class="form-control" name="q" placeholder="Nombre o descripción del período..." value="{{ busqueda }}" style="height: 42px;">
+                </div>
+                <div class="col-lg-4 col-md-4">
+                    <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">badge</span>
+                        <span>Tipo de Persona</span>
+                    </label>
+                    <select class="form-select" name="tipo_persona_id" style="height: 42px;">
+                        <option value="">Todos los tipos de persona</option>
+                        {% for t in tenant_tipos %}
+                        <option value="{{ t.id }}" {% if tipo_persona_id==t.id %}selected{% endif %}>{{ t.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-lg-2 col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-rippling-primary flex-fill" style="height: 42px; justify-content: center;">
+                        <span class="material-symbols-outlined" style="font-size: 1.15rem;">filter_alt</span>
+                        <span>Filtrar</span>
+                    </button>
+                    {% if busqueda or tipo_persona_id %}
+                    <a href="{{ url_for('periods.lista') }}" class="btn btn-rippling-secondary" title="Limpiar filtros" style="height: 42px; width: 44px; justify-content: center; padding: 0;">
+                        <span class="material-symbols-outlined" style="font-size: 1.2rem;">backspace</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ── 4. Component Card: Grid de Resultados de Períodos ────────────── -->
+    <div class="component-card-shell" style="position: relative; z-index: 10;">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">calendar_view_day</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Registro de Períodos de Seguimiento</span>
+            </div>
+            <div class="component-tools-slot d-flex align-items-center gap-2">
+                <ul class="nav nav-pills nav-tabs-slot gap-1" id="periodosTab" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active d-flex align-items-center gap-1" id="activos-tab" data-bs-toggle="tab" data-bs-target="#activos" type="button" role="tab">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">event_available</span>
+                            <span>Activos ({{ total_activos }})</span>
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link d-flex align-items-center gap-1" id="historial-tab" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">history</span>
+                            <span>Historial ({{ total_historial }})</span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="tab-content" id="periodosTabContent">
+                <!-- ── TAB: Períodos Activos ── -->
+                <div class="tab-pane fade show active" id="activos" role="tabpanel">
+                    {% if not periodos_activos %}
+                    <div class="text-center py-5 px-3">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 64px; height: 64px;">
+                            <span class="material-symbols-outlined text-muted" style="font-size: 2rem;">event_note</span>
                         </div>
-                        <h5 class="card-title fw-bold text-truncate">{{ p.nombre }}</h5>
-                        <p class="text-muted small mb-2">
-                             {{ p.fecha_inicio.strftime('%d/%m/%Y') }} — {{ p.fecha_fin.strftime('%d/%m/%Y') if p.fecha_fin else 'Indefinido' }}
+                        <h5 class="fw-bold text-dark mb-1">Aún no tienes períodos activos</h5>
+                        <p class="text-muted small mb-3" style="max-width: 440px; margin: 0 auto;">
+                            Crea períodos para hacer seguimiento ordenado de pasantes, contratistas o proyectos temporales con fechas definidas.
                         </p>
-                        <p class="text-muted small mb-0">{{ p.total_personas }} personas</p>
+                        {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                        <button class="btn btn-rippling-primary btn-sm d-inline-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCrearPeriodo">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">add_circle</span>
+                            <span>Crear mi primer período</span>
+                        </button>
+                        {% endif %}
                     </div>
+                    {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="rippling-table-header">
+                                <tr>
+                                    <th style="min-width: 240px;">Período / Cohorte</th>
+                                    <th style="min-width: 210px;">Vigencia</th>
+                                    <th>Personal</th>
+                                    <th>Estado</th>
+                                    <th class="text-end" style="min-width: 170px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in periodos_activos %}
+                                <tr class="tr-clickable" onclick="window.location.href='{{ url_for('periods.detalle', id=p.id) }}'">
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 36px; height: 36px;">
+                                                <span class="material-symbols-outlined" style="font-size: 1.15rem;">calendar_month</span>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.9rem;">{{ p.nombre }}</div>
+                                                <div class="text-muted small" style="font-size: 0.75rem;">
+                                                    {{ p.descripcion or 'Sin descripción adicional' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-nowrap">
+                                        <span class="time-badge time-badge-out">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">date_range</span>
+                                            {{ p.fecha_inicio.strftime('%d/%m/%Y') }} 
+                                            {% if p.fecha_fin %}
+                                            → {{ p.fecha_fin.strftime('%d/%m/%Y') }}
+                                            {% else %}
+                                            → (Indefinido)
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="rippling-pill {% if p.total_personas > 0 %}rippling-pill-navy{% else %}rippling-pill-slate{% endif %}" style="font-size: 0.78rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">group</span>
+                                            {{ p.total_personas }} persona(s)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="rippling-pill pill-status-ok" style="font-size: 0.78rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">check_circle</span>
+                                            En curso
+                                        </span>
+                                    </td>
+                                    <td class="text-end" onclick="event.stopPropagation();">
+                                        <div class="d-flex align-items-center justify-content-end gap-1">
+                                            <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-rippling-primary py-1 px-2 d-inline-flex align-items-center gap-1 shadow-sm">
+                                                <span class="material-symbols-outlined" style="font-size: 1rem;">bar_chart</span>
+                                                <span>Ver Asistencia</span>
+                                            </a>
+                                            <div class="dropdown d-inline-block">
+                                                <button class="btn btn-sm btn-rippling-secondary py-1 px-2" data-bs-toggle="dropdown" aria-expanded="false" title="Más opciones">
+                                                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">more_vert</span>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end shadow border-0 p-1 custom-periodo-dropdown">
+                                                    <li>
+                                                        <a class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 rounded" href="{{ url_for('periods.detalle', id=p.id) }}">
+                                                            <span class="material-symbols-outlined fs-6 text-primary">visibility</span>
+                                                            <span>Ver detalle completo</span>
+                                                        </a>
+                                                    </li>
+                                                    {% if current_user_roles and ('admin' in current_user_roles or 'superadmin' in current_user_roles) %}
+                                                    <li><hr class="dropdown-divider my-1"></li>
+                                                    <li>
+                                                        <form method="POST" action="{{ url_for('periods.cerrar', id=p.id) }}" class="m-0 p-0">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 rounded text-warning-emphasis" onclick="return confirm('¿Cerrar el período «{{ p.nombre }}»? Pasará al historial.')">
+                                                                <span class="material-symbols-outlined fs-6 text-warning">lock</span>
+                                                                <span>Cerrar período</span>
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    {% endif %}
+                                                    {% if current_user_roles and 'superadmin' in current_user_roles %}
+                                                    <li><hr class="dropdown-divider my-1"></li>
+                                                    <li>
+                                                        <form method="POST" action="{{ url_for('periods.eliminar', id=p.id) }}" class="m-0 p-0" onsubmit="return confirm('¿Eliminar permanentemente «{{ p.nombre }}»? Esta acción desvinculará sus registros y no se puede deshacer.')">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                            <button type="submit" class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 rounded text-danger">
+                                                                <span class="material-symbols-outlined fs-6">delete_forever</span>
+                                                                <span>Eliminar</span>
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    {% endif %}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- ── TAB: Historial / Períodos Cerrados ── -->
+                <div class="tab-pane fade" id="historial" role="tabpanel">
+                    {% if not periodos_historial %}
+                    <div class="text-center py-5 px-3">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 64px; height: 64px;">
+                            <span class="material-symbols-outlined text-muted" style="font-size: 2rem;">history_toggle_off</span>
+                        </div>
+                        <h6 class="fw-bold text-dark mb-1">Sin períodos archivados</h6>
+                        <p class="text-muted small mb-0">Aún no hay períodos cerrados ni archivados en el historial.</p>
+                    </div>
+                    {% else %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="rippling-table-header">
+                                <tr>
+                                    <th style="min-width: 240px;">Período / Cohorte</th>
+                                    <th style="min-width: 210px;">Vigencia</th>
+                                    <th>Personal Registrado</th>
+                                    <th>Estado</th>
+                                    <th class="text-end" style="min-width: 170px;">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in periodos_historial %}
+                                <tr class="tr-clickable opacity-90" onclick="window.location.href='{{ url_for('periods.detalle', id=p.id) }}'">
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate" style="width: 36px; height: 36px;">
+                                                <span class="material-symbols-outlined" style="font-size: 1.15rem;">inventory_2</span>
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.9rem;">{{ p.nombre }}</div>
+                                                <div class="text-muted small" style="font-size: 0.75rem;">
+                                                    {{ p.descripcion or 'Sin descripción adicional' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-nowrap">
+                                        <span class="time-badge time-badge-gold">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">calendar_today</span>
+                                            {{ p.fecha_inicio.strftime('%d/%m/%Y') }} — {{ p.fecha_fin.strftime('%d/%m/%Y') if p.fecha_fin else 'Sin fin' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="rippling-pill rippling-pill-slate" style="font-size: 0.78rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">group</span>
+                                            {{ p.total_personas }} persona(s)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="rippling-pill pill-status-empty" style="font-size: 0.78rem;">
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">lock</span>
+                                            {{ p.estado | capitalize }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end" onclick="event.stopPropagation();">
+                                        <a href="{{ url_for('periods.detalle', id=p.id) }}" class="btn btn-sm btn-rippling-secondary py-1 px-3 d-inline-flex align-items-center gap-1">
+                                            <span class="material-symbols-outlined" style="font-size: 1rem;">visibility</span>
+                                            <span>Ver Reporte</span>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            {% else %}
-            <p class="text-muted text-center py-4">No hay registros en el historial.</p>
-            {% endfor %}
         </div>
     </div>
 </div>
+{% endblock %}
 
-<!-- Modal Crear Periodo -->
-<div class="modal fade" id="modalCrearPeriodo" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
+{% block modals %}
+<!-- Modal Enterprise de Nuevo Período (Mismo estilo de Entradas y Salidas) -->
+<div class="modal fade" id="modalCrearPeriodo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
             <form method="POST" action="{{ url_for('periods.crear') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Nuevo Período</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">Nombre del Período</label>
-                        <input type="text" class="form-control" name="nombre" placeholder="Ej: Prácticas Abril 2026" required>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col">
-                            <label class="form-label">Fecha Inicio</label>
-                            <input type="date" class="form-control" name="fecha_inicio" required>
+                <div class="modal-header bg-light border-bottom px-4 py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                            <span class="material-symbols-outlined" style="font-size: 1.25rem;">calendar_add_on</span>
                         </div>
-                        <div class="col">
-                            <label class="form-label">Fecha Fin</label>
-                            <input type="date" class="form-control" name="fecha_fin">
-                            <small class="text-muted">Vacío para indefinido</small>
+                        <div>
+                            <h5 class="modal-title fw-bold text-dark mb-0" style="font-size: 1.1rem;">Nuevo Período de Seguimiento</h5>
+                            <div class="small text-muted mt-1 d-flex align-items-center gap-2">
+                                <span>Define el intervalo de fechas para la nueva cohorte de control</span>
+                            </div>
                         </div>
                     </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+
+                <div class="modal-body p-4">
                     <div class="mb-3">
-                        <label class="form-label">Descripción</label>
-                        <textarea class="form-control" name="descripcion" rows="2"></textarea>
+                        <label class="form-label small fw-bold text-muted mb-1">Nombre del Período <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" placeholder="Ej: Practicantes II Semestre 2026" required style="height: 42px;">
+                        <div class="form-text">Asigna un nombre institucional claro y representativo.</div>
                     </div>
-                    <hr>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Fecha de Inicio <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" name="fecha_inicio" required style="height: 42px;">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Fecha de Fin</label>
+                            <input type="date" class="form-control" name="fecha_fin" style="height: 42px;">
+                            <div class="form-text">Opcional si no tiene fecha límite programada.</div>
+                        </div>
+                    </div>
                     <div class="mb-3">
-                        <label class="form-label">Carga Masiva (Opcional)</label>
-                        <p class="small text-muted mb-2">Para crear el periodo y agregar personas con sus horarios de una sola vez.</p>
-                        <input type="file" class="form-control" name="archivo_csv" accept=".csv" disabled>
-                        <small class="text-warning">Cree el periodo primero para subir personas después.</small>
+                        <label class="form-label small fw-bold text-muted mb-1">Descripción / Observaciones</label>
+                        <textarea class="form-control" name="descripcion" rows="2" placeholder="Ej: Personal en convenio de pasantías con facultades universitarias"></textarea>
+                    </div>
+                    <div class="alert alert-light border d-flex gap-2 align-items-start py-2 mb-0" style="font-size:0.85rem; border-radius: var(--radius-md); background-color: var(--token-color-navy-50);">
+                        <span class="material-symbols-outlined text-primary flex-shrink-0" style="font-size:1.1rem; margin-top:2px;">info</span>
+                        <span>Una vez creado, podrás agregar personas tanto de forma <strong>manual (seleccionando existentes o creando nuevas)</strong> como mediante <strong>carga masiva CSV</strong>.</span>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Guardar</button>
+
+                <div class="modal-footer bg-light border-top px-4 py-2 d-flex justify-content-between">
+                    <small class="text-muted d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">schedule</span>
+                        <span>Las marcaciones se auditarán automáticamente en el rango indicado</span>
+                    </small>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">
+                            <span>Cancelar</span>
+                        </button>
+                        <button type="submit" class="btn btn-rippling-primary btn-sm shadow-sm">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">check</span>
+                            <span>Crear Período</span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
 </div>
-
-<style>
-.card-hover {
-    transition: transform var(--transition-base), box-shadow var(--transition-base);
-}
-.card-hover:hover {
-    transform: translateY(-3px);
-    box-shadow: var(--shadow-lg) !important;
-}
-.btn-icon {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    padding: 0;
-}
-</style>
 {% endblock %}
+

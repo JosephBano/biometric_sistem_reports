@@ -15,10 +15,13 @@ from db.queries.horarios_grupo_funcional import (
     asignar_horario_default_grupo,
     asignar_override_horario_persona,
     asignar_persona_a_grupo_funcional,
+    asignar_personas_masivo_a_grupo_funcional,
     cerrar_vinculo_persona_grupo_funcional,
     listar_grupos_funcionales_de_persona,
     listar_horarios_default_grupo,
     listar_overrides_horario_persona,
+    listar_personas_detalladas_en_grupo_funcional,
+    procesar_csv_personas_grupo_funcional,
     resolver_horario_vigente,
 )
 from db.queries.horarios import listar_horarios
@@ -32,11 +35,14 @@ __all__ = [
     "asignar_horario_default_grupo",
     "asignar_override_horario_persona",
     "asignar_persona_a_grupo_funcional",
+    "asignar_personas_masivo_a_grupo_funcional",
     "cerrar_vinculo_persona_grupo_funcional",
     "listar_grupos_funcionales_de_persona",
     "listar_horarios_default_grupo",
     "listar_horarios",
     "listar_overrides_horario_persona",
+    "listar_personas_detalladas_en_grupo_funcional",
+    "procesar_csv_personas_grupo_funcional",
     "resolver_horario_vigente",
     "resolver_horario_vigente_para_persona",
 ]

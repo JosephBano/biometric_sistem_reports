@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-shell">
+    <!-- ── 1. Page Header Shell (Área Externa Superior de Página) ────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Arquitectura UI</span>
+                <span class="rippling-pill rippling-pill-gold">Tokens v2.0</span>
+            </div>
+            <h1 class="title-hero">Estructura Externa de Página & Slots de Componentes</h1>
+            <p class="page-header-subtitle">
+                Área externa estandarizada para montaje y ciclo de carga de componentes modulares (Estilo Enterprise Rippling).
+            </p>
+        </div>
+
+        <!-- Slot de Acciones Globales de la Página -->
+        <div class="page-actions-slot">
+            <div class="btn-group p-1 bg-white border rounded-3 shadow-sm" role="group" aria-label="Selector de Modo de Visualización">
+                <button type="button" class="btn btn-sm btn-outline-secondary active" id="btn-mode-skeleton" onclick="cambiarModo('skeleton')">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">animation</span>
+                    <span>Carga / Skeleton</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mode-wireframe" onclick="cambiarModo('wireframe')">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">crop_free</span>
+                    <span>Slots Vacíos</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-mode-loaded" onclick="cambiarModo('loaded')">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">visibility</span>
+                    <span>Montaje Real</span>
+                </button>
+            </div>
+
+            <button class="btn btn-rippling-primary" onclick="showToast('Estructura de página lista para inyección de componentes', 'info')">
+                <span class="material-symbols-outlined" style="font-size: 1.1rem;">refresh</span>
+                <span>Recargar Slots</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ── 2. Grid de Componentes Externos: Métricas KPI (4 Columnas) ───── -->
+    <div class="component-grid-shell grid-cols-4">
+        <!-- KPI Slot 1 -->
+        <div class="component-card-shell">
+            <div class="component-header-shell">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="font-size: 1.15rem; color: var(--token-color-slate-500);">today</span>
+                    <span class="kpi-metric-label">Asistencias Hoy</span>
+                </div>
+                <span class="rippling-pill rippling-pill-slate">KPI-01</span>
+            </div>
+            <div class="component-body-shell p-3">
+                <!-- Estado Skeleton -->
+                <div class="slot-view slot-skeleton">
+                    <div class="skeleton-shimmer skeleton-kpi mb-2" style="width: 55%;"></div>
+                    <div class="skeleton-shimmer skeleton-subtitle" style="width: 75%;"></div>
+                </div>
+                <!-- Estado Wireframe Vacío -->
+                <div class="slot-view slot-wireframe d-none">
+                    <div class="component-slot-wireframe py-3" style="min-height: 80px;">
+                        <span class="text-muted small fw-semibold">Slot: [Metric.DailyAttendance]</span>
+                    </div>
+                </div>
+                <!-- Estado Componente Montado -->
+                <div class="slot-view slot-loaded d-none">
+                    <div class="kpi-metric-value">1,248</div>
+                    <div class="d-flex align-items-center gap-1 text-success small mt-1">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">trending_up</span>
+                        <span class="fw-semibold">+4.2%</span> <span class="text-muted">vs. ayer</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Slot 2 -->
+        <div class="component-card-shell">
+            <div class="component-header-shell">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="font-size: 1.15rem; color: var(--token-color-gold-700);">schedule</span>
+                    <span class="kpi-metric-label">Atrasos del Día</span>
+                </div>
+                <span class="rippling-pill rippling-pill-gold">KPI-02</span>
+            </div>
+            <div class="component-body-shell p-3">
+                <!-- Estado Skeleton -->
+                <div class="slot-view slot-skeleton">
+                    <div class="skeleton-shimmer skeleton-kpi mb-2" style="width: 45%;"></div>
+                    <div class="skeleton-shimmer skeleton-subtitle" style="width: 65%;"></div>
+                </div>
+                <!-- Estado Wireframe Vacío -->
+                <div class="slot-view slot-wireframe d-none">
+                    <div class="component-slot-wireframe py-3" style="min-height: 80px;">
+                        <span class="text-muted small fw-semibold">Slot: [Metric.LateArrivals]</span>
+                    </div>
+                </div>
+                <!-- Estado Componente Montado -->
+                <div class="slot-view slot-loaded d-none">
+                    <div class="kpi-metric-value text-warning" style="color: #d97706 !important;">34</div>
+                    <div class="d-flex align-items-center gap-1 text-muted small mt-1">
+                        <span>2.7% del total de marcaciones</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Slot 3 -->
+        <div class="component-card-shell">
+            <div class="component-header-shell">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="font-size: 1.15rem; color: var(--token-color-navy-900);">pending_actions</span>
+                    <span class="kpi-metric-label">Justificaciones</span>
+                </div>
+                <span class="rippling-pill rippling-pill-navy">KPI-03</span>
+            </div>
+            <div class="component-body-shell p-3">
+                <!-- Estado Skeleton -->
+                <div class="slot-view slot-skeleton">
+                    <div class="skeleton-shimmer skeleton-kpi mb-2" style="width: 50%;"></div>
+                    <div class="skeleton-shimmer skeleton-subtitle" style="width: 80%;"></div>
+                </div>
+                <!-- Estado Wireframe Vacío -->
+                <div class="slot-view slot-wireframe d-none">
+                    <div class="component-slot-wireframe py-3" style="min-height: 80px;">
+                        <span class="text-muted small fw-semibold">Slot: [Metric.PendingJustifications]</span>
+                    </div>
+                </div>
+                <!-- Estado Componente Montado -->
+                <div class="slot-view slot-loaded d-none">
+                    <div class="kpi-metric-value">12</div>
+                    <div class="d-flex align-items-center gap-1 text-primary small mt-1">
+                        <span class="fw-semibold">3 urgentes</span> <span class="text-muted">requieren firma</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI Slot 4 -->
+        <div class="component-card-shell">
+            <div class="component-header-shell">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="font-size: 1.15rem; color: #10b981;">sensors</span>
+                    <span class="kpi-metric-label">Biométricos Activos</span>
+                </div>
+                <span class="rippling-pill rippling-pill-slate">KPI-04</span>
+            </div>
+            <div class="component-body-shell p-3">
+                <!-- Estado Skeleton -->
+                <div class="slot-view slot-skeleton">
+                    <div class="skeleton-shimmer skeleton-kpi mb-2" style="width: 60%;"></div>
+                    <div class="skeleton-shimmer skeleton-subtitle" style="width: 70%;"></div>
+                </div>
+                <!-- Estado Wireframe Vacío -->
+                <div class="slot-view slot-wireframe d-none">
+                    <div class="component-slot-wireframe py-3" style="min-height: 80px;">
+                        <span class="text-muted small fw-semibold">Slot: [Metric.ActiveDevices]</span>
+                    </div>
+                </div>
+                <!-- Estado Componente Montado -->
+                <div class="slot-view slot-loaded d-none">
+                    <div class="kpi-metric-value text-success">4 / 4</div>
+                    <div class="d-flex align-items-center gap-1 text-muted small mt-1">
+                        <span>100% sincronización en tiempo real</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. Grid de Componentes Principales (Layout 2fr y 1fr) ────────── -->
+    <div class="component-grid-shell grid-main-side">
+        <!-- Componente Principal: Data Table / Stream Grid -->
+        <div class="component-card-shell">
+            <!-- Header del Componente -->
+            <div class="component-header-shell">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="color: var(--token-color-navy-900);">grid_view</span>
+                    <span>Componente Principal de Datos (Data Grid Container)</span>
+                </div>
+                <div class="component-tools-slot">
+                    <span class="rippling-pill rippling-pill-navy">Slot: #main-content-table</span>
+                </div>
+            </div>
+
+            <!-- Body del Componente -->
+            <div class="component-body-shell">
+                <!-- Estado Skeleton -->
+                <div class="slot-view slot-skeleton">
+                    <!-- Fila de Filtros Skeleton -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="skeleton-shimmer" style="height: 36px; width: 220px; border-radius: var(--radius-md);"></div>
+                        <div class="d-flex gap-2">
+                            <div class="skeleton-shimmer" style="height: 36px; width: 100px; border-radius: var(--radius-md);"></div>
+                            <div class="skeleton-shimmer" style="height: 36px; width: 120px; border-radius: var(--radius-md);"></div>
+                        </div>
+                    </div>
+                    <!-- Tabla Skeleton -->
+                    <div class="border rounded-3 overflow-hidden">
+                        <div class="skeleton-shimmer mb-1" style="height: 42px; width: 100%; border-radius: 0;"></div>
+                        <div class="p-3 d-flex flex-column gap-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2" style="width: 40%;">
+                                    <div class="skeleton-shimmer skeleton-avatar"></div>
+                                    <div class="skeleton-shimmer" style="height: 14px; width: 70%;"></div>
+                                </div>
+                                <div class="skeleton-shimmer" style="height: 14px; width: 20%;"></div>
+                                <div class="skeleton-shimmer skeleton-pill"></div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2" style="width: 40%;">
+                                    <div class="skeleton-shimmer skeleton-avatar"></div>
+                                    <div class="skeleton-shimmer" style="height: 14px; width: 60%;"></div>
+                                </div>
+                                <div class="skeleton-shimmer" style="height: 14px; width: 20%;"></div>
+                                <div class="skeleton-shimmer skeleton-pill"></div>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2" style="width: 40%;">
+                                    <div class="skeleton-shimmer skeleton-avatar"></div>
+                                    <div class="skeleton-shimmer" style="height: 14px; width: 65%;"></div>
+                                </div>
+                                <div class="skeleton-shimmer" style="height: 14px; width: 20%;"></div>
+                                <div class="skeleton-shimmer skeleton-pill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Estado Wireframe Vacío -->
+                <div class="slot-view slot-wireframe d-none">
+                    <div class="component-slot-wireframe">
+                        <div class="component-slot-wireframe-icon">
+                            <span class="material-symbols-outlined">table_chart</span>
+                        </div>
+                        <h4 class="component-slot-wireframe-title">Área Externa del Componente de Registros</h4>
+                        <p class="component-slot-wireframe-desc">
+                            Espacio delimitado para inyectar la tabla de asistencia, filtros por rango, ordenamiento y exportación de reportes.
+                        </p>
+                        <span class="badge bg-light text-dark border">Contenedor: &lt;div id="component-data-grid"&gt;</span>
+                    </div>
+                </div>
+
+                <!-- Estado Componente Montado -->
+                <div class="slot-view slot-loaded d-none">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <input type="text" class="form-control form-control-sm" placeholder="Buscar por cédula o nombre..." style="max-width: 260px;">
+                        <button class="btn btn-rippling-secondary btn-sm">
+                            <span class="material-symbols-outlined" style="font-size: 1rem;">filter_list</span>
+                            <span>Filtros</span>
+                        </button>
+                    </div>
+                    <div class="table-responsive border rounded-3">
+                        <table class="table mb-0">
+                            <thead class="rippling-table-header">
+                                <tr>
+                                    <th>Persona / Empleado</th>
+                                    <th>Grupo Funcional</th>
+                                    <th>Entrada</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="fw-semibold">Ing. Carlos Morales</td>
+                                    <td class="text-muted">Docentes TI</td>
+                                    <td>07:58:12</td>
+                                    <td><span class="rippling-pill rippling-pill-navy">Puntual</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Lic. María Fernández</td>
+                                    <td class="text-muted">Administrativo</td>
+                                    <td>08:06:40</td>
+                                    <td><span class="rippling-pill rippling-pill-gold">Atraso Leve</span></td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Msc. Roberto Gómez</td>
+                                    <td class="text-muted">Investigación</td>
+                                    <td>07:50:15</td>
+                                    <td><span class="rippling-pill rippling-pill-navy">Puntual</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer del Componente -->
+            <div class="component-footer-shell">
+                <span class="text-muted small">Mostrando 3 de 1,248 registros</span>
+                <span class="rippling-pill rippling-pill-slate">Paginación Slot</span>
+            </div>
+        </div>
+
+        <!-- Componente Secundario: Panel Lateral / Widgets -->
+        <div class="component-card-shell">
+            <!-- Header del Componente -->
+            <div class="component-header-shell">
+                <div class="component-title-slot">
+                    <span class="material-symbols-outlined" style="color: var(--token-color-gold-700);">pie_chart</span>
+                    <span>Panel Lateral (Side Widget)</span>
+                </div>
+                <span class="rippling-pill rippling-pill-gold">Slot: #side-panel</span>
+            </div>
+
+            <!-- Body del Componente -->
+            <div class="component-body-shell">
+                <!-- Estado Skeleton -->
+                <div class="slot-view slot-skeleton">
+                    <div class="skeleton-shimmer skeleton-title mb-3" style="width: 80%;"></div>
+                    <div class="skeleton-shimmer mx-auto mb-3" style="width: 140px; height: 140px; border-radius: 50%;"></div>
+                    <div class="d-flex flex-column gap-2">
+                        <div class="skeleton-shimmer" style="height: 12px; width: 100%;"></div>
+                        <div class="skeleton-shimmer" style="height: 12px; width: 85%;"></div>
+                        <div class="skeleton-shimmer" style="height: 12px; width: 70%;"></div>
+                    </div>
+                </div>
+
+                <!-- Estado Wireframe Vacío -->
+                <div class="slot-view slot-wireframe d-none">
+                    <div class="component-slot-wireframe">
+                        <div class="component-slot-wireframe-icon">
+                            <span class="material-symbols-outlined">donut_large</span>
+                        </div>
+                        <h4 class="component-slot-wireframe-title">Área Externa de Gráficos / Resumen</h4>
+                        <p class="component-slot-wireframe-desc">
+                            Espacio para widgets de análisis porcentual, ranking de cumplimiento o alertas en tiempo real.
+                        </p>
+                        <span class="badge bg-light text-dark border">Contenedor: &lt;aside id="side-widget-slot"&gt;</span>
+                    </div>
+                </div>
+
+                <!-- Estado Componente Montado -->
+                <div class="slot-view slot-loaded d-none">
+                    <div class="text-center py-2">
+                        <div class="fw-bold text-dark mb-1">Distribución de Asistencia</div>
+                        <p class="text-muted small mb-3">Jornada Activa</p>
+                        <div class="p-3 bg-light rounded-3 mb-3">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Puntualidad</span>
+                                <span class="fw-bold text-success">92%</span>
+                            </div>
+                            <div class="progress mb-2" style="height: 6px;">
+                                <div class="progress-bar bg-success" style="width: 92%;"></div>
+                            </div>
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span>Atrasos</span>
+                                <span class="fw-bold text-warning">8%</span>
+                            </div>
+                            <div class="progress" style="height: 6px;">
+                                <div class="progress-bar bg-warning" style="width: 8%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer del Componente -->
+            <div class="component-footer-shell">
+                <button class="btn btn-sm btn-outline-secondary w-100 justify-content-center">
+                    <span class="material-symbols-outlined" style="font-size: 1rem;">insights</span>
+                    <span>Ver Analítica Completa</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function cambiarModo(modo) {
+    document.querySelectorAll('#btn-mode-skeleton, #btn-mode-wireframe, #btn-mode-loaded').forEach(btn => {
+        btn.classList.remove('active', 'btn-primary');
+        btn.classList.add('btn-outline-secondary');
+    });
+
+    const activeBtn = document.getElementById(`btn-mode-${modo}`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
+        activeBtn.classList.remove('btn-outline-secondary');
+    }
+
+    document.querySelectorAll('.slot-view').forEach(el => el.classList.add('d-none'));
+
+    if (modo === 'skeleton') {
+        document.querySelectorAll('.slot-skeleton').forEach(el => el.classList.remove('d-none'));
+        showToast('Modo de Carga con Skeleton Shimmer activado', 'info');
+    } else if (modo === 'wireframe') {
+        document.querySelectorAll('.slot-wireframe').forEach(el => el.classList.remove('d-none'));
+        showToast('Modo Contenedores Externos (Slots Vacíos) activado', 'warning');
+    } else if (modo === 'loaded') {
+        document.querySelectorAll('.slot-loaded').forEach(el => el.classList.remove('d-none'));
+        showToast('Modo Componentes Montados activado', 'success');
+    }
+}
+</script>
+{% endblock %}

@@ -22,6 +22,7 @@ def resolver_persona_id(
 ) -> tuple[str, str]:
     """
     Dado un id_usuario del ZK, retorna (persona_id UUID, nombre canónico).
+    Si la persona ya existe (activa o inactiva), asegura que quede activa y retorna sus datos.
     Si la persona no existe, la crea automáticamente en personas + personas_dispositivos.
     """
     if dispositivo_id is None:
@@ -29,29 +30,78 @@ def resolver_persona_id(
 
     row = conn.execute(
         text("""
-            SELECT p.id, p.nombre
+            SELECT p.id, p.nombre, pd.activo AS pd_activo, p.activo AS p_activo
             FROM personas p
             JOIN personas_dispositivos pd ON pd.persona_id = p.id
             WHERE pd.id_en_dispositivo = :id_usuario
               AND (:dispositivo_id IS NULL OR pd.dispositivo_id = CAST(:dispositivo_id AS uuid))
-              AND pd.activo = true
-            ORDER BY pd.es_principal DESC
+            ORDER BY pd.es_principal DESC, pd.creado_en ASC
             LIMIT 1
         """),
         {"id_usuario": id_usuario, "dispositivo_id": dispositivo_id},
     ).fetchone()
 
     if row:
-        return str(row[0]), row[1]
+        persona_id = str(row[0])
+        persona_nombre = row[1]
+        pd_activo = row[2]
+        p_activo = row[3]
+
+        if not pd_activo and dispositivo_id:
+            conn.execute(
+                text("""
+                    UPDATE personas_dispositivos
+                    SET activo = true
+                    WHERE persona_id = CAST(:persona_id AS uuid)
+                      AND dispositivo_id = CAST(:dispositivo_id AS uuid)
+                      AND id_en_dispositivo = :id_usuario
+                """),
+                {"persona_id": persona_id, "dispositivo_id": dispositivo_id, "id_usuario": id_usuario},
+            )
+        if not p_activo:
+            conn.execute(
+                text("UPDATE personas SET activo = true WHERE id = CAST(:persona_id AS uuid)"),
+                {"persona_id": persona_id},
+            )
+        return persona_id, persona_nombre
 
     return _crear_persona_desde_zk(conn, id_usuario, nombre or id_usuario, dispositivo_id)
+
+
+def invertir_nombre_apellido(nombre: str) -> str:
+    """
+    Formatea en memoria un nombre 'Nombre Apellido' a 'Apellido Nombre'
+    para presentación en la UI y reportes, sin alterar la base de datos.
+    Ejemplos:
+      - 'Alexander Martinez' -> 'Martinez Alexander'
+      - 'Alexander Martinez Gomez' -> 'Martinez Gomez Alexander'
+      - 'Alexander David Martinez Gomez' -> 'Martinez Gomez Alexander David'
+    Si ya contiene coma o es de 1 sola palabra, se conserva intacto.
+    """
+    if not nombre or not isinstance(nombre, str):
+        return ""
+    nombre = nombre.strip()
+    if "," in nombre:
+        return nombre
+    partes = nombre.split()
+    if len(partes) <= 1:
+        return nombre
+    if len(partes) == 2:
+        return f"{partes[1]} {partes[0]}"
+    if len(partes) == 3:
+        return f"{partes[1]} {partes[2]} {partes[0]}"
+    if len(partes) >= 4:
+        nombres = " ".join(partes[:-2])
+        apellidos = " ".join(partes[-2:])
+        return f"{apellidos} {nombres}"
+    return nombre
 
 
 def _crear_persona_desde_zk(
     conn, id_usuario: str, nombre: str, dispositivo_id: str = None
 ) -> tuple[str, str]:
     """
-    Crea una persona mínima a partir de datos del ZK.
+    Crea una persona mínima a partir de datos del ZK preservando el nombre original.
     Retorna (persona_id, nombre).
     """
     # Obtener el tipo_persona_id por defecto (primero activo)
@@ -63,8 +113,8 @@ def _crear_persona_desde_zk(
     if tipo_id:
         persona_row = conn.execute(
             text("""
-                INSERT INTO personas (nombre, tipo_persona_id)
-                VALUES (:nombre, CAST(:tipo_id AS uuid))
+                INSERT INTO personas (nombre, tipo_persona_id, activo)
+                VALUES (:nombre, CAST(:tipo_id AS uuid), true)
                 RETURNING id
             """),
             {"nombre": nombre, "tipo_id": tipo_id},
@@ -72,7 +122,7 @@ def _crear_persona_desde_zk(
     else:
         # Sin tipo configurado — crear persona sin tipo (debería evitarse en prod)
         persona_row = conn.execute(
-            text("INSERT INTO personas (nombre) VALUES (:nombre) RETURNING id"),
+            text("INSERT INTO personas (nombre, activo) VALUES (:nombre, true) RETURNING id"),
             {"nombre": nombre},
         ).fetchone()
 
@@ -83,9 +133,12 @@ def _crear_persona_desde_zk(
         conn.execute(
             text("""
                 INSERT INTO personas_dispositivos
-                    (persona_id, dispositivo_id, id_en_dispositivo, es_principal)
-                VALUES (CAST(:persona_id AS uuid), CAST(:dispositivo_id AS uuid), :id_en_dispositivo, true)
-                ON CONFLICT (dispositivo_id, id_en_dispositivo) DO NOTHING
+                    (persona_id, dispositivo_id, id_en_dispositivo, es_principal, activo)
+                VALUES (CAST(:persona_id AS uuid), CAST(:dispositivo_id AS uuid), :id_en_dispositivo, true, true)
+                ON CONFLICT (dispositivo_id, id_en_dispositivo) DO UPDATE SET
+                    persona_id = EXCLUDED.persona_id,
+                    activo = true,
+                    es_principal = true
             """),
             {
                 "persona_id": persona_id,
@@ -126,13 +179,20 @@ def upsert_usuarios(usuarios: list[dict], dispositivo_id: str = None):
     """
     Inserta o actualiza usuarios del dispositivo ZK en usuarios_zk y personas_dispositivos.
     Crea personas mínimas si no existen.
+    Si un usuario fue eliminado del dispositivo biométrico (ya no viene en la lista sincronizada),
+    se desactiva automáticamente en personas_dispositivos y en personas (si ya no tiene dispositivos activos).
     """
     with get_connection() as conn:
         if not dispositivo_id:
             dispositivo_id = _get_dispositivo_id(conn)
+
+        ids_presentes = []
         for u in usuarios:
-            id_usuario = str(u["id_usuario"])
+            id_usuario = str(u["id_usuario"]).strip()
             nombre = str(u["nombre"]).strip()
+            if not id_usuario:
+                continue
+            ids_presentes.append(id_usuario)
 
             # Actualizar tabla espejo del dispositivo
             conn.execute(
@@ -151,8 +211,51 @@ def upsert_usuarios(usuarios: list[dict], dispositivo_id: str = None):
                 },
             )
 
-            # Asegurar que existe la persona vinculada
+            # Asegurar que existe la persona vinculada y que esté activa
             resolver_persona_id(conn, id_usuario, nombre, dispositivo_id)
+
+        # Si se sincronizó con un dispositivo específico y se recibieron usuarios:
+        # Desactivar en el sistema a quienes fueron eliminados del biométrico
+        if dispositivo_id and ids_presentes:
+            # 1. Desactivar vinculación en personas_dispositivos para este equipo
+            conn.execute(
+                text("""
+                    UPDATE personas_dispositivos
+                    SET activo = false
+                    WHERE dispositivo_id = CAST(:dispositivo_id AS uuid)
+                      AND NOT (id_en_dispositivo = ANY(CAST(:ids_presentes AS text[])))
+                      AND activo = true
+                """),
+                {
+                    "dispositivo_id": dispositivo_id,
+                    "ids_presentes": ids_presentes,
+                },
+            )
+
+            # 2. Desactivar en personas a quienes ya no tienen ningún vínculo activo en ningún dispositivo
+            conn.execute(
+                text("""
+                    UPDATE personas p
+                    SET activo = false
+                    WHERE p.activo = true
+                      AND p.id IN (
+                          SELECT pd.persona_id
+                          FROM personas_dispositivos pd
+                          WHERE pd.dispositivo_id = CAST(:dispositivo_id AS uuid)
+                            AND NOT (pd.id_en_dispositivo = ANY(CAST(:ids_presentes AS text[])))
+                      )
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM personas_dispositivos pd_act
+                          WHERE pd_act.persona_id = p.id
+                            AND pd_act.activo = true
+                      )
+                """),
+                {
+                    "dispositivo_id": dispositivo_id,
+                    "ids_presentes": ids_presentes,
+                },
+            )
 
 
 def get_ids_usuarios_zk() -> set:
