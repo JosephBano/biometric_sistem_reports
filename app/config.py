@@ -100,6 +100,16 @@ class ProductionConfig(BaseConfig):
     # falla con 403 "Token CSRF inválido".
     SESSION_COOKIE_SECURE = os.environ.get("SESSION_COOKIE_SECURE", "true").lower() == "true"
 
+    def init_app(self, app: Flask) -> None:
+        key = os.environ.get("FLASK_SECRET_KEY", "").strip()
+        if not key or key == "dev-secret-change-in-production" or len(key) < 32:
+            raise RuntimeError(
+                "FLASK_SECRET_KEY no configurada o insegura. Genera una con:\n"
+                "  python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+        app.config["SECRET_KEY"] = key
+        super().init_app(app)
+
 
 class TestingConfig(BaseConfig):
     """

@@ -32,11 +32,42 @@ class TestFactoryEnSi:
         with pytest.raises(KeyError):
             create_app("config_inexistente")
 
-    def test_create_app_acepta_aliases(self):
+    def test_create_app_acepta_aliases(self, monkeypatch):
         # Los aliases de config_map deben funcionar.
+        monkeypatch.setenv("FLASK_SECRET_KEY", "0" * 32)
         for name in ("dev", "prod", "test"):
             app = create_app(name)
             assert app is not None
+
+
+class TestProductionConfigSafeguard:
+
+    def test_falla_si_flask_secret_key_falta(self, monkeypatch):
+        monkeypatch.delenv("FLASK_SECRET_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="FLASK_SECRET_KEY no configurada o insegura"):
+            create_app("production")
+
+    def test_falla_si_flask_secret_key_esta_vacia(self, monkeypatch):
+        monkeypatch.setenv("FLASK_SECRET_KEY", "")
+        with pytest.raises(RuntimeError, match="FLASK_SECRET_KEY no configurada o insegura"):
+            create_app("production")
+
+    def test_falla_si_flask_secret_key_es_valor_por_defecto(self, monkeypatch):
+        monkeypatch.setenv("FLASK_SECRET_KEY", "dev-secret-change-in-production")
+        with pytest.raises(RuntimeError, match="FLASK_SECRET_KEY no configurada o insegura"):
+            create_app("production")
+
+    def test_falla_si_flask_secret_key_demasiado_corta(self, monkeypatch):
+        monkeypatch.setenv("FLASK_SECRET_KEY", "0" * 16)
+        with pytest.raises(RuntimeError, match="FLASK_SECRET_KEY no configurada o insegura"):
+            create_app("production")
+
+    def test_flask_secret_key_valida_pasa(self, monkeypatch):
+        valid_key = "0" * 32
+        monkeypatch.setenv("FLASK_SECRET_KEY", valid_key)
+        app = create_app("production")
+        assert app is not None
+        assert app.config["SECRET_KEY"] == valid_key
 
 
 class TestTestingConfigSafeguard:

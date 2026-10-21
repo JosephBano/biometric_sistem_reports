@@ -21,12 +21,18 @@ API pública:
 """
 from __future__ import annotations
 
-import pandas as pd
-import numpy as np
 from datetime import date, timedelta
+
+import pandas as pd
 from sqlalchemy import text
+
 from db.connection import get_connection
-from db.queries.asistencia_periodo import calcular_asistencia_periodo  # usado en resumen_periodo y otras funciones avanzadas
+from db.queries.asistencia_periodo import (
+    calcular_asistencia_periodo,  # usado en resumen_periodo y otras funciones avanzadas
+)
+from db.queries.grupos import listar_grupos
+from db.queries.periodos import get_periodo
+
 
 def load_data_asistencia_dataframe(fecha_inicio: date, fecha_fin: date, grupo_id: str = None, tipo_persona_id: str = None) -> pd.DataFrame:
     """
@@ -165,11 +171,11 @@ def calcular_risk_score(persona_df: pd.DataFrame) -> int:
     Tope máximo 100.
     """
     if persona_df.empty:
-         return 0
-         
-    ausencias = len(persona_df[persona_df['estado'] == 'ausente'])
-    tardanzas = len(persona_df[persona_df['tardanza'] == True])
-    
+        return 0
+
+    ausencias = len(persona_df[persona_df["estado"] == "ausente"])
+    tardanzas = len(persona_df[persona_df["tardanza"]])
+
     score = (ausencias * 15) + (tardanzas * 5)
     return min(100, score)
 
@@ -179,23 +185,23 @@ def analizar(tipo_persona_id: str = None, grupo_id: str = None, periodo_vigencia
     Punto de entrada unificado para obtener estadísticas y anomalías.
     """
     if not fecha_inicio:
-         fecha_inicio = date.today() - timedelta(days=30)
+        fecha_inicio = date.today() - timedelta(days=30)
     if not fecha_fin:
-         fecha_fin = date.today()
-         
+        fecha_fin = date.today()
+
     df = load_data_asistencia_dataframe(fecha_inicio, fecha_fin, grupo_id, tipo_persona_id)
-    
+
     if df.empty:
-         return {"exito": False, "error": "No hay datos para el rango y filtros especificados"}
-         
+        return {"exito": False, "error": "No hay datos para el rango y filtros especificados"}
+
     # 1. Estadísticas Generales
     total_dias = len(df)
-    asistencias = df[df['estado'].isin(['presente', 'presente_tarde'])]
-    ausencias = df[df['estado'] == 'ausente']
-    tardanzas = df[df['tardanza'] == True]
-    
+    asistencias = df[df["estado"].isin(["presente", "presente_tarde"])]
+    ausencias = df[df["estado"] == "ausente"]
+    tardanzas = df[df["tardanza"]]
+
     tasa_asistencia = round((len(asistencias) / len(df[df['estado'] != 'no_programado'])) * 100, 2) if len(df[df['estado'] != 'no_programado']) > 0 else 100.0
-    
+
     # 2. Risk Score por Persona
     risk_scores = []
     for p_id, p_df in df.groupby('persona_id'):
@@ -207,15 +213,15 @@ def analizar(tipo_persona_id: str = None, grupo_id: str = None, periodo_vigencia
              "score": score,
              "semaforo": "Rojo" if score >= 70 else ("Amarillo" if score >= 40 else "Verde")
          })
-         
+
     # 3. Anomalías Estadísticas (Personas que exceden la desviación estándar)
     anomalias = []
-    
+
     # 3.1 Exceso de Tardanzas
     conteo_tardanzas = df.groupby('persona_id')['tardanza'].sum().reset_index()
     promedio_tardanzas = conteo_tardanzas['tardanza'].mean()
     std_tardanzas = conteo_tardanzas['tardanza'].std()
-    
+
     if std_tardanzas > 0:
          limite = promedio_tardanzas + (1.5 * std_tardanzas)
          for _, row in conteo_tardanzas[conteo_tardanzas['tardanza'] > limite].iterrows():
@@ -228,13 +234,13 @@ def analizar(tipo_persona_id: str = None, grupo_id: str = None, periodo_vigencia
                   "detalle": f"Tiene {c_tardanzas} tardanzas (Promedio del grupo: {round(promedio_tardanzas, 1)})",
                   "cantidad": c_tardanzas
               })
-              
+
     # 3.2 Exceso de Ausencias (Faltas)
     df['es_ausente'] = (df['estado'] == 'ausente')
     conteo_ausencias = df.groupby('persona_id')['es_ausente'].sum().reset_index()
     promedio_ausencias = conteo_ausencias['es_ausente'].mean()
     std_ausencias = conteo_ausencias['es_ausente'].std()
-    
+
     if std_ausencias > 0:
          limite_aus = promedio_ausencias + (1.5 * std_ausencias)
          for _, row in conteo_ausencias[conteo_ausencias['es_ausente'] > limite_aus].iterrows():
@@ -247,10 +253,10 @@ def analizar(tipo_persona_id: str = None, grupo_id: str = None, periodo_vigencia
                   "detalle": f"Tiene {c_faltas} faltas injustificadas (Promedio del grupo: {round(promedio_ausencias, 1)})",
                   "cantidad": c_faltas
               })
-              
+
     # Ordenar de mayor cantidad a menor cantidad
     anomalias.sort(key=lambda x: x['cantidad'], reverse=True)
-              
+
     # 4. Dimensiones: Agregación por Grupo
     grupo_stats = []
     for g_name, g_df in df.groupby('grupo'):
@@ -262,7 +268,7 @@ def analizar(tipo_persona_id: str = None, grupo_id: str = None, periodo_vigencia
               "tasa_asistencia": asist_p,
               "total_personas": len(g_df['persona_id'].unique())
          })
-         
+
     return {
          "exito": True,
          "rango": {"inicio": fecha_inicio.strftime('%Y-%m-%d'), "fin": fecha_fin.strftime('%Y-%m-%d')},
@@ -289,8 +295,10 @@ def patron_semanal(persona_id: str, semanas: int = 8) -> dict:
     Retorna asistencia y tardanzas por día de semana.
     """
     from datetime import date, timedelta
-    from db.connection import get_connection
+
     from sqlalchemy import text
+
+    from db.connection import get_connection
 
     fecha_fin = date.today()
     fecha_inicio = fecha_fin - timedelta(weeks=semanas)
@@ -332,8 +340,9 @@ def comparar_grupos(grupo_ids: list[str], fecha_inicio, fecha_fin) -> list[dict]
     Compara la tasa de asistencia entre varios grupos en un rango de fechas.
     Retorna lista ordenada de peor a mejor asistencia.
     """
-    from db.connection import get_connection
     from sqlalchemy import text
+
+    from db.connection import get_connection
 
     if not grupo_ids:
         return []
@@ -369,10 +378,9 @@ def ranking_departamento(grupo_id: str, fecha_inicio, fecha_fin) -> list[dict]:
     Ranking de personas dentro de un grupo por tasa de asistencia en el período.
     Retorna lista ordenada de mejor a peor asistencia.
     """
-    from datetime import timedelta
-    from db.connection import get_connection
-    from db.queries.asistencia_periodo import calcular_asistencia_periodo
     from sqlalchemy import text
+
+    from db.connection import get_connection
 
     with get_connection() as conn:
         # Obtener personas del grupo con periodos activos en el rango
@@ -425,8 +433,10 @@ def tendencia_mensual(tipo_persona_id: str = None, meses: int = 6) -> list[dict]
     Agrupa por mes y calcula la tasa promedio.
     """
     from datetime import date
-    from db.connection import get_connection
+
     from sqlalchemy import text
+
+    from db.connection import get_connection
 
     fecha_fin = date.today().replace(day=1)
     # Calculate fecha_inicio manually without dateutil
@@ -464,7 +474,6 @@ def resumen_periodo(periodo_id: str) -> dict:
     """
     Resumen de cumplimiento para un grupos_periodo específico.
     """
-    from db.queries.asistencia_periodo import calcular_asistencia_periodo
 
     personas = calcular_asistencia_periodo(periodo_id)
     if not personas:
@@ -496,7 +505,6 @@ def distribucion_asistencia_periodo(periodo_id: str) -> dict:
     """
     Distribución de días de asistencia por estado dentro de un período.
     """
-    from db.queries.asistencia_periodo import calcular_asistencia_periodo
 
     personas = calcular_asistencia_periodo(periodo_id)
     conteo = {"presente": 0, "presente_tarde": 0, "ausente": 0,
@@ -519,9 +527,9 @@ def comparar_periodos_historicos(tipo_persona_id: str = None, n: int = 5) -> lis
     """
     Compara los últimos N períodos cerrados del mismo tipo de persona.
     """
-    from db.connection import get_connection
-    from db.queries.asistencia_periodo import calcular_asistencia_periodo
     from sqlalchemy import text
+
+    from db.connection import get_connection
 
     q = """
         SELECT gp.id::text, gp.nombre, gp.fecha_inicio, gp.fecha_fin
@@ -556,8 +564,6 @@ def tasa_riesgo_por_grupo(grupo_id: str) -> dict:
     """
     Porcentaje de personas en riesgo (Rojo) dentro de un grupo.
     """
-    from db.connection import get_connection
-    from sqlalchemy import text
     from datetime import date, timedelta
 
     fecha_fin = date.today()
@@ -593,13 +599,10 @@ __all__ = [
     "distribucion_asistencia_periodo",
     "comparar_periodos_historicos",
     "tasa_riesgo_por_grupo",
+    "calcular_asistencia_periodo",
+    "get_periodo",
+    "listar_grupos",
 ]
 
 
-# Re-exports de `db` (capa de datos), añadidos para cumplir la regla de
-# capas del ADR-0001 (antes: `app/web/analytics_bp.py` importaba `db` directo).
-from db import (
-    calcular_asistencia_periodo,
-    get_periodo,
-    listar_grupos,
-)
+

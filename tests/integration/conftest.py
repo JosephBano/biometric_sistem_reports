@@ -23,7 +23,7 @@ import pytest
 
 # Forzar el modo testing ANTES de importar la app.
 os.environ.setdefault("FLASK_ENV", "testing")
-os.environ.setdefault("FLASK_SECRET_KEY", "test-secret-key-for-pytest-only")
+os.environ.setdefault("FLASK_SECRET_KEY", "0" * 32)
 os.environ.setdefault(
     "DB_ENCRYPTION_KEY",
     base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),

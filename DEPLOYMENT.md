@@ -119,7 +119,7 @@ Los valores más importantes en esta instalación son:
 
 - `ZK_IP`, `ZK_PORT`, `ZK_PASSWORD` — datos del dispositivo biométrico
 - `POSTGRES_PASSWORD` — contraseña de la base de datos (elegir una segura)
-- `FLASK_SECRET_KEY` — clave aleatoria para sesiones Flask
+- `FLASK_SECRET_KEY` — clave aleatoria para sesiones Flask (obligatoria en producción, mínimo 32 caracteres)
 - `NOMBRE_INSTITUCION` — aparece en los encabezados de los PDFs
 
 > La variable `DATABASE_URL` se configura automáticamente en el `docker-compose.yml` para usar el servicio `db` como host. En el `.env` local puedes dejarla apuntando a `localhost:5432` para desarrollo sin Docker.
@@ -380,7 +380,7 @@ notepad .env
 
 Rellenar los valores en el Bloc de notas y guardar (ver sección [Referencia del .env](#referencia-del-env)).
 
-Generar una `FLASK_SECRET_KEY` segura: abrir PowerShell y ejecutar:
+Generar una `FLASK_SECRET_KEY` segura (obligatoria en producción, la app no arranca si falta o tiene menos de 32 caracteres): abrir PowerShell y ejecutar:
 
 ```powershell
 python -c "import secrets; print(secrets.token_hex(32))"
@@ -943,7 +943,9 @@ TENANT_DEFAULT=istpet
 DB_ENCRYPTION_KEY=generar_con_comando_de_arriba
 
 # ── Flask ──────────────────────────────────────────────────────────────
-# Clave secreta para sesiones Flask — generar con:
+# Clave secreta para sesiones Flask y CSRF — OBLIGATORIA (mínimo 32 caracteres)
+# La aplicación no arranca en producción si falta, está vacía, es por defecto o tiene menos de 32 caracteres.
+# Generar con:
 #   python3 -c "import secrets; print(secrets.token_hex(32))"
 FLASK_SECRET_KEY=cambiar_esto_por_una_clave_larga_y_segura
 
