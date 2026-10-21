@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 from datetime import time as dt_time
@@ -9,6 +10,8 @@ except ImportError:
     ZK_DISPONIBLE = False
 
 from drivers.base import BiometricDriver
+
+log = logging.getLogger(__name__)
 
 
 class ZKDriver(BiometricDriver):
@@ -85,8 +88,8 @@ class ZKDriver(BiometricDriver):
             if conn:
                 try:
                     conn.disconnect()
-                except:
-                    pass
+                except Exception as e:
+                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
 
     def get_asistencias(self, desde: datetime = None) -> list[dict]:
         zk = self._make_zk()
@@ -133,8 +136,8 @@ class ZKDriver(BiometricDriver):
             if conn:
                 try:
                     conn.disconnect()
-                except:
-                    pass
+                except Exception as e:
+                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
 
     def clear_asistencias(self) -> int:
         zk = self._make_zk()
@@ -148,8 +151,8 @@ class ZKDriver(BiometricDriver):
             if conn:
                 try:
                     conn.disconnect()
-                except:
-                    pass
+                except Exception as e:
+                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
 
     def get_capacidad(self) -> dict:
         total = 0
@@ -159,8 +162,8 @@ class ZKDriver(BiometricDriver):
             conn = zk.connect()
             total = len(conn.get_attendance())
             conn.disconnect()
-        except:
-            pass
+        except Exception as e:
+            log.warning("get_capacidad %s:%s falló: %s", self.ip, self.port, e)
         return {
             "total_registros": total,
             "capacidad_max": cap_max

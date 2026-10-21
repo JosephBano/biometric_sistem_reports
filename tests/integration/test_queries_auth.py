@@ -6,6 +6,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from db import set_thread_tenant
 from db.queries.auth import (
@@ -123,7 +124,7 @@ class TestCrearUsuario:
 
     def test_crear_usuario_email_duplicado_falla(self, tenant_id, usuario_test):
         """Email duplicado lanza excepción."""
-        with pytest.raises(Exception):
+        with pytest.raises(IntegrityError):
             crear_usuario_db(
                 tenant_id=tenant_id,
                 email=usuario_test["email"],

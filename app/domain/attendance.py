@@ -17,6 +17,21 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+# Re-exports de `db` (capa de datos), añadidos para cumplir la regla de
+# capas del ADR-0001 (antes: `app/web/attendance_bp.py` importaba `db` directo).
+from db import (
+    actualizar_estado_justificacion,
+    actualizar_justificacion_completa,
+    eliminar_feriado,
+    eliminar_justificacion,
+    get_feriados,
+    get_justificacion_by_id,
+    get_justificaciones,
+    importar_feriados_csv,
+    insertar_feriado,
+    insertar_justificacion,
+)
+
 # ══════════════════════════════════════════════════════════════════════════
 # CONSTANTES
 # ══════════════════════════════════════════════════════════════════════════
@@ -57,16 +72,16 @@ def parsear_obd(ruta: str) -> list[dict]:
         from odf import teletype
         from odf.opendocument import load
         from odf.table import Table, TableCell, TableRow
-    except ImportError:
+    except ImportError as e:
         raise RuntimeError(
             "La librería odfpy no está instalada. "
             "Ejecuta: pip install odfpy"
-        )
+        ) from e
 
     try:
         doc = load(ruta)
     except Exception as e:
-        raise RuntimeError(f"No se pudo leer el archivo de horarios: {e}")
+        raise RuntimeError(f"No se pudo leer el archivo de horarios: {e}") from e
 
     tablas = doc.spreadsheet.getElementsByType(Table)
     if not tablas:
@@ -317,7 +332,7 @@ def parsear_csv(ruta: str) -> list[dict]:
                         return None
                     try:
                         return float(str(val).strip())
-                    except:
+                    except ValueError:
                         return None
 
                 horario = {
@@ -354,7 +369,7 @@ def parsear_csv(ruta: str) -> list[dict]:
     except RuntimeError:
         raise
     except Exception as e:
-        raise RuntimeError(f"No se pudo leer el CSV de horarios: {e}")
+        raise RuntimeError(f"No se pudo leer el CSV de horarios: {e}") from e
 
     if not horarios:
         raise RuntimeError("El CSV no contiene filas de datos válidas.")
@@ -421,7 +436,7 @@ __all__ = [
     "parsear_csv",
     "parsear_obd",
     "get_info_dia",
-    # Re-exports de `db` (ver bloque de imports más abajo).
+    # Re-exports de `db` (ver bloque de imports al inicio del módulo).
     "actualizar_estado_justificacion",
     "actualizar_justificacion_completa",
     "eliminar_feriado",
@@ -434,18 +449,3 @@ __all__ = [
     "insertar_justificacion",
 ]
 
-
-# Re-exports de `db` (capa de datos), añadidos para cumplir la regla de
-# capas del ADR-0001 (antes: `app/web/attendance_bp.py` importaba `db` directo).
-from db import (
-    actualizar_estado_justificacion,
-    actualizar_justificacion_completa,
-    eliminar_feriado,
-    eliminar_justificacion,
-    get_feriados,
-    get_justificacion_by_id,
-    get_justificaciones,
-    importar_feriados_csv,
-    insertar_feriado,
-    insertar_justificacion,
-)

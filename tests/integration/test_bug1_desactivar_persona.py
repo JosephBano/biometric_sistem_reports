@@ -179,9 +179,6 @@ class TestBug1DesactivarPersona:
         # Persona B con otro ZK id
         pid_b = _seed_persona(e, base, "P-B", "93", base["dev2"])
         with e.connect() as c:
-            id_a = c.execute(sa.text(
-                "SELECT identificacion FROM istpet.personas WHERE id = CAST(:id AS uuid)"
-            ), {"id": pid_a}).fetchone()[0]
             id_b = c.execute(sa.text(
                 "SELECT identificacion FROM istpet.personas WHERE id = CAST(:id AS uuid)"
             ), {"id": pid_b}).fetchone()[0]

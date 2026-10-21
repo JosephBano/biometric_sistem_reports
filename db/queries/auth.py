@@ -123,7 +123,6 @@ def get_tenants_activos() -> list:
 def crear_usuario_db(tenant_id: str, email: str, password_hash: str, nombre: str,
                      roles: list, configuracion: dict) -> dict:
     """Inserta un nuevo usuario. Retorna el usuario creado (sin password_hash)."""
-    roles_pg = "{" + ",".join(roles) + "}"
     with get_engine().connect() as conn:
         row = conn.execute(
             text("""
