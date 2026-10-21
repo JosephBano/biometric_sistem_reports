@@ -48,10 +48,6 @@ def _start_pg_or_skip():
 
         _PG_SERVER = pgserver.get_server("biometrico_test_int")
         _PG_URI = _PG_SERVER.get_uri()
-        try:
-            import psycopg  # noqa: F401
-        except ImportError:
-            _PG_URI = _PG_URI.replace("postgresql+psycopg://", "postgresql+psycopg2://")
     except Exception as e:
         pytest.skip(f"pgserver no disponible: {e}", allow_module_level=True)
         return None

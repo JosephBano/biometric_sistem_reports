@@ -30,21 +30,7 @@ os.environ.setdefault("FLASK_SECRET_KEY", "0" * 32)
 
 
 def _is_postgres_available() -> bool:
-    """Devuelve True si hay un PostgreSQL accesible en DATABASE_URL o via pgserver."""
-    try:
-        import pgserver
-
-        server = pgserver.get_server("biometrico_test_int")
-        uri = server.get_uri()
-        try:
-            import psycopg  # noqa: F401
-        except ImportError:
-            uri = uri.replace("postgresql+psycopg://", "postgresql+psycopg2://")
-        os.environ["DATABASE_URL"] = uri
-        return True
-    except Exception:
-        pass
-
+    """Devuelve True si hay un PostgreSQL accesible en DATABASE_URL."""
     try:
         import sqlalchemy
 
