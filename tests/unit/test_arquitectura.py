@@ -50,7 +50,7 @@ def _web_files():
 
 
 def _domain_files():
-    return sorted((ROOT / "app" / "domain").glob("*.py"))
+    return sorted(p for p in (ROOT / "app" / "domain").rglob("*.py") if p.is_file())
 
 
 def _db_query_files():

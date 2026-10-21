@@ -12,9 +12,10 @@ __pycache__/
 *.pyo
 
 # Datos en runtime (se montan como volúmenes)
-data/
-uploads/
-reports/
+/data/
+/uploads/
+/reports/
+!app/domain/reports/
 
 # Base de datos local de desarrollo
 *.db
