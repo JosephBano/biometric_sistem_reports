@@ -30,7 +30,16 @@ os.environ.setdefault("FLASK_SECRET_KEY", "0" * 32)
 
 
 def _is_postgres_available() -> bool:
-    """Devuelve True si hay un PostgreSQL accesible en DATABASE_URL."""
+    """Devuelve True si hay un PostgreSQL accesible en DATABASE_URL o via pgserver."""
+    try:
+        import pgserver
+
+        server = pgserver.get_server("biometrico_test_int")
+        os.environ["DATABASE_URL"] = server.get_uri()
+        return True
+    except Exception:
+        pass
+
     try:
         import sqlalchemy
 
