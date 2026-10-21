@@ -41,7 +41,7 @@ jobs:
           pip install -r requirements-dev.txt
           # pgserver: trae binarios de PostgreSQL 16 embebidos para los tests
           # de integración (no requiere servicio Docker postgres:16).
-          pip install pgserver
+          pip install pgserver "psycopg[binary]"
 
       - name: Lint (ruff)
         run: |
@@ -85,7 +85,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install pgserver
+          pip install pgserver "psycopg[binary]"
 
       - name: Check coverage
         # El umbral está en pyproject.toml (--cov-fail-under=60) cumpliendo DoD-8 del ADR-0001.

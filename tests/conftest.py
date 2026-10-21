@@ -35,7 +35,12 @@ def _is_postgres_available() -> bool:
         import pgserver
 
         server = pgserver.get_server("biometrico_test_int")
-        os.environ["DATABASE_URL"] = server.get_uri()
+        uri = server.get_uri()
+        try:
+            import psycopg  # noqa: F401
+        except ImportError:
+            uri = uri.replace("postgresql+psycopg://", "postgresql+psycopg2://")
+        os.environ["DATABASE_URL"] = uri
         return True
     except Exception:
         pass
