@@ -5,14 +5,15 @@ Crea el schema, corre DDL y siembra datos iniciales.
 """
 
 import logging
-from sqlalchemy import text
-from alembic.script import ScriptDirectory
-from alembic.config import Config
 
-from db.connection import get_engine, get_connection
-from db.schema import get_tenant_ddl
-from db.queries.tenants import insertar_tipo_persona, eliminar_tenant_de_public
+from alembic.config import Config
+from alembic.script import ScriptDirectory
+from sqlalchemy import text
+
+from db.connection import get_connection, get_engine
 from db.init_seed import _insertar_feriados_ecuador
+from db.queries.tenants import eliminar_tenant_de_public
+from db.schema import get_tenant_ddl
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def provisionar_schema(slug: str, tipos_persona: list[str]) -> bool:
             # Sede por defecto
             conn.execute(
                 text("INSERT INTO sedes (nombre) VALUES (:nombre)"),
-                {"nombre": f"Sede Principal"}
+                {"nombre": "Sede Principal"}
             )
 
             # Tipos de persona iniciales
@@ -68,12 +69,12 @@ def provisionar_schema(slug: str, tipos_persona: list[str]) -> bool:
                      alembic_cfg = Config(ini_path)
                      script = ScriptDirectory.from_config(alembic_cfg)
                      head_rev = script.get_current_head()
-                     
+
                      if head_rev:
                           log.info(f"Sincronizando Alembic en '{slug}' a revision '{head_rev}'...")
-                          conn.execute(text(f"CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
-                          conn.execute(text(f"DELETE FROM alembic_version"))
-                          conn.execute(text(f"INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head_rev})
+                          conn.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
+                          conn.execute(text("DELETE FROM alembic_version"))
+                          conn.execute(text("INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head_rev})
                 else:
                      log.warning("alembic.ini no encontrado para sincronizar version_num.")
             except Exception as e_alembic:

@@ -4,7 +4,7 @@ Tests de integración de `db.queries.asistencias` (Fase 7.4 — cobertura).
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -18,7 +18,6 @@ from db.queries.asistencias import (
 )
 from db.queries.dispositivos import eliminar_dispositivo, upsert_dispositivo
 from db.queries.personas_crud import crear_persona
-
 
 pytestmark = pytest.mark.integration
 
@@ -76,7 +75,7 @@ class TestInsertarAsistencias:
 
     def test_insertar_una_asistencia(self, persona_test, dispositivo_test):
         """Insertar una asistencia retorna 1."""
-        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=timezone.utc)
+        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=UTC)
         result = insertar_asistencias([{
             "id_usuario": persona_test["id_zk"],
             "fecha_hora": fecha_hora,
@@ -86,7 +85,7 @@ class TestInsertarAsistencias:
 
     def test_insertar_duplicado_no_cuenta(self, persona_test, dispositivo_test):
         """Insertar la misma asistencia 2 veces cuenta solo la primera."""
-        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=timezone.utc)
+        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=UTC)
         registro = {
             "id_usuario": persona_test["id_zk"],
             "fecha_hora": fecha_hora,
@@ -107,7 +106,7 @@ class TestConsultarAsistencias:
 
     def test_consultar_asistencias_con_datos(self, persona_test, dispositivo_test):
         """Consultar retorna registros insertados con formato esperado."""
-        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=timezone.utc)
+        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=UTC)
         insertar_asistencias([{
             "id_usuario": persona_test["id_zk"],
             "fecha_hora": fecha_hora,
@@ -136,7 +135,7 @@ class TestGetPersonas:
 
     def test_get_personas_con_datos(self, persona_test, dispositivo_test):
         """get_personas retorna nombres únicos."""
-        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=timezone.utc)
+        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=UTC)
         insertar_asistencias([{
             "id_usuario": persona_test["id_zk"],
             "fecha_hora": fecha_hora,
@@ -156,7 +155,7 @@ class TestGetPersonasConId:
 
     def test_get_personas_con_id_retorna_id_y_nombre(self, persona_test, dispositivo_test):
         """Retorna dict con id_usuario (ZK) y nombre."""
-        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=timezone.utc)
+        fecha_hora = datetime(2026, 7, 2, 8, 0, 0, tzinfo=UTC)
         insertar_asistencias([{
             "id_usuario": persona_test["id_zk"],
             "fecha_hora": fecha_hora,

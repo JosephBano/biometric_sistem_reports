@@ -18,7 +18,6 @@ from db.queries.tenants import (
     listar_tenants,
 )
 
-
 pytestmark = pytest.mark.integration
 
 

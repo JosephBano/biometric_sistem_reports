@@ -12,7 +12,6 @@ para verificar que el wrapper aplica el feature flag correctamente.
 """
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import date
 from unittest.mock import MagicMock, patch
 

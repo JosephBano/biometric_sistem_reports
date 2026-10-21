@@ -22,15 +22,21 @@ from sqlalchemy import text
 from app.domain import auth as auth_svc
 from app.domain.admin import (
     actualizar_tenant as svc_actualizar_tenant,
+)
+from app.domain.admin import (
     crear_tenant as svc_crear_tenant,
+)
+from app.domain.admin import (
     get_connection,
     get_tenants_activos,
     get_usuario_por_id,
     get_usuarios_all_tenants,
     get_usuarios_tenant,
-    listar_tenants as svc_listar_tenants,
     provisionar_schema,
     registrar_audit,
+)
+from app.domain.admin import (
+    listar_tenants as svc_listar_tenants,
 )
 from app.domain.rbac import require_role
 

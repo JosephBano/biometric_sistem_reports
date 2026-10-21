@@ -18,7 +18,6 @@ from db.queries.personas_crud import (
     listar_personas,
 )
 
-
 pytestmark = pytest.mark.integration
 
 

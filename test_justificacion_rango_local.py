@@ -1,9 +1,9 @@
-import os
-import sys
 import json
+import sys
+
 sys.path.append('.')
 
-from db import insertar_justificacion, get_justificaciones, listar_personas
+from db import get_justificaciones, insertar_justificacion, listar_personas
 
 print("--- INICIANDO TEST REGISTRO RANGO ---")
 
@@ -12,15 +12,15 @@ try:
     if not personas:
         print("No hay personas en la BD para probar.")
         sys.exit(0)
-        
+
     p = personas[0]
     print(f"Probando con persona: {p['nombre']}")
-    
+
     # Inserción
     res = insertar_justificacion(
         id_usuario=str(p['id']),
         nombre=p['nombre'],
-        fecha='2026-05-01', 
+        fecha='2026-05-01',
         tipo='tardanza',
         motivo='Prueba Rango Automatizada',
         recuperable=1,
@@ -29,7 +29,7 @@ try:
         hora_recuperacion_fin='10:45'
     )
     print("Resultado Inserción:", json.dumps(res, indent=2))
-    
+
     # Verificación
     justs = get_justificaciones('2026-05-01', '2026-05-01')
     ok = False
@@ -41,7 +41,7 @@ try:
             if j.get('hora_recuperacion_fin') == "10:45:00":
                 print("\n✅ PRUEBA SUPERADA: hora_recuperacion_fin guardada correctamente.")
                 ok = True
-                
+
     if not ok:
         print("\n❌ PRUEBA FALLIDA: Falta hora_recuperacion_fin.")
 

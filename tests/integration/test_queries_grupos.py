@@ -16,8 +16,7 @@ from db.queries.grupos import (
     listar_grupos,
     listar_grupos_funcionales,
 )
-from db.queries.tenants import get_tipos_persona, insertar_tipo_persona
-
+from db.queries.tenants import insertar_tipo_persona
 
 pytestmark = pytest.mark.integration
 

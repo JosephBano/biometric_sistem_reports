@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import text
 
@@ -24,7 +23,7 @@ _SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,30}$")
 _JOBS_VALIDOS = {"sync_nocturna", "sync_incremental", "backup_diario"}
 
 
-def _validar_tenant_slug(slug: Optional[str]) -> Optional[str]:
+def _validar_tenant_slug(slug: str | None) -> str | None:
     """Valida que tenant_slug (si presente) cumpla el patrón seguro.
 
     Retorna el slug validado, o None si el argumento era None.
@@ -41,13 +40,13 @@ def _validar_tenant_slug(slug: Optional[str]) -> Optional[str]:
 
 def registrar_run(
     job: str,
-    tenant_slug: Optional[str],
+    tenant_slug: str | None,
     inicio: datetime,
     fin: datetime,
     ok: bool,
-    descargados: Optional[int],
-    insertados: Optional[int],
-    detalle: Optional[str],
+    descargados: int | None,
+    insertados: int | None,
+    detalle: str | None,
 ) -> None:
     """
     Inserta una fila en `public.scheduler_runs`.

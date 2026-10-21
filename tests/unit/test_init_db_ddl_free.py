@@ -15,9 +15,7 @@ para capturar las sentencias SQL ejecutadas.
 from __future__ import annotations
 
 from contextlib import contextmanager
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 def _ejecutar_init_db_mockeado(monkeypatch, alembic_present: bool):

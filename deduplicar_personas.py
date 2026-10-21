@@ -14,11 +14,14 @@ Uso:
 """
 
 import sys
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from db.connection import get_connection
 from sqlalchemy import text
+
+from db.connection import get_connection
 
 
 def obtener_grupos_duplicados(conn):
@@ -196,7 +199,7 @@ def main():
                 total_asistencias_afectadas += asis
 
             conn.commit()
-            print(f"\n✓ Fusiones aplicadas.")
+            print("\n✓ Fusiones aplicadas.")
             print(f"  Personas eliminadas          : {total_duplicados}")
             print(f"  Asistencias reasignadas/elim : {total_asistencias_afectadas}")
 

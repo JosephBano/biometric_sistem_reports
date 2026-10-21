@@ -5,10 +5,7 @@ Funciones puras (no Flask) y mocks de SMTP.
 """
 from __future__ import annotations
 
-import os
 from unittest.mock import patch
-
-import pytest
 
 from app.domain import emailer
 

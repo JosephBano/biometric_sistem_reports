@@ -6,6 +6,7 @@ Esta traducción es el núcleo del cambio SQLite → PostgreSQL.
 """
 
 from sqlalchemy import text
+
 from db.connection import get_connection
 
 

@@ -1,6 +1,7 @@
 """Queries de feriados. Sin cambios conceptuales respecto al sistema SQLite."""
 
 from datetime import date as _date
+
 from sqlalchemy import text
 
 from db.connection import get_connection

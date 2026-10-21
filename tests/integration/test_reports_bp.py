@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-
 pytestmark = pytest.mark.integration
 
 
@@ -33,7 +32,6 @@ class TestReportsBlueprint:
     def test_generar_desde_db_sin_datos(self, admin_client, csrf_token):
         """POST /api/generar-desde-db sin registros → 4xx o mensaje claro."""
         # El endpoint espera JSON
-        import json
         r = admin_client.post(
             "/api/generar-desde-db",
             json={"csrf_token": csrf_token, "formato": "pdf"},

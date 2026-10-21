@@ -4,7 +4,7 @@ Tests de integración de `db.queries.dispositivos` (Fase 7.4 — cobertura).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -21,7 +21,6 @@ from db.queries.dispositivos import (
     marcar_alerta_enviada,
     upsert_dispositivo,
 )
-
 
 pytestmark = pytest.mark.integration
 
@@ -121,7 +120,7 @@ class TestWatermark:
 
     def test_actualizar_watermark(self, dispositivo_test):
         """actualizar_watermark cambia los campos del watermark."""
-        fecha = datetime(2026, 7, 2, 10, 0, tzinfo=timezone.utc)
+        fecha = datetime(2026, 7, 2, 10, 0, tzinfo=UTC)
         actualizar_watermark(dispositivo_test, "12345", fecha)
 
         d = get_dispositivo(dispositivo_test)

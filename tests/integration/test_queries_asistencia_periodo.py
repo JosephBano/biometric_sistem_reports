@@ -12,7 +12,6 @@ from db import set_thread_tenant
 from db.queries.asistencia_periodo import calcular_asistencia_periodo
 from db.queries.periodos import crear_periodo
 
-
 pytestmark = pytest.mark.integration
 
 

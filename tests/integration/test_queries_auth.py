@@ -3,9 +3,7 @@ Tests de integración de `db.queries.auth` (Fase 7.4 — cobertura).
 """
 from __future__ import annotations
 
-import os
 import uuid
-from datetime import datetime, timezone
 
 import pytest
 
@@ -26,7 +24,6 @@ from db.queries.auth import (
     registrar_audit,
     registrar_login_intento,
 )
-
 
 pytestmark = pytest.mark.integration
 
@@ -188,6 +185,7 @@ class TestRegistrarAudit:
     def test_registrar_audit_con_detalle(self, tenant_id, usuario_test):
         """registrar_audit con detalle JSONB no falla."""
         import sqlalchemy as sa
+
         from db.connection import get_engine
 
         registrar_audit(

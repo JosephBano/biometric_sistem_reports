@@ -4,7 +4,6 @@ Tests de integracion para la nueva ruta /api/analytics/entradas-salidas.
 from __future__ import annotations
 
 import uuid
-from datetime import date
 
 import pytest
 import sqlalchemy as sa

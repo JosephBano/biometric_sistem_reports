@@ -29,7 +29,6 @@ Auditoría:
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from sqlalchemy import text
 
@@ -51,13 +50,13 @@ def aplicar_grupo_funcional_masivo(
     *,
     filtros: dict,
     grupo_funcional_id_destino: str,
-    plantilla_id: Optional[str] = None,
+    plantilla_id: str | None = None,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
+    fecha_fin: date | None = None,
     modo: str = "asignar_grupo_funcional",
     cerrar_legacy_en_fecha: bool = False,
     confirmar: bool = False,
-    tenant_schema: Optional[str] = None,
+    tenant_schema: str | None = None,
 ) -> dict:
     """Aplica una asignación masiva con filtros combinables.
 
@@ -223,8 +222,9 @@ def aplicar_grupo_funcional_masivo(
 
     # 2) Audit log de la operación masiva.
     try:
-        from db import registrar_audit
         from flask import g, request
+
+        from db import registrar_audit
 
         tenant_id = g.get("tenant_id")
         usuario_id = g.get("usuario_id")

@@ -12,7 +12,6 @@ from db import set_thread_tenant
 from db.queries.dispositivos import eliminar_dispositivo, upsert_dispositivo
 from db.queries.sync_log import get_latest_sync_logs_por_dispositivo, registrar_sync
 
-
 pytestmark = pytest.mark.integration
 
 

@@ -16,13 +16,10 @@ API pública:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Optional
 
 from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
 
 from db.connection import get_connection, validate_schema_name
-
 
 # Mapeo canónico de valores crudos a tipo normalizado.
 # El ZK típicamente envía 0 (entrada) / 1 (salida) en punch_raw, mientras
@@ -42,7 +39,7 @@ _TIPO_CANONICO = {
 }
 
 
-def normalizar_tipo_marcacion(raw: Optional[str]) -> str:
+def normalizar_tipo_marcacion(raw: str | None) -> str:
     """
     Convierte el valor crudo de `asistencias.tipo` en uno de: `"entrada"`,
     `"salida"`, `"otro"`.

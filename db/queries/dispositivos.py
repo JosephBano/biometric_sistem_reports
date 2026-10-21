@@ -2,7 +2,9 @@
 Consultas a la base de datos relacionadas a los dispositivos y su estado de sincronización.
 """
 from sqlalchemy import text
+
 from db.connection import get_connection
+
 
 def get_dispositivos_activos():
     with get_connection() as conn:
@@ -12,7 +14,7 @@ def get_dispositivos_activos():
 def get_dispositivo(dispositivo_id: str):
     with get_connection() as conn:
         r = conn.execute(
-            text("SELECT * FROM dispositivos WHERE id = CAST(:id AS uuid)"), 
+            text("SELECT * FROM dispositivos WHERE id = CAST(:id AS uuid)"),
             {"id": dispositivo_id}
         ).mappings().first()
         return dict(r) if r else None
@@ -21,8 +23,8 @@ def actualizar_watermark(dispositivo_id: str, ultimo_id: str, ultima_fecha):
     with get_connection() as conn:
         conn.execute(
             text("""
-                UPDATE dispositivos 
-                SET watermark_ultimo_id = :ultimo_id, watermark_ultima_fecha = :ultima_fecha 
+                UPDATE dispositivos
+                SET watermark_ultimo_id = :ultimo_id, watermark_ultima_fecha = :ultima_fecha
                 WHERE id = CAST(:id AS uuid)
             """),
             {"id": dispositivo_id, "ultimo_id": str(ultimo_id), "ultima_fecha": ultima_fecha}
@@ -33,7 +35,7 @@ def get_estado_sync_ui():
     """Retorna el progreso actual para todos los dispositivos en la UI"""
     with get_connection() as conn:
         rows = conn.execute(text("""
-            SELECT e.*, d.nombre 
+            SELECT e.*, d.nombre
             FROM sync_estado e
             JOIN dispositivos d ON d.id = e.dispositivo_id
         """)).mappings().all()
@@ -65,12 +67,12 @@ def upsert_dispositivo(data: dict) -> str:
         # Default de 100000 si no se envía
         if "capacidad_max" not in data:
             data["capacidad_max"] = 100000
-            
+
         if data.get("id"):
             conn.execute(text("""
-                UPDATE dispositivos SET 
-                    nombre = :nombre, ip = :ip, puerto = :puerto, 
-                    protocolo = :protocolo, tipo_driver = :tipo_driver, 
+                UPDATE dispositivos SET
+                    nombre = :nombre, ip = :ip, puerto = :puerto,
+                    protocolo = :protocolo, tipo_driver = :tipo_driver,
                     prioridad = :prioridad, timeout_seg = :timeout_seg,
                     activo = :activo, capacidad_max = :capacidad_max
                     """ + (", password_enc = :password_enc" if data.get("password_enc") else "") + """
@@ -128,7 +130,7 @@ def get_dispositivos_con_fallas_consecutivas(n: int = 3):
     with get_connection() as conn:
         rows = conn.execute(text("""
             WITH UltimosLogs AS (
-                SELECT dispositivo_id, exito, 
+                SELECT dispositivo_id, exito,
                        ROW_NUMBER() OVER(PARTITION BY dispositivo_id ORDER BY fecha_sync DESC) as rn
                 FROM sync_log
             ),
@@ -139,7 +141,7 @@ def get_dispositivos_con_fallas_consecutivas(n: int = 3):
                 GROUP BY dispositivo_id
                 HAVING COUNT(*) = :n
             )
-            SELECT d.* 
+            SELECT d.*
             FROM dispositivos d
             JOIN FallasConsecutivas f ON f.dispositivo_id = d.id
             WHERE d.activo = true

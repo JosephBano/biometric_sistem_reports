@@ -1,8 +1,9 @@
 from datetime import datetime
 
+
 class BiometricDriver:
     """Clase base para todos los drivers biométricos."""
-    
+
     def __init__(self, dispositivo: dict):
         self.dispositivo = dispositivo
 

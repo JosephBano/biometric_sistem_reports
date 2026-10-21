@@ -11,10 +11,11 @@ En Fase 1:
 """
 
 from datetime import date
+
 from sqlalchemy import text
 
 from db.connection import get_connection
-from db.queries.personas import resolver_persona_id, id_usuario_from_persona, _get_dispositivo_id
+from db.queries.personas import _get_dispositivo_id, resolver_persona_id
 
 # Columnas de horario que se copian directamente entre el dict legacy y la plantilla
 _HORARIO_COLS = [

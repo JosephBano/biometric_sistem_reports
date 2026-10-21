@@ -70,8 +70,8 @@ def _patch_schema_for_pgserver():
 
     Esta función se ejecuta UNA vez (session scope) antes del primer test.
     """
-    import db.schema as _schema_mod
     import db.init as _init_mod
+    import db.schema as _schema_mod
 
     # Si `pgcrypto` está disponible, no hacer nada.
     try:
@@ -163,6 +163,7 @@ def client(app):
 def tenant_id(app):
     """ID del tenant por defecto (`istpet`). Lo crea si no existe."""
     import sqlalchemy as sa
+
     from db.connection import get_engine
 
     engine = get_engine()
@@ -189,8 +190,9 @@ def tenant_id(app):
 def admin_user_id(app, tenant_id):
     """ID de un usuario superadmin para tests que requieren sesión autenticada."""
     import sqlalchemy as sa
-    from db.connection import get_engine
+
     from app.domain.auth import hash_password
+    from db.connection import get_engine
 
     engine = get_engine()
     with engine.connect() as conn:
@@ -262,6 +264,7 @@ def _reset_login_intentos():
     seguro porque solo afecta datos de prueba.
     """
     import sqlalchemy as sa
+
     from db.connection import get_engine
 
     engine = get_engine()

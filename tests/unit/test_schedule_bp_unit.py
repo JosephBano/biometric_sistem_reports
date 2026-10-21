@@ -5,8 +5,6 @@ Cubre rutas internas que requieren archivos reales.
 """
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
-
 import pytest
 
 

@@ -1,6 +1,7 @@
 """CRUD completo de personas para la UI de Fase 4."""
 
 from sqlalchemy import text
+
 from db.connection import get_connection
 
 

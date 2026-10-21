@@ -7,8 +7,6 @@ complejidad de fixtures.
 """
 from __future__ import annotations
 
-import pytest
-
 from app.domain.reports import (
     DEFAULT_CONFIG,
     DEFAULT_FILTROS,
@@ -155,6 +153,7 @@ class TestHelpersReports:
     def test_minutos_diferencia(self):
         """_minutos_diferencia calcula correctamente."""
         from datetime import time
+
         from app.domain.reports import _minutos_diferencia
 
         assert _minutos_diferencia(time(8, 0), time(8, 30)) == 30
@@ -164,6 +163,7 @@ class TestHelpersReports:
     def test_dia_nombre_corto(self):
         """_dia_nombre_corto retorna nombre en español de 3 letras."""
         from datetime import date
+
         from app.domain.reports import _dia_nombre_corto
 
         assert _dia_nombre_corto(date(2026, 7, 6)) == "Lun"   # lunes
@@ -173,6 +173,7 @@ class TestHelpersReports:
     def test_calcular_tiempo_neto_min(self):
         """_calcular_tiempo_neto_min suma pares Entrada→Salida."""
         from datetime import datetime, timedelta
+
         from app.domain.reports import _calcular_tiempo_neto_min
 
         base = datetime(2026, 7, 2, 8, 0, 0)
@@ -186,6 +187,7 @@ class TestHelpersReports:
     def test_calcular_tiempo_neto_sin_pares(self):
         """Sin pares Entrada→Salida, retorna 0."""
         from datetime import datetime
+
         from app.domain.reports import _calcular_tiempo_neto_min
 
         marcaciones = [
@@ -227,7 +229,8 @@ class TestGetInfoDia:
 
     def test_dia_laborable_con_horario(self):
         """Día lunes con horario configurado retorna info completa."""
-        from datetime import date, time
+        from datetime import date
+
         from app.domain.reports import _get_info_dia
 
         horario = {
@@ -244,6 +247,7 @@ class TestGetInfoDia:
     def test_dia_sabado_sin_horario(self):
         """Sábado sin entrada 'sabado' → no trabaja."""
         from datetime import date
+
         from app.domain.reports import _get_info_dia
 
         horario = {"lunes": "08:00"}  # sin sábado
@@ -253,6 +257,7 @@ class TestGetInfoDia:
     def test_dia_domingo_trabaja_si_horario_definido(self):
         """Domingo SÍ trabaja si el horario lo define explícitamente."""
         from datetime import date
+
         from app.domain.reports import _get_info_dia
 
         horario = {"domingo": "10:00", "domingo_salida": "15:00"}

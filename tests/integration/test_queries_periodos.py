@@ -4,7 +4,7 @@ Tests de integración de `db.queries.periodos` (Fase 7.4 — cobertura).
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 
@@ -21,7 +21,6 @@ from db.queries.periodos import (
     listar_periodos_historial,
     procesar_csv_personas_periodo,
 )
-
 
 pytestmark = pytest.mark.integration
 

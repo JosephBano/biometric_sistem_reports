@@ -11,6 +11,10 @@ vive en `app/domain/horarios_resolucion.py` (Tar. 3.2 del plan).
 """
 from __future__ import annotations
 
+# Re-exportar el wrapper del feature flag como nombre canónico para
+# quienes prefieran importarlo desde aquí.
+from app.domain.horarios_resolucion import resolver_horario_vigente_para_persona
+from db.queries.horarios import listar_horarios
 from db.queries.horarios_grupo_funcional import (
     asignar_horario_default_grupo,
     asignar_override_horario_persona,
@@ -24,12 +28,6 @@ from db.queries.horarios_grupo_funcional import (
     procesar_csv_personas_grupo_funcional,
     resolver_horario_vigente,
 )
-from db.queries.horarios import listar_horarios
-
-# Re-exportar el wrapper del feature flag como nombre canónico para
-# quienes prefieran importarlo desde aquí.
-from app.domain.horarios_resolucion import resolver_horario_vigente_para_persona
-
 
 __all__ = [
     "asignar_horario_default_grupo",

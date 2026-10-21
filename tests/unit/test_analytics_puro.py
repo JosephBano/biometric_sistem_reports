@@ -7,7 +7,6 @@ Las funciones que requieren BD se cubren por integración.
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from app.domain.analytics import calcular_risk_score
 
