@@ -27,13 +27,11 @@ Reglas arquitectónicas (no negociables):
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from sqlalchemy import text
 
 from db.connection import get_connection
 from db.queries.horarios import _row_to_horario_dict
-
 
 # ═════════════════════════════════════════════════════════════════════════
 # N:M persona ↔ grupo funcional
@@ -100,9 +98,9 @@ def asignar_persona_a_grupo_funcional(
     persona_id: str,
     grupo_funcional_id: str,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
+    fecha_fin: date | None = None,
     es_principal: bool = False,
-    notas: Optional[str] = None,
+    notas: str | None = None,
     schema: str | None = None,
 ) -> dict | None:
     """Asigna una persona a un grupo funcional con vigencia.
@@ -267,9 +265,9 @@ def crear_horario_default_grupo(
     grupo_funcional_id: str,
     plantilla_id: str,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
+    fecha_fin: date | None = None,
     prioridad: int = 0,
-    notas: Optional[str] = None,
+    notas: str | None = None,
     schema: str | None = None,
 ) -> dict | None:
     """Crea un default para un grupo funcional. Idempotente por UNIQUE compuesto."""
@@ -367,9 +365,9 @@ def crear_override_horario(
     persona_id: str,
     plantilla_id: str,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
-    notas: Optional[str] = None,
-    creado_por: Optional[str] = None,
+    fecha_fin: date | None = None,
+    notas: str | None = None,
+    creado_por: str | None = None,
     schema: str | None = None,
 ) -> dict:
     """Crea un override por persona. Idempotente por UNIQUE compuesto."""
@@ -750,7 +748,7 @@ def procesar_csv_personas_grupo_funcional(
                             ).fetchone()
                             if p_row:
                                 persona_id = str(p_row[0])
-                        
+
                         if not persona_id and nombre_p:
                             p_row = conn.execute(
                                 text("SELECT id::text FROM personas WHERE UPPER(TRIM(nombre)) = UPPER(TRIM(:n)) LIMIT 1"),

@@ -7,7 +7,6 @@ que `app/web/grupos_funcionales_bp.py` no importe `db` directamente
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from db.queries.horarios_grupo_funcional import (
     cerrar_horario_default_grupo,
@@ -34,9 +33,9 @@ def crear(
     grupo_funcional_id: str,
     plantilla_id: str,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
+    fecha_fin: date | None = None,
     prioridad: int = 0,
-    notas: Optional[str] = None,
+    notas: str | None = None,
 ):
     """Crea un default por grupo funcional. Idempotente por UNIQUE compuesto."""
     return crear_horario_default_grupo(

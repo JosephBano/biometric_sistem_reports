@@ -10,7 +10,13 @@ Rutas (4):
 from __future__ import annotations
 
 from flask import (
-    Blueprint, flash, jsonify, redirect, render_template, request, url_for,
+    Blueprint,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
 )
 
 from app.domain.people import (
@@ -134,7 +140,7 @@ def editar(id: str):
         datos["activo"] = activo_val == "1"
     if "id_usuario_zk" in request.form:
         datos["id_usuario_zk"] = request.form.get("id_usuario_zk", "").strip() or ""
-    
+
     is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.is_json or "application/json" in request.headers.get("Accept", "")
     try:
         actualizar_persona(id, datos)

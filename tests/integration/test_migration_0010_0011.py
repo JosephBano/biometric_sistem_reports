@@ -22,7 +22,6 @@ from __future__ import annotations
 import pytest
 import sqlalchemy as sa
 
-
 # Tablas del modelo de horarios por grupo funcional (creadas por 0011)
 TABLAS_0011 = (
     "grupos_funcionales_personas",

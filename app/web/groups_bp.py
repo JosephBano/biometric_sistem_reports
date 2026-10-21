@@ -15,10 +15,20 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 
 from app.domain.groups import (
     actualizar_grupo as svc_actualizar_grupo,
+)
+from app.domain.groups import (
     actualizar_grupo_funcional as svc_actualizar_grupo_funcional,
+)
+from app.domain.groups import (
     crear_grupo as svc_crear_grupo,
+)
+from app.domain.groups import (
     crear_grupo_funcional as svc_crear_grupo_funcional,
+)
+from app.domain.groups import (
     listar_grupos as svc_listar_grupos,
+)
+from app.domain.groups import (
     listar_grupos_funcionales as svc_listar_grupos_funcionales,
 )
 from app.domain.rbac import require_role

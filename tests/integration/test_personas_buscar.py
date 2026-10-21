@@ -16,7 +16,6 @@ import uuid
 import pytest
 import sqlalchemy as sa
 
-
 pytestmark = pytest.mark.integration
 
 

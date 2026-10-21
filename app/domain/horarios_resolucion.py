@@ -30,9 +30,8 @@ sin haber agotado las opciones (R-A del ADR-0003).
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
-from app.tenant import get_horario_por_grupo_enabled, get_horario_desempate
+from app.tenant import get_horario_desempate, get_horario_por_grupo_enabled
 from db.queries.horarios_grupo_funcional import resolver_horario_vigente
 
 
@@ -40,8 +39,8 @@ def resolver_horario_vigente_para_persona(
     persona_id: str,
     fecha: date,
     *,
-    feature_flag: Optional[bool] = None,
-    horario_desempate: Optional[str] = None,
+    feature_flag: bool | None = None,
+    horario_desempate: str | None = None,
 ) -> dict:
     """API pública del dominio.
 

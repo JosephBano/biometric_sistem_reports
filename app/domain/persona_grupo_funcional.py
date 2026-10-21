@@ -5,7 +5,6 @@ N:M entre personas y grupos funcionales con vigencia + `es_principal`.
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from db.queries.horarios_grupo_funcional import (
     asignar_persona_a_grupo_funcional,
@@ -30,9 +29,9 @@ def asignar(
     persona_id: str,
     grupo_funcional_id: str,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
+    fecha_fin: date | None = None,
     es_principal: bool = False,
-    notas: Optional[str] = None,
+    notas: str | None = None,
 ):
     """Asigna una persona a un grupo funcional con vigencia.
 
@@ -69,8 +68,9 @@ def cerrar_por_id(pgf_id: str, fecha_fin: date) -> bool:
     # SELECT + UPDATE. Para mantener simpleza y dado que las
     # operaciones se hacen por id, lo más limpio es agregar una
     # función SQL específica.
-    from db.connection import get_connection
     from sqlalchemy import text
+
+    from db.connection import get_connection
 
     with get_connection() as conn:
         result = conn.execute(

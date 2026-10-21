@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from docx import Document
-from docx.shared import Pt, Cm, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_ALIGN_VERTICAL
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
 
+from docx import Document
+from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Cm, Pt, RGBColor
 
 # ══════════════════════════════════════════════════════════════════════════
 # PALETA DE COLORES (coincide con script.py)
@@ -372,10 +372,14 @@ def generar_docx(
 
     # ── Selección de días a mostrar ───────────────────────────────────────
     _claves_activas = []
-    if _F["mostrar_tardanza_leve"]:    _claves_activas.append("tardanza_leve")
-    if _F["mostrar_tardanza_severa"]:  _claves_activas.append("tardanza_severa")
-    if _F["mostrar_almuerzo"]:         _claves_activas.append("almuerzo_largo")
-    if _F["mostrar_incompletos"]:      _claves_activas.append("incompletos")
+    if _F["mostrar_tardanza_leve"]:
+        _claves_activas.append("tardanza_leve")
+    if _F["mostrar_tardanza_severa"]:
+        _claves_activas.append("tardanza_severa")
+    if _F["mostrar_almuerzo"]:
+        _claves_activas.append("almuerzo_largo")
+    if _F["mostrar_incompletos"]:
+        _claves_activas.append("incompletos")
     if _F["mostrar_salida_anticipada"]:
         _claves_activas.append("salida_anticipada_leve")
         _claves_activas.append("salida_anticipada_severa")
@@ -408,12 +412,17 @@ def generar_docx(
 
             # Resumen del día
             partes = []
-            if res.get("tardanza_severa"): partes.append(f"{res['tardanza_severa']} tard. severas")
-            if res.get("tardanza_leve"):   partes.append(f"{res['tardanza_leve']} tard. leves")
-            if res.get("almuerzo_largo"):  partes.append(f"{res['almuerzo_largo']} exc. almuerzo")
-            if res.get("incompletos"):     partes.append(f"{res['incompletos']} anómalos")
+            if res.get("tardanza_severa"):
+                partes.append(f"{res['tardanza_severa']} tard. severas")
+            if res.get("tardanza_leve"):
+                partes.append(f"{res['tardanza_leve']} tard. leves")
+            if res.get("almuerzo_largo"):
+                partes.append(f"{res['almuerzo_largo']} exc. almuerzo")
+            if res.get("incompletos"):
+                partes.append(f"{res['incompletos']} anómalos")
             sa_t = res.get("salida_anticipada_severa", 0) + res.get("salida_anticipada_leve", 0)
-            if sa_t: partes.append(f"{sa_t} sal. anticipadas")
+            if sa_t:
+                partes.append(f"{sa_t} sal. anticipadas")
             resumen_txt = "  ·  ".join(partes) if partes else "Sin novedades"
             p_res = doc.add_paragraph(resumen_txt)
             p_res.runs[0].font.size = Pt(9)
@@ -588,12 +597,18 @@ def generar_docx_persona(
         _add_rule(doc)
 
         partes = []
-        if r_res.get("ausencias",       0): partes.append(f"{r_res['ausencias']} ausencias")
-        if r_res.get("tardanza_severa", 0): partes.append(f"{r_res['tardanza_severa']} tard. severas")
-        if r_res.get("tardanza_leve",   0): partes.append(f"{r_res['tardanza_leve']} tard. leves")
-        if r_res.get("almuerzo_largo",  0): partes.append(f"{r_res['almuerzo_largo']} exc. almuerzo")
-        if r_res.get("incompletos",     0): partes.append(f"{r_res['incompletos']} anómalos")
-        if r_res.get("justificadas",    0): partes.append(f"{r_res['justificadas']} justificadas")
+        if r_res.get("ausencias",       0):
+            partes.append(f"{r_res['ausencias']} ausencias")
+        if r_res.get("tardanza_severa", 0):
+            partes.append(f"{r_res['tardanza_severa']} tard. severas")
+        if r_res.get("tardanza_leve",   0):
+            partes.append(f"{r_res['tardanza_leve']} tard. leves")
+        if r_res.get("almuerzo_largo",  0):
+            partes.append(f"{r_res['almuerzo_largo']} exc. almuerzo")
+        if r_res.get("incompletos",     0):
+            partes.append(f"{r_res['incompletos']} anómalos")
+        if r_res.get("justificadas",    0):
+            partes.append(f"{r_res['justificadas']} justificadas")
         resumen_txt = "  ·  ".join(partes) if partes else "Sin novedades"
         p_res_p = doc.add_paragraph(resumen_txt)
         p_res_p.runs[0].font.size = Pt(9)

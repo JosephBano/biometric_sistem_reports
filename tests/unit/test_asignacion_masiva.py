@@ -15,7 +15,6 @@ import pytest
 
 from app.domain.asignacion_masiva import aplicar_grupo_funcional_masivo
 
-
 # ── 1. Confirmar=True es obligatorio ───────────────────────────────
 
 

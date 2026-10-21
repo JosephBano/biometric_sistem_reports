@@ -12,26 +12,27 @@ Rutas:
 """
 from __future__ import annotations
 
-from datetime import date
 import os
 import tempfile
-from werkzeug.utils import secure_filename
+from datetime import date
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
+from werkzeug.utils import secure_filename
 
+from app.domain.grupos_funcionales import (
+    crear as crear_grupo_funcional,
+)
 from app.domain.horarios_grupo_funcional import (
     asignar_horario_default_grupo,
     asignar_persona_a_grupo_funcional,
     asignar_personas_masivo_a_grupo_funcional,
     cerrar_vinculo_persona_grupo_funcional,
     listar_horarios_default_grupo,
-    listar_horarios as listar_horarios_activos,
     listar_personas_detalladas_en_grupo_funcional,
     procesar_csv_personas_grupo_funcional,
 )
-from app.domain.grupos_funcionales import (
-    crear as crear_grupo_funcional,
-    listar as listar_grupos_funcionales_domain,
+from app.domain.horarios_grupo_funcional import (
+    listar_horarios as listar_horarios_activos,
 )
 from app.domain.people import (
     crear_persona,

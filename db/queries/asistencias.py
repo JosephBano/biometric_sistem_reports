@@ -6,10 +6,11 @@ siguen aceptando y retornando id_usuario (TEXT) como el sistema SQLite.
 """
 
 from datetime import datetime, timedelta
+
 from sqlalchemy import text
 
 from db.connection import get_connection
-from db.queries.personas import resolver_persona_id, _get_dispositivo_id
+from db.queries.personas import _get_dispositivo_id, resolver_persona_id
 
 
 def insertar_asistencias(registros: list[dict], dispositivo_id: str = None) -> int:

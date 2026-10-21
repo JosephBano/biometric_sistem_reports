@@ -6,7 +6,6 @@ del grupo funcional (precedencia paso 1).
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from db.queries.horarios_grupo_funcional import (
     cerrar_override_horario,
@@ -30,9 +29,9 @@ def crear(
     persona_id: str,
     plantilla_id: str,
     fecha_inicio: date,
-    fecha_fin: Optional[date] = None,
-    notas: Optional[str] = None,
-    creado_por: Optional[str] = None,
+    fecha_fin: date | None = None,
+    notas: str | None = None,
+    creado_por: str | None = None,
 ):
     """Crea un override. Idempotente por UNIQUE(persona, plantilla, fecha_inicio)."""
     return crear_override_horario(

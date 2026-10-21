@@ -9,19 +9,17 @@ from datetime import date
 import pytest
 
 from db import set_thread_tenant
-from db.queries.dispositivos import eliminar_dispositivo, upsert_dispositivo
 from db.queries.justificaciones import (
     actualizar_estado_justificacion,
     actualizar_justificacion_completa,
     eliminar_justificacion,
+    get_justificacion_by_id,
     get_justificaciones,
     get_justificaciones_dict,
     get_justificaciones_pendientes,
-    get_justificacion_by_id,
     insertar_justificacion,
 )
 from db.queries.personas_crud import crear_persona
-
 
 pytestmark = pytest.mark.integration
 

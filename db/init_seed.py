@@ -21,7 +21,7 @@ import os
 
 from sqlalchemy import text
 
-from db.connection import get_engine, get_connection
+from db.connection import get_connection, get_engine
 
 log = logging.getLogger(__name__)
 

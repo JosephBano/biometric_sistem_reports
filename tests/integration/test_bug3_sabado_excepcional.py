@@ -15,8 +15,7 @@ Cubre:
 from __future__ import annotations
 
 import uuid
-from collections import defaultdict
-from datetime import date, datetime, time
+from datetime import date
 
 import pytest
 import sqlalchemy as sa
@@ -129,10 +128,10 @@ class TestBug3SabadoExcepcional:
         Despues del fix: el reporte muestra entrada, salida, y el estado es
         'extra' para indicar que la persona trabajo excepcionalmente en un dia
         que su horario marca como libre."""
-        from db.connection import get_engine
         from app.domain.reports import analizar_por_persona
-        from db.queries.horarios import get_horarios
+        from db.connection import get_engine
         from db.queries.asistencias import consultar_asistencias
+        from db.queries.horarios import get_horarios
 
         e = get_engine()
         base = _seed_basico(e)
@@ -184,10 +183,10 @@ class TestBug3SabadoExcepcional:
         """Cuando una persona SOLO tiene marcaciones en un dia libre (sin dias
         normales en el rango), debe aparecer en el reporte (no quedar filtrada
         por el guard `resumen['total_dias'] > 0`)."""
-        from db.connection import get_engine
         from app.domain.reports import analizar_por_persona
-        from db.queries.horarios import get_horarios
+        from db.connection import get_engine
         from db.queries.asistencias import consultar_asistencias
+        from db.queries.horarios import get_horarios
 
         e = get_engine()
         base = _seed_basico(e)
@@ -216,10 +215,10 @@ class TestBug3SabadoExcepcional:
     def test_dia_normal_seguira_siendo_ok(self, admin_client, tenant_id):
         """Los dias normales (L-V con horario) deben seguir mostrandose como
         'ok' con la salida correcta, sin regresion del bug 3."""
-        from db.connection import get_engine
         from app.domain.reports import analizar_por_persona
-        from db.queries.horarios import get_horarios
+        from db.connection import get_engine
         from db.queries.asistencias import consultar_asistencias
+        from db.queries.horarios import get_horarios
 
         e = get_engine()
         base = _seed_basico(e)

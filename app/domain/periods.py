@@ -25,6 +25,7 @@ from db import (
     remover_persona_de_periodo,
 )
 
+
 def reordenar_a_apellido_nombre(nombre: str) -> str:
     """
     Normaliza el nombre a formato 'Apellidos Nombres' para visualización y ordenamiento

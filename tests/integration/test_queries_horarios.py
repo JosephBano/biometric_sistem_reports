@@ -17,7 +17,6 @@ from db.queries.horarios import (
 )
 from db.queries.personas_crud import crear_persona
 
-
 pytestmark = pytest.mark.integration
 
 

@@ -14,7 +14,6 @@ API pública:
 """
 from __future__ import annotations
 
-
 import re
 from datetime import datetime
 
@@ -55,9 +54,9 @@ def parsear_obd(ruta: str) -> list[dict]:
         RuntimeError: Si odfpy no está instalado o el archivo es inválido.
     """
     try:
-        from odf.opendocument import load
-        from odf.table import Table, TableRow, TableCell
         from odf import teletype
+        from odf.opendocument import load
+        from odf.table import Table, TableCell, TableRow
     except ImportError:
         raise RuntimeError(
             "La librería odfpy no está instalada. "
@@ -314,9 +313,12 @@ def parsear_csv(ruta: str) -> list[dict]:
                     continue
 
                 def _to_float(val):
-                    if val is None or str(val).strip() == "": return None
-                    try: return float(str(val).strip())
-                    except: return None
+                    if val is None or str(val).strip() == "":
+                        return None
+                    try:
+                        return float(str(val).strip())
+                    except:
+                        return None
 
                 horario = {
                     "id_usuario":   id_usuario,
@@ -398,12 +400,12 @@ def get_info_dia(horario_persona: dict, fecha) -> dict:
     columna      = WEEKDAY_COLUMNA.get(weekday, "viernes")
     hora_entrada = horario_persona.get(columna)
     hora_salida  = horario_persona.get(f"{columna}_salida")
-    
+
     col_almuerzo = f"{columna}_almuerzo_min"
     almuerzo_dia = horario_persona.get(col_almuerzo)
     if almuerzo_dia is None:
         almuerzo_dia = horario_persona.get("almuerzo_min", 0)
-        
+
     # Sábado: nunca analizar almuerzo aunque ALMUERZO sea TRUE
     almuerzo_min = 0 if es_sabado else almuerzo_dia
 
@@ -415,7 +417,22 @@ def get_info_dia(horario_persona: dict, fecha) -> dict:
         "es_domingo":   False,
     }
 
-__all__ = ["parsear_csv", "parsear_obd", "get_info_dia"]
+__all__ = [
+    "parsear_csv",
+    "parsear_obd",
+    "get_info_dia",
+    # Re-exports de `db` (ver bloque de imports más abajo).
+    "actualizar_estado_justificacion",
+    "actualizar_justificacion_completa",
+    "eliminar_feriado",
+    "eliminar_justificacion",
+    "get_feriados",
+    "get_justificacion_by_id",
+    "get_justificaciones",
+    "importar_feriados_csv",
+    "insertar_feriado",
+    "insertar_justificacion",
+]
 
 
 # Re-exports de `db` (capa de datos), añadidos para cumplir la regla de

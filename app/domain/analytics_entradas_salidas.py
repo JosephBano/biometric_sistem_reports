@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import uuid as _uuid
 from datetime import date
-from typing import Optional
 
 from app.domain.asistencia_dia import resumir_rango
 from db.queries.asistencias_entradas_salidas import (
@@ -17,7 +16,6 @@ from db.queries.asistencias_entradas_salidas import (
     grupos_funcionales_disponibles,
     listar_marcaciones_por_persona,
     listar_marcaciones_rango,
-    normalizar_tipo_marcacion,
 )
 
 # Un mes entra completo en una página del resumen diario.

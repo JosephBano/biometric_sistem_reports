@@ -6,7 +6,6 @@ Usa `pgserver` (fixture `app` definida en `tests/integration/conftest.py`).
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -18,7 +17,6 @@ from db.queries.feriados import (
     importar_feriados_csv,
     insertar_feriado,
 )
-
 
 pytestmark = pytest.mark.integration
 

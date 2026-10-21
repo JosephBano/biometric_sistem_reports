@@ -13,7 +13,6 @@ Verifica que:
 from __future__ import annotations
 
 import pytest
-import sqlalchemy as sa
 
 from app.domain.horario_por_grupo_flag import set_horario_por_grupo_flag
 

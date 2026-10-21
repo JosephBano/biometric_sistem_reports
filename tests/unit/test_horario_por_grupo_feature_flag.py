@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.tenant import (
-    get_horario_por_grupo_enabled,
     get_horario_desempate,
+    get_horario_por_grupo_enabled,
 )
 
 
