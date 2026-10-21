@@ -26,7 +26,7 @@ os.environ.setdefault(
     "DB_ENCRYPTION_KEY",
     base64.urlsafe_b64encode(secrets.token_bytes(32)).decode(),
 )
-os.environ.setdefault("FLASK_SECRET_KEY", "test-secret-key-for-pytest-only")
+os.environ.setdefault("FLASK_SECRET_KEY", "0" * 32)
 
 
 def _is_postgres_available() -> bool:
