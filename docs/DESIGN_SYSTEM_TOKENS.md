@@ -93,5 +93,5 @@ Se utiliza una **única fuente universal** para toda la interfaz:
 
 ## 5. Implementación y Recursos
 
-- **Tokens CSS**: [static/tokens.css](file:///c:/Users/DESARROLLADOR-PC02/Desktop/PROYECTOS%20DESARROLLADOS/biometric_sistem_reports/static/tokens.css)
-- **Especificación JSON**: [tokens.json](file:///c:/Users/DESARROLLADOR-PC02/Desktop/PROYECTOS%20DESARROLLADOS/biometric_sistem_reports/tokens.json)
+- **Tokens CSS**: [static/tokens.css](../static/tokens.css)
+- **Especificación JSON**: [tokens.json](../tokens.json)
