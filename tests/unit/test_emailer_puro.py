@@ -88,6 +88,7 @@ class TestEnviarCorreo:
 
         # El envío debe seguir funcionando a pesar del adjunto faltante
         assert result is True
+        mock_instance.send_message.assert_called_once()
 
     def test_enviar_correo_cuando_smtp_falla_retorna_false(self, monkeypatch):
         """Si smtplib.SMTP lanza excepción, retorna False."""

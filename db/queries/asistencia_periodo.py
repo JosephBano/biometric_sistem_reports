@@ -70,7 +70,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
         resultado = []
 
         for p in personas:
-            p_dict = dict(p._mapping) if hasattr(p, "_mapping") else dict(zip(['persona_id', 'nombre', 'identificacion', 'grupo', 'categoria'], p))
+            p_dict = dict(p._mapping) if hasattr(p, "_mapping") else dict(zip(['persona_id', 'nombre', 'identificacion', 'grupo', 'categoria'], p, strict=True))
             persona_id = str(p_dict["persona_id"])
 
             # 4. Obtener todas las asistencias de esta persona en el rango

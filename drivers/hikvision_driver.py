@@ -106,7 +106,8 @@ class HikvisionDriver(BiometricDriver):
                     try:
                         ts = datetime.fromisoformat(ts_str.replace('+08:00', '+00:00'))
                         ts = ts.replace(tzinfo=None)
-                    except:
+                    except (ValueError, AttributeError):
+                        # Timestamp ausente o con formato no ISO: se descarta el evento.
                         continue
 
                     # Filtrar eventos

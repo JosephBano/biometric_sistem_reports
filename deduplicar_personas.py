@@ -19,9 +19,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from sqlalchemy import text
+# Imports tras load_dotenv(): db.connection lee las variables de entorno.
+from sqlalchemy import text  # noqa: E402
 
-from db.connection import get_connection
+from db.connection import get_connection  # noqa: E402
 
 
 def obtener_grupos_duplicados(conn):
@@ -174,7 +175,7 @@ def main():
 
         if dry_run:
             print("\nEjemplos de fusiones que se harían (primeros 10):")
-            for i, (nombre, miembros) in enumerate(list(fusionables.items())[:10]):
+            for nombre, miembros in list(fusionables.items())[:10]:
                 ids = list({m["persona_id"] for m in miembros})
                 ordenados = sorted(
                     [m for m in miembros if m["persona_id"] in ids],

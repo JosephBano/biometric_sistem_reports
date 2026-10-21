@@ -21,6 +21,7 @@ import os
 import sys
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from typing import Any
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -37,6 +38,21 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+)
+
+# DEFAULT_CONFIG, analizar_dia, etc. ahora viven en este mismo módulo
+# (migrados desde script.py). Ya no hace falta re-export.
+from app.domain.report_docx import generar_docx, generar_docx_persona
+
+# Re-exports de `db` (capa de datos), añadidos para cumplir la regla de
+# capas del ADR-0001 (antes: `app/web/reports_bp.py` importaba `db` directo).
+from db import (
+    consultar_asistencias,
+    get_breaks_categorizados_dict,
+    get_feriados_set,
+    get_horarios,
+    get_justificaciones_dict,
+    registrar_audit,
 )
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -199,7 +215,7 @@ def deduplicar(registros: list[dict], max_min: float = 0.5) -> tuple[list[dict],
     limpios = []
     log_dup = []
 
-    for clave, marcaciones in grupos.items():
+    for _clave, marcaciones in grupos.items():
         marcaciones.sort(key=lambda x: x["datetime"])
         resultado = [marcaciones[0]]
 
@@ -314,7 +330,9 @@ def analizar_dia(
         if fecha_dia in feriados:
             continue
 
-        def _justificado_dia(tipo_obs: str) -> bool:
+        def _justificado_dia(
+            tipo_obs: str, id_usuario=id_usuario, fecha_dia=fecha_dia
+        ) -> bool:
             return (id_usuario, fecha_dia.isoformat(), tipo_obs) in justificaciones
 
         info = _get_info_dia(horario_persona, fecha_dia)
@@ -571,7 +589,9 @@ def analizar_por_persona(
             "permiso_sin_retorno":         0,
         }
 
-        def _get_justificado(fecha_eval: date, tipo_obs: str) -> dict:
+        def _get_justificado(
+            fecha_eval: date, tipo_obs: str, id_usuario=id_usuario
+        ) -> dict:
             if not id_usuario:
                 return None
             j = justificaciones.get((str(id_usuario), fecha_eval.isoformat(), tipo_obs))
@@ -1553,8 +1573,6 @@ def _seccion_cronologico_persona(st, datos: list, con_tiempo_dentro: bool) -> li
 
         filas = [enc]
         for d in datos:
-            obs_txt = " / ".join(d.get("observaciones", [])) or "—"
-
             fila = [
                 d["fecha"].strftime("%d/%m/%Y"),
                 d.get("llegada") or "—",
@@ -1629,8 +1647,6 @@ def _seccion_tardanzas_persona(st, titulo: str, desc: str,
 
         filas = [enc]
         for d in datos:
-            obs_txt = " / ".join(o for o in d.get("observaciones", [])
-                                 if "Tardanza" in o) or "—"
             fila = [
                 d["fecha"].strftime("%d/%m/%Y"),
                 d.get("hora_programada") or "—",
@@ -2384,8 +2400,6 @@ def main():
     print(f"⚙️  Configuración guardada en: {config_path}")
 
 
-if __name__ == "__main__":
-    main()
 def _fmt_horas(minutos: int) -> str:
     """Formatea minutos como 'Xh Ym'."""
     if minutos is None:
@@ -2396,13 +2410,6 @@ def _fmt_horas(minutos: int) -> str:
     if h > 0:
         return f"{signo}{h}h {int(m)}m"
     return f"{signo}{int(m)}m"
-
-from collections import defaultdict
-from typing import Any
-
-# DEFAULT_CONFIG, analizar_dia, etc. ahora viven en este mismo módulo
-# (migrados desde script.py). Ya no hace falta re-export.
-from app.domain.report_docx import generar_docx, generar_docx_persona  # noqa: F401  (re-export)
 
 
 def parse_config(data: dict[str, Any]) -> dict[str, Any]:
@@ -2595,28 +2602,7 @@ __all__ = [
     "get_justificaciones_dict",
     "enriquecer_analisis_con_origen",
     "registrar_audit",
-]
-
-# Re-exports de `db` (capa de datos), añadidos para cumplir la regla de
-# capas del ADR-0001 (antes: `app/web/reports_bp.py` importaba `db` directo).
-from db import (  # noqa: E402
-    consultar_asistencias,
-    get_breaks_categorizados_dict,
-    get_feriados_set,
-    get_horarios,
-    get_justificaciones_dict,
-    registrar_audit,
-)
-
-__all__ = [
-    "DEFAULT_CONFIG",
     "cargar_archivo",
-    "filtrar_excluidos",
-    "deduplicar",
-    "analizar_dia",
-    "analizar_por_persona",
-    "generar_pdf",
-    "generar_pdf_persona",
 ]
 
 
@@ -2687,3 +2673,7 @@ def enriquecer_analisis_con_origen(
                 dia["horario_origen"] = None
 
     return analisis
+
+
+if __name__ == "__main__":
+    main()

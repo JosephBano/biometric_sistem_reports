@@ -285,7 +285,6 @@ def sincronizar(
             for d in dispositivos
         }
         for future in as_completed(futures):
-            d = futures[future]
             try:
                 descargados, insertados = future.result()
                 tot_descargados += descargados

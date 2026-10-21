@@ -98,7 +98,6 @@ def test_masivo_idempotente_no_duplica_grupos_vigentes():
     """Si la persona ya tiene el gf vigente, NO crea duplicado."""
     # La query EXISTS retorna una fila (ya tiene pgf vigente) → skip.
     # El segundo execute (shadow check) retorna 0.
-    call_count = {"n": 0}
 
     def _execute(sql, params=None, *args, **kwargs):
         sql_text = str(sql.text if hasattr(sql, "text") else sql)
