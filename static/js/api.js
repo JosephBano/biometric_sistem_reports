@@ -74,3 +74,27 @@ function showError(msg) {
         alert("ERROR: " + msg);
     }
 }
+
+/**
+ * Helper unificado de escape HTML contra XSS (Issue #11).
+ * Escapa los 5 caracteres sensibles: & < > " '
+ */
+function esc(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeHtml(str) {
+    return esc(str);
+}
+
+window.esc = esc;
+window.escapeHtml = escapeHtml;
+window.h = window.h || {};
+window.h.esc = esc;
+

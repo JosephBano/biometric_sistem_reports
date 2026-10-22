@@ -360,11 +360,8 @@ function consultarReporteRapidoActual() {
         });
 }
 
-function esc(v) {
-    return String(v === null || v === undefined ? '' : v)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
+// Usa esc() unificado de api.js
+// (definicion delegada a window.esc)
 
 function renderizarReporteRapidoEnPantalla(data) {
     setEstadoVistaRapida('resultado');

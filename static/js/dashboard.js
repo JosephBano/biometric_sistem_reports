@@ -145,9 +145,9 @@ function renderTablaRiesgo(alertas) {
                 <td>
                     <div class="d-flex align-items-center gap-2">
                         <div style="width:26px; height:26px; border-radius:50%; background:var(--token-color-navy-900); color:white; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700;">
-                            ${inicial}
+                            ${esc(inicial)}
                         </div>
-                        <span class="fw-semibold text-dark">${p.persona}</span>
+                        <span class="fw-semibold text-dark">${esc(p.persona)}</span>
                     </div>
                 </td>
                 <td class="text-center">
@@ -161,7 +161,7 @@ function renderTablaRiesgo(alertas) {
                     </span>
                 </td>
                 <td class="text-end">
-                    <a href="${window.APP_BASE || ''}/reportes?persona=${targetParam}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;" title="Ver reporte de ${p.persona}">
+                    <a href="${window.APP_BASE || ''}/reportes?persona=${targetParam}" class="btn btn-outline-secondary btn-sm py-0 px-2" style="font-size:0.75rem;" title="Ver reporte de ${esc(p.persona)}">
                         <span class="material-symbols-outlined" style="font-size:0.9rem;">description</span>
                         <span>Detalle</span>
                     </a>
@@ -350,14 +350,14 @@ function renderDispositivos(dispositivos) {
 
         return `<div class="d-flex align-items-center justify-content-between py-1 px-1 ${borderClass}" style="font-size:0.78rem;">
             <div class="d-flex align-items-center gap-2 min-w-0" style="max-width: 60%;">
-                <span class="status-dot dot-gray flex-shrink-0" id="dot-${d.id}" title="Verificando…"></span>
-                <span class="fw-bold text-truncate" title="${d.nombre}">${d.nombre}</span>
+                <span class="status-dot dot-gray flex-shrink-0" id="dot-${esc(d.id)}" title="Verificando…"></span>
+                <span class="fw-bold text-truncate" title="${esc(d.nombre)}">${esc(d.nombre)}</span>
                 <span class="badge bg-${badgeColor} bg-opacity-10 text-${badgeColor} border border-${badgeColor} border-opacity-25" style="font-size:0.65rem; padding: 1px 5px;">${driver}</span>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <span class="text-muted" style="font-size:0.72rem;">${lastSync}</span>
+                <span class="text-muted" style="font-size:0.72rem;">${esc(lastSync)}</span>
                 <button class="btn btn-outline-primary btn-sm py-0 px-1 d-inline-flex align-items-center"
-                    onclick="iniciarSyncDispositivo('${d.id}')" title="Sincronizar ${d.nombre}">
+                    onclick="iniciarSyncDispositivo('${esc(d.id)}')" title="Sincronizar ${esc(d.nombre)}">
                     <span class="material-symbols-outlined" style="font-size:0.85rem;">sync</span>
                 </button>
             </div>
@@ -406,7 +406,7 @@ function fetchEstadoHorarios() {
 
             if (data.cargados) {
                 if (statusDot) statusDot.className = 'status-dot dot-green';
-                if (statusText) statusText.innerHTML = `${data.total} personas con horario configurado`;
+                if (statusText) statusText.textContent = `${data.total} personas con horario configurado`;
 
                 if (detalles) detalles.style.display = 'block';
                 const elSem = document.getElementById('stat-semana');
@@ -424,7 +424,7 @@ function fetchEstadoHorarios() {
                 }
             } else {
                 if (statusDot) statusDot.className = 'status-dot dot-red';
-                if (statusText) statusText.innerHTML = 'Falta cargar el archivo de horarios';
+                if (statusText) statusText.textContent = 'Falta cargar el archivo de horarios';
                 if (detalles) detalles.style.display = 'none';
             }
         })

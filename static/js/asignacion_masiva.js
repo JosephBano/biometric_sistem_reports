@@ -37,11 +37,11 @@
             const body = document.getElementById('preview-body');
             if (!body) return;
             body.innerHTML = `
-                <p><strong>${data.matched_count}</strong> personas
+                <p><strong>${esc(data.matched_count)}</strong> personas
                    serán afectadas.</p>
                 <details>
                     <summary>Ver primeros 50 IDs</summary>
-                    <pre>${(data.affected_persona_ids || []).join('\n')}</pre>
+                    <pre>${(data.affected_persona_ids || []).map(esc).join('\n')}</pre>
                 </details>`;
             if (previewBox) previewBox.style.display = 'block';
         })

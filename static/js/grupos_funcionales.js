@@ -13,15 +13,15 @@
         }
         tbody.innerHTML = grupos.map(g => `
             <tr>
-                <td><code>${g.codigo || g.nombre}</code></td>
-                <td>${g.nombre || ''}</td>
-                <td>${g.orden ?? 0}</td>
+                <td><code>${esc(g.codigo || g.nombre)}</code></td>
+                <td>${esc(g.nombre || '')}</td>
+                <td>${esc(g.orden ?? 0)}</td>
                 <td>${g.activo
                     ? '<span class="badge bg-success">Activo</span>'
                     : '<span class="badge bg-secondary">Inactivo</span>'}</td>
                 <td>${g.activo
                     ? `<button class="btn btn-sm btn-outline-secondary"
-                              onclick="desactivar('${g.id}')">Desactivar</button>`
+                              onclick="desactivar('${esc(g.id)}')">Desactivar</button>`
                     : ''}</td>
             </tr>
         `).join('');
