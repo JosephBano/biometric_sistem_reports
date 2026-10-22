@@ -453,3 +453,18 @@ python scripts/migrar_asignaciones_a_defaults.py \
 El CSV contiene 1 fila por persona con asignación 1:1 vigente y los
 campos que el admin necesitará para agrupar y crear
 `horarios_default_grupo` + `personas_grupos_funcionales` masivamente.
+
+### 8.6 Deduplicación de personas
+
+Si se han sincronizado registros duplicados de personas (mismo nombre registrado en diferentes momentos o dispositivos):
+
+```bash
+# Modo dry-run (por defecto, no modifica nada en BD y muestra el resumen):
+python scripts/deduplicar_personas.py
+
+# Aplicar fusiones permanentemente:
+python scripts/deduplicar_personas.py --apply
+```
+
+- **Fusión automática (segura)**: grupos donde todos los miembros tienen el mismo `id_en_dispositivo` (o sin conflicto). La persona canónica es la más antigua según `creado_en`; se reasignan las asistencias y vínculos de dispositivo al canónico y se eliminan los duplicados.
+- **Casos conflictivos (revisión manual)**: grupos con identificadores de dispositivo distintos. El script los detecta, omite su modificación y los lista en consola para auditoría manual.

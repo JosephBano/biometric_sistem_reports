@@ -268,6 +268,7 @@ biometric_sistem_reports/
 │   ├── CHANGELOG.md                    # Registro de cambios
 │   ├── DESIGN_SYSTEM_TOKENS.md         # Tokens y guía de componentes
 │   ├── OPERATIONS.md                   # Runbook de operaciones y despliegue
+│   ├── tokens.json                     # Definición fuente de Design Tokens
 │   └── ...
 │
 ├── wsgi.py                             # Entrypoint canónico WSGI: `wsgi:app`
@@ -275,8 +276,8 @@ biometric_sistem_reports/
 ├── docker-compose.yml                  # Orquestación de app y base de datos
 ├── pyproject.toml                      # Configuración de linting (Ruff) y testing
 ├── requirements.txt                    # Dependencias de producción
-├── requirements-dev.txt                # Dependencias de desarrollo
-└── tokens.json                         # Definición fuente de Design Tokens
+└── requirements-dev.txt                # Dependencias de desarrollo
+
 ```
 
 ### Notas por paquete
