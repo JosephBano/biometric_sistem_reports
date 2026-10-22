@@ -142,7 +142,11 @@ biometric_sistem_reports/
 │       ├── horarios_default_grupo.js
 │       ├── justificaciones.js
 │       ├── persona_grupos_funcionales.js
-│       └── reportes.js
+│       ├── reportes.js      # Orquestador de reportes
+│       ├── reportes_rapido.js # Filtros rápidos y renderizado
+│       ├── reportes_marcaciones.js # Marcaciones por día y exportación
+│       ├── reportes_detallado.js # Reporte detallado y dual listbox
+│       └── reportes_edicion.js # Edición inline de personas y horarios
 │
 ├── scripts/                 # Scripts auxiliares y de mantenimiento
 │   ├── cambiar_password.py  # Cambio interactivo de contraseña de usuarios
