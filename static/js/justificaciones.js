@@ -189,8 +189,8 @@ function cargarJustificaciones() {
             };
 
             const html = data.justificaciones.map(j => {
-                const b = badges[j.tipo] || `<span class="badge bg-secondary">${j.tipo}</span>`;
-                const sb = statusBadges[j.estado] || `<span class="badge bg-secondary">${j.estado}</span>`;
+                const b = badges[j.tipo] || `<span class="badge bg-secondary">${esc(j.tipo)}</span>`;
+                const sb = statusBadges[j.estado] || `<span class="badge bg-secondary">${esc(j.estado)}</span>`;
                 
                 let rules = [];
                 if (j.hora_permitida) rules.push(`Hora: ${j.hora_permitida}`);
@@ -199,11 +199,11 @@ function cargarJustificaciones() {
                 
                 return `
                     <tr>
-                        <td class="fw-semibold text-nowrap">${j.fecha}</td>
-                        <td>${j.nombre || ''} <small class="text-muted">(ID: ${j.id_usuario})</small></td>
+                        <td class="fw-semibold text-nowrap">${esc(j.fecha)}</td>
+                        <td>${esc(j.nombre || '')} <small class="text-muted">(ID: ${esc(j.id_usuario)})</small></td>
                         <td>${b}</td>
-                        <td class="text-truncate" style="max-width: 200px;" title="${j.motivo || ''}">${j.motivo || '<em class="text-muted pl-2">Sin motivo</em>'}${rulesStr}</td>
-                        <td>${j.aprobado_por || '<span class="text-muted">—</span>'}</td>
+                        <td class="text-truncate" style="max-width: 200px;" title="${esc(j.motivo || '')}">${j.motivo ? esc(j.motivo) : '<em class="text-muted pl-2">Sin motivo</em>'}${rulesStr}</td>
+                        <td>${j.aprobado_por ? esc(j.aprobado_por) : '<span class="text-muted">—</span>'}</td>
                         <td>${sb}</td>
                         <td class="text-end">
                             <div class="d-flex gap-1 justify-content-end">
@@ -223,7 +223,7 @@ function cargarJustificaciones() {
         .catch(err => {
             const tbody = document.getElementById('just-lista');
             if(tbody) {
-                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error al cargar datos: ${err.message}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error al cargar datos: ${esc(err.message)}</td></tr>`;
             }
         });
 }
@@ -405,7 +405,7 @@ function abrirEditarJustificacion(jid) {
             cambioTipoJustificacion();
             offcanvasJustificacion.show();
         })
-        .catch(err => showError(`Error al cargar datos: ${err.message}`));
+        .catch(err => showError(`Error al cargar datos: ${esc(err.message)}`));
 }
 
 function guardarCambiosJustificacion() {

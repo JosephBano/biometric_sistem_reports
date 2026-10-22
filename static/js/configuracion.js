@@ -40,7 +40,7 @@ function cargarHorarios() {
         })
         .catch(err => {
             const tbody = document.getElementById('horarios-tbody');
-            if(tbody) tbody.innerHTML = `<tr><td colspan="13" class="text-danger text-center py-4">Error cargando horarios: ${err}</td></tr>`;
+            if(tbody) tbody.innerHTML = `<tr><td colspan="13" class="text-danger text-center py-4">Error cargando horarios: ${esc(err)}</td></tr>`;
         });
 }
 
@@ -461,7 +461,7 @@ function subirHistorico() {
     .catch(err => {
         btn.disabled = false;
         statusDiv.className = 'mt-2 alert alert-danger py-2 small mb-0';
-        statusDiv.innerHTML = `Error: ${err.message}`;
+        statusDiv.textContent = `Error: ${err.message}`;
     });
 }
 
@@ -475,13 +475,7 @@ function subirHistorico() {
  * createElement y asignar textContent (ver cargarSchedulerEstado).
  */
 function escapeHtml(s) {
-    if (s == null) return '';
-    return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    return esc(s);
 }
 
 async function cargarSchedulerEstado() {

@@ -721,7 +721,7 @@
                     <div class="fw-semibold text-dark" style="font-size:0.85rem;">${escapeHtml(p.nombre)}</div>
                     ${p.identificacion ? `<small class="text-muted">${escapeHtml(p.identificacion)}</small>` : ''}
                 </div>
-                ${p.id_usuario_zk ? `<span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.7rem;">ZK: ${p.id_usuario_zk}</span>` : ''}
+                ${p.id_usuario_zk ? `<span class="badge bg-secondary bg-opacity-10 text-secondary" style="font-size:0.7rem;">ZK: ${esc(p.id_usuario_zk)}</span>` : ''}
             </div>
         `).join('');
     }
@@ -737,7 +737,7 @@
         document.getElementById('vincular-persona-id-sel').value = id;
         document.getElementById('btn-confirmar-vincular').disabled = false;
         const label = document.getElementById('vincular-persona-seleccionada');
-        label.innerHTML = `<span class="material-symbols-outlined fs-6 align-middle">check_circle</span> Seleccionada: <strong>${nombre}</strong>${identificacion ? ' · ' + identificacion : ''}`;
+        label.innerHTML = `<span class="material-symbols-outlined fs-6 align-middle">check_circle</span> Seleccionada: <strong>${esc(nombre)}</strong>${identificacion ? ' · ' + esc(identificacion) : ''}`;
         label.style.display = '';
         document.querySelectorAll('.vincular-persona-item').forEach(el => el.classList.remove('bg-light'));
     }
@@ -782,7 +782,7 @@
 
     function escapeHtml(str) {
         if (!str) return '';
-        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        return esc(str);
     }
 </script>
 {% endblock %}

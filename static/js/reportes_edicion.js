@@ -86,7 +86,7 @@ function abrirModalConDatosPersona(p) {
             idzkInput.classList.remove('bg-white', 'text-muted');
             idzkInput.style.cursor = '';
             if (zkBadge) zkBadge.style.display = 'none';
-            if (zkHelp) zkHelp.innerHTML = 'Asigna el número de usuario del dispositivo ZK (una vez guardado no se podrá modificar).';
+            if (zkHelp) zkHelp.textContent = 'Asigna el número de usuario del dispositivo ZK (una vez guardado no se podrá modificar).';
         }
     }
 
@@ -135,7 +135,7 @@ function actualizarInfoHorarioEnModal(nombre, idZk) {
         const horarioStr = entrada ? (salida ? `${entrada} a ${salida}` : `Entrada: ${entrada}`) : 'Jornada personalizada';
         const almuerzoStr = h.almuerzo_min ? ` · Almuerzo: ${h.almuerzo_min} min` : '';
 
-        desc.innerHTML = `<strong>${diasActivos.join(' ')}</strong> · ${horarioStr}${almuerzoStr}`;
+        desc.innerHTML = `<strong>${esc(diasActivos.join(' '))}</strong> · ${esc(horarioStr)}${esc(almuerzoStr)}`;
         if (btnIcon) btnIcon.textContent = 'edit_calendar';
         if (btnTexto) btnTexto.textContent = 'Editar Horario';
     } else {
@@ -470,7 +470,7 @@ async function guardarGrupoInline() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = 'Crear';
+            btn.textContent = 'Crear';
         }
     }
 }
@@ -557,7 +557,7 @@ async function guardarGFInline() {
     } finally {
         if (btn) {
             btn.disabled = false;
-            btn.innerHTML = 'Crear Grupo';
+            btn.textContent = 'Crear Grupo';
         }
     }
 }

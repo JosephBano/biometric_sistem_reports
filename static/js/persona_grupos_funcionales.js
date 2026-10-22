@@ -13,7 +13,7 @@
                 if (!sel) return;
                 sel.innerHTML = '<option value="">Seleccione…</option>' +
                     (data.grupos || []).map(g =>
-                        `<option value="${g.id}">${g.nombre || g.codigo}</option>`
+                        `<option value="${esc(g.id)}">${esc(g.nombre || g.codigo)}</option>`
                     ).join('');
             })
             .catch(() => {});

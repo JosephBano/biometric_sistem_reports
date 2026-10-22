@@ -715,13 +715,13 @@ function abrirDetalleAsistenciaModal(index) {
                 estadoBadge = '<span class="rippling-pill rippling-pill-slate" style="font-size:0.75rem;">No programado</span>';
             }
 
-            const horarioEsperado = d.entrada_esperada ? `${d.entrada_esperada} → ${d.salida_esperada || '—'}` : '<span class="text-muted">—</span>';
-            const marcacionReal = (d.entrada_marcada || d.salida_marcada) ? `${d.entrada_marcada || '—'} → ${d.salida_marcada || '—'}` : '<span class="text-muted">—</span>';
+            const horarioEsperado = d.entrada_esperada ? `${esc(d.entrada_esperada)} → ${esc(d.salida_esperada || '—')}` : '<span class="text-muted">—</span>';
+            const marcacionReal = (d.entrada_marcada || d.salida_marcada) ? `${esc(d.entrada_marcada || '—')} → ${esc(d.salida_marcada || '—')}` : '<span class="text-muted">—</span>';
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td><strong>${d.fecha}</strong></td>
-                <td>${d.dia_semana}</td>
+                <td><strong>${esc(d.fecha)}</strong></td>
+                <td>${esc(d.dia_semana)}</td>
                 <td>${horarioEsperado}</td>
                 <td>${marcacionReal}</td>
                 <td>${estadoBadge}</td>

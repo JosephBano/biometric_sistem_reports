@@ -436,11 +436,7 @@
             showToast('No se pudo cargar el listado de personas', 'danger');
         });
 
-    function esc(v) {
-        return String(v === null || v === undefined ? '' : v)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
-    }
+    // Usa esc() unificado de api.js
 
     function renderSkeletonLoading() {
         container.innerHTML =
@@ -596,7 +592,7 @@
             ? '<span class="rippling-pill pill-status-alert"><span class="material-symbols-outlined" style="font-size:0.9rem;">warning</span> ' + esc(dia.mensaje || 'Anomalía') + '</span>'
             : '<span class="rippling-pill pill-status-ok"><span class="material-symbols-outlined" style="font-size:0.9rem;">check_circle</span> Jornada regular</span>';
 
-        subEl.innerHTML = badgeHtml + '<span class="text-muted">&middot; ' + dia.total_marcaciones + ' marcaciones registradas</span>';
+        subEl.innerHTML = badgeHtml + '<span class="text-muted">&middot; ' + esc(dia.total_marcaciones) + ' marcaciones registradas</span>';
 
         const body = document.getElementById('modalDetalleBody');
         if (!dia.marcaciones || dia.marcaciones.length === 0) {
