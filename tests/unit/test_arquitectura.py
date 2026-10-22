@@ -112,9 +112,9 @@ def test_no_quedan_modulos_top_level_de_negocio():
     utilitarios (no de negocio). Esta es la verificación final del DoD-7.
     """
     permitidos = {
-        "wsgi.py",            # entrypoint canónico (gunicorn)
-        "deduplicar_personas.py",  # script CLI de mantenimiento
-        "test_justificacion_rango_local.py",  # script manual de QA
+        "wsgi.py",  # entrypoint canónico WSGI (gunicorn)
+
+
     }
     encontrados = sorted(
         p.name for p in ROOT.glob("*.py")

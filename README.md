@@ -146,6 +146,7 @@ biometric_sistem_reports/
 │
 ├── scripts/                 # Scripts auxiliares y de mantenimiento
 │   ├── cambiar_password.py  # Cambio interactivo de contraseña de usuarios
+│   ├── deduplicar_personas.py # Fusión segura de registros duplicados de personas
 │   └── ...
 │
 ├── tests/                   # Suite de pruebas automatizadas (pytest)
@@ -157,6 +158,7 @@ biometric_sistem_reports/
 │   ├── ARQUITECTURA.md      # Descripción técnica de arquitectura
 │   ├── CHANGELOG.md         # Registro de versiones y cambios
 │   ├── DESIGN_SYSTEM_TOKENS.md # Guía del Design System
+│   ├── tokens.json          # Definición fuente de Design Tokens
 │   └── ...
 │
 ├── .env.example             # Plantilla de variables de entorno
@@ -165,7 +167,7 @@ biometric_sistem_reports/
 ├── pyproject.toml           # Configuración de herramientas (Ruff, Pytest, Coverage)
 ├── requirements.txt         # Dependencias de producción
 ├── requirements-dev.txt     # Dependencias de desarrollo y testing
-└── tokens.json              # Definición fuente de Design Tokens
+└── wsgi.py                  # Entrypoint canónico WSGI: wsgi:app
 ```
 
 ### Base de datos PostgreSQL

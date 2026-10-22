@@ -110,6 +110,29 @@ class TestGetJustificaciones:
         assert "2026-07-02" in fechas
         assert "2026-07-15" not in fechas
 
+    def test_get_justificaciones_con_rango_recuperacion(self, persona_test):
+        """get_justificaciones retorna hora_recuperacion y hora_recuperacion_fin."""
+        insertar_justificacion(
+            id_usuario=persona_test["id_zk"],
+            nombre=persona_test["nombre"],
+            fecha="2026-05-01",
+            tipo="tardanza",
+            motivo="Prueba Rango Recuperacion",
+            recuperable=1,
+            fecha_recuperacion="2026-05-02",
+            hora_recuperacion="08:30",
+            hora_recuperacion_fin="10:45",
+        )
+        justs = get_justificaciones(date(2026, 5, 1), date(2026, 5, 1))
+        encontrada = [
+            j for j in justs
+            if j["nombre"] == persona_test["nombre"] and j["tipo"] == "tardanza"
+        ]
+        assert len(encontrada) == 1
+        j = encontrada[0]
+        assert j.get("hora_recuperacion") == "08:30:00"
+        assert j.get("hora_recuperacion_fin") == "10:45:00"
+
 
 class TestGetJustificacionesDict:
 

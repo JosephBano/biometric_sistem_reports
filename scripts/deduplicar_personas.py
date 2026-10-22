@@ -9,11 +9,15 @@ La persona canónica es la de menor creado_en (la más antigua del grupo).
 Las demás se eliminan después de reasignar asistencias y vínculos de dispositivo.
 
 Uso:
-    python deduplicar_personas.py          # dry-run (solo muestra lo que haría)
-    python deduplicar_personas.py --apply  # ejecuta los cambios
+    python scripts/deduplicar_personas.py          # dry-run (solo muestra lo que haría)
+    python scripts/deduplicar_personas.py --apply  # ejecuta los cambios
 """
 
+import os
 import sys
+
+# Permitir ejecución tanto desde la raíz como desde scripts/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 
