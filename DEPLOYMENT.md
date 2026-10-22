@@ -15,7 +15,7 @@ En todos los casos el flujo de despliegue y actualización es el mismo una vez q
 
 > **Inicio rápido** — Si ya tienes Docker y el `.env` configurado:
 > ```bash
-> docker compose up -d --build   # primera vez (levanta PostgreSQL + la app)
+> docker compose up -d --build   # primera vez (DB + web + scheduler)
 > docker compose up -d --build   # para aplicar actualizaciones
 > docker compose logs -f          # ver qué hace
 > ```
@@ -24,12 +24,13 @@ En todos los casos el flujo de despliegue y actualización es el mismo una vez q
 
 ## Arquitectura de servicios
 
-El sistema corre con **dos contenedores Docker** que se coordinan automáticamente:
+El sistema corre con **tres contenedores Docker** que se coordinan automáticamente:
 
 | Servicio | Imagen | Función |
 |----------|--------|---------|
 | `biometrico-db` | `postgres:16-alpine` | Base de datos PostgreSQL. Arranca primero. |
-| `biometrico-app` | construida desde `Dockerfile` | Aplicación Flask. Espera a que la DB esté lista (healthcheck). |
+| `biometrico-app` | construida desde `Dockerfile` | Aplicación Flask con Gunicorn multi-worker. No ejecuta jobs programados. |
+| `biometrico-scheduler` | construida desde `Dockerfile` | Proceso dedicado para sync y backups automáticos. Solo un proceso obtiene el advisory lock de PostgreSQL. |
 
 Los datos de PostgreSQL se guardan en el volumen nombrado `postgres_data`. Los uploads y reportes PDF se guardan en el volumen `app_data`. **Ambos volúmenes persisten entre reinicios, actualizaciones y `docker compose down`.**
 
@@ -402,7 +403,7 @@ La primera vez tarda 3–5 minutos. Cuando termine:
 docker compose ps
 ```
 
-Deben aparecer **dos contenedores** en estado `Up`: `biometrico-db` y `biometrico-app`. Abrir el navegador en:
+Deben aparecer **tres contenedores** en estado `Up`: `biometrico-db`, `biometrico-app` y `biometrico-scheduler`. Abrir el navegador en:
 
 ```
 http://localhost:5000

@@ -39,6 +39,8 @@ Cada ADR:
 | [0001](./0001-modularizacion-monolito-flask.md) | Modularización del monolito Flask en Application Factory + Blueprints por dominio | proposed | 2026-07-01 | Migrar `app.py` (2 512 líneas, 81 rutas) a `app/` con Application Factory + Blueprints + servicios en `app/domain/*`. Ver [[ARQUITECTURA]]. |
 | [0002](./0002-sync-observable-y-backups.md) | Sync automática observable + Backups portables | accepted | 2026-07-02 | Reforzar scheduler in-process con `public.scheduler_runs` + backups `pg_dump -Fc` con retención. |
 | [0003](./0003-horarios-por-rol-funcional.md) | Horarios por grupo funcional con override individual, precedencia explícita y compatibilidad hacia atrás | accepted | 2026-07-28 | Introduce `grupos_funcionales` (antes `categorias`) + `grupos_funcionales_personas` (N:M con vigencia) + `horarios_default_grupo` + `overrides_horario_persona`. Distingue explícitamente `tenant.grupos` (operativo) del nuevo `tenant.grupos_funcionales` (laboral). Feature flag `horario_por_grupo` queda off por defecto en prod. |
+| [0004](./0004-tests-integracion-pgserver.md) | Tests de integración con PostgreSQL embebido (pgserver) | accepted | 2026-07-02 | Ejecuta pruebas de integración contra PostgreSQL real sin depender de un servicio Docker. |
+| [0005](./0005-scheduler-separado-y-lock-postgresql.md) | Separar scheduler y proteger sus corridas con locks PostgreSQL | accepted | 2026-10-22 | Ejecuta los jobs en un proceso dedicado fuera de Gunicorn y usa advisory locks de PostgreSQL para elegir líder y evitar ejecuciones concurrentes. |
 
 ---
 

@@ -45,6 +45,7 @@ class BaseConfig:
 
     # ── Sync ──────────────────────────────────────────────────────────
     SYNC_AUTO = os.environ.get("SYNC_AUTO", "false").lower() == "true"
+    SCHEDULER_PROCESS = os.environ.get("SCHEDULER_PROCESS", "false").lower() == "true"
     SYNC_HORA_NOCTURNA = os.environ.get("SYNC_HORA_NOCTURNA", "02:00")
     SYNC_INTERVALO_HORAS = int(os.environ.get("SYNC_INTERVALO_HORAS", "2"))
 

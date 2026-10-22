@@ -248,7 +248,7 @@ python scripts/cambiar_password.py
 flask --app "app:create_app('development')" run --port 5000
 
 # Producción / WSGI (Gunicorn con DispatcherMiddleware /biometrico)
-gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 --timeout 120 wsgi:app
+gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 4 --timeout 120 wsgi:app
 ```
 
 Disponible en `http://localhost:5000`.
@@ -386,6 +386,8 @@ SMTP_USE_TLS=true
 
 # ── Sincronización automática ───────────────────────
 SYNC_AUTO=false
+SCHEDULER_PROCESS=false
+WEB_CONCURRENCY=2
 SYNC_HORA_NOCTURNA=02:00
 SYNC_INTERVALO_HORAS=2
 
@@ -678,7 +680,7 @@ SYNC_HORA_NOCTURNA=02:00    # sync completo diario
 SYNC_INTERVALO_HORAS=2      # sync incremental cada 2 horas
 ```
 
-Reiniciar: `docker compose restart biometrico-app`
+Aplicar: `docker compose up -d --build biometrico-app biometrico-scheduler`.
 
 ### Rutina mensual recomendada
 

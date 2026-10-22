@@ -57,3 +57,10 @@ def proxima_corrida() -> str | None:
     from app.domain.schedule import proxima_corrida as _proxima_corrida
 
     return _proxima_corrida()
+
+
+def scheduler_activo() -> bool:
+    """Indica si un proceso mantiene el lock distribuido del scheduler."""
+    from db.queries.scheduler_lock import scheduler_is_active
+
+    return scheduler_is_active()

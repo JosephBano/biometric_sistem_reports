@@ -28,14 +28,14 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 5000
 
-# gunicorn con 1 worker y 4 threads:
-# - 1 worker mantiene el estado en memoria (job tracking, scheduler)
-# - 4 threads permiten atender múltiples peticiones concurrentes
+# gunicorn con 2 workers y 4 threads:
+# - el scheduler corre en un servicio separado y no depende de workers web
+# - 2 workers permiten atender peticiones HTTP en paralelo
 # - timeout 120s para operaciones largas de sync y generación de PDF
 # - wsgi:app es el entrypoint canónico post-refactor (ADR-0001)
 CMD ["gunicorn", \
      "--bind", "0.0.0.0:5000", \
-     "--workers", "1", \
+     "--workers", "2", \
      "--threads", "4", \
      "--timeout", "120", \
      "--access-logfile", "-", \
