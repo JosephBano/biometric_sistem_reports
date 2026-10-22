@@ -3,7 +3,7 @@ title: "CHANGELOG — Sistema Biométrico RRHH ISTPET"
 tags: [changelog, release-notes, historial, superpowers]
 status: active
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-10-21
 authors: [implementer, documenter]
 related:
   - "[[ADR-0001-modularizacion-monolito-flask]]"
@@ -11,6 +11,7 @@ related:
   - "[[ADR-0004-tests-integracion-pgserver]]"
   - "[[ARQUITECTURA]]"
   - "[[OPERATIONS]]"
+  - "[[DESIGN_SYSTEM_TOKENS]]"
 supersedes: []
 superseded_by: []
 ---
@@ -23,7 +24,50 @@ superseded_by: []
 
 ---
 
-## [Unreleased] — Refactor monolito Flask → Application Factory
+## [UI Shell v2.0] — Nueva UI Shell modular y Design System Tokens
+
+**Fecha**: 2026-08-25
+**Tipo**: feat + ui + docs
+**Commit**: `f2fc9ea`
+**Documentación**: [[DESIGN_SYSTEM_TOKENS]]
+
+### Summary
+
+Implementación de la nueva arquitectura de UI Shell modular basada en Design Tokens,
+rediseño integral del frontend con estética moderna (sidebar colapsable, top navbar unificado,
+tablas de datos consistentes, pills/badges de estado), componentes modulares y preview interactivo,
+junto con la infraestructura CRUD para grupos funcionales y asignaciones en el sistema biométrico.
+
+### Added
+
+- **Design System Tokens**:
+  - `tokens.json`: Especificación centralizada de tokens de diseño (paleta de colores marca/neutro/estados, elevaciones, tipografía, espaciados y radios).
+  - `static/tokens.css`: Variables CSS nativas generadas a partir de la especificación de tokens.
+  - `docs/DESIGN_SYSTEM_TOKENS.md`: Guía de referencia del sistema de diseño, reglas de contraste y guía de componentes.
+- **Componentes y Vistas UI Shell**:
+  - `templates/page_shell_preview.html`: Plantilla interactiva de previsualización de componentes del UI Shell (cards, badges, tablas, botones, formularios).
+  - Endpoint `GET /preview-shell` en `app/web/dashboard_bp.py` para visualizar el catálogo de componentes.
+- **Estilos globales y componentes**:
+  - `static/style.css`: Ampliado con clases utilitarias del UI shell, data tables responsivas, ripple-style badges y variantes de botones.
+- **Soporte CRUD backend**:
+  - `db/queries/horarios_grupo_funcional.py`: Nuevas queries de persistencia para horarios y asignaciones por grupo funcional.
+  - `app/domain/periods.py`, `app/domain/people.py`, `app/domain/horarios_grupo_funcional.py`: Soporte de dominio para los nuevos flujos.
+
+### Changed
+
+- **Rediseño de plantillas**:
+  - `templates/base.html`: Nueva estructura de UI Shell (sidebar moderno, header superior con perfil y selector de tenant, alertas y contenedor principal responsivo).
+  - Vistas principales migradas al nuevo shell:
+    - Administración: `admin/dispositivos.html`, `admin/grupos.html`, `admin/grupos_funcionales.html`, `admin/horarios_grupo_funcional.html`, `admin/superadmin_usuarios.html`, `admin/tenants.html`, `admin/usuarios.html`.
+    - Períodos y Personas: `periodos/lista.html`, `periodos/detalle.html`, `personas/lista.html`.
+    - Operativa y Análisis: `dashboard.html`, `reportes.html`, `configuracion.html`, `analytics_entradas_salidas.html`.
+- **Scripts de frontend**:
+  - `static/js/reportes.js`: Modularización de interacción con filtros, generación de reportes y preview dinámico.
+  - `static/js/dashboard.js`, `static/js/configuracion.js`: Adaptación a los componentes y eventos de la nueva shell.
+
+---
+
+## [Refactor monolito Flask] — Application Factory
 
 **Fecha**: 2026-07-01 → 2026-07-02
 **Tipo**: refactor + tests + docs
