@@ -32,6 +32,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SCHEDULER_PROCESS: "false"
     depends_on:
       db:
         condition: service_healthy
@@ -40,8 +41,28 @@ services:
       - app_data:/data
       - /etc/localtime:/etc/localtime:ro
     restart: unless-stopped
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "${WEB_CONCURRENCY:-2}", "--threads", "4", "--timeout", "120", "--access-logfile", "-", "wsgi:app"]
     ports:
       - "5000:5000"
+    networks:
+      - internal
+
+  biometrico-scheduler:
+    build: .
+    container_name: biometrico-scheduler
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SCHEDULER_PROCESS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_data:/data
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    command: ["python", "-m", "app.scheduler_main"]
     networks:
       - internal
 

@@ -108,7 +108,11 @@ def scheduler_estado():
 
     Útil para la card 'Sincronización automática' en /configuracion.
     """
-    sync_activo = os.environ.get("SYNC_AUTO", "false").lower() == "true"
+    try:
+        sync_activo = scheduler_svc.scheduler_activo()
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("No se pudo consultar el estado del scheduler")
+        sync_activo = False
     hora_nocturna = os.environ.get("SYNC_HORA_NOCTURNA", "02:00")
     try:
         intervalo = int(os.environ.get("SYNC_INTERVALO_HORAS", "2"))

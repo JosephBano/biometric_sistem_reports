@@ -84,8 +84,8 @@ def create_app(config_name: str = "production") -> Flask:
     # ── Manejadores de error ─────────────────────────────────────────────
     register_error_handlers(app)
 
-    # ── Lifecycle: scheduler solo si SYNC_AUTO=true ─────────────────────
-    if app.config.get("SYNC_AUTO"):
+    # ── Lifecycle: scheduler solo en el proceso dedicado ─────────────────────
+    if app.config.get("SYNC_AUTO") and app.config.get("SCHEDULER_PROCESS"):
         from app.domain.schedule import init_scheduler
         init_scheduler(app)
 

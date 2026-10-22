@@ -668,15 +668,43 @@ def init_scheduler(app) -> None:
         log.warning("Scheduler ya estaba iniciado; se ignora segunda llamada")
         return
 
+    def _run_with_distributed_lock(job_name: str, callback) -> None:
+        from db.queries import scheduler_lock
+
+        lock_id = scheduler_lock.job_lock_id(job_name)
+        try:
+            conn = scheduler_lock.try_acquire(lock_id)
+        except Exception:
+            log.exception("No se pudo adquirir lock distribuido (job=%s)", job_name)
+            return
+
+        if conn is None:
+            log.warning("Job %s omitido: otro proceso mantiene el lock", job_name)
+            return
+
+        try:
+            callback()
+        finally:
+            try:
+                scheduler_lock.release(conn, lock_id)
+            except Exception:
+                log.exception("No se pudo liberar lock distribuido (job=%s)", job_name)
+
     # Sync nocturna
-    _schedule.every().day.at(sync_hora).do(_sync_nocturna_completa)
+    _schedule.every().day.at(sync_hora).do(
+        _run_with_distributed_lock, "sync_nocturna", _sync_nocturna_completa,
+    )
 
     # Sync incremental
-    _schedule.every(sync_intervalo).hours.do(_sync_automatico)
+    _schedule.every(sync_intervalo).hours.do(
+        _run_with_distributed_lock, "sync_incremental", _sync_automatico,
+    )
 
     # Backup diario (si está activado)
     if backup_auto:
-        _schedule.every().day.at(backup_hora).do(_backup_diario)
+        _schedule.every().day.at(backup_hora).do(
+            _run_with_distributed_lock, "backup_diario", _backup_diario,
+        )
         log.info(
             "Backup diario ACTIVO a las %s, dir=%s, retención=%sd",
             backup_hora, backup_dir, backup_retencion,

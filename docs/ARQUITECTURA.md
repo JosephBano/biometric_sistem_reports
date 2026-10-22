@@ -3,12 +3,13 @@ title: Arquitectura del Sistema Biométrico
 tags: [arquitectura, flask, modulos, blueprint, multitenant, postgres]
 status: active
 created: 2026-07-01
-updated: 2026-07-02
+updated: 2026-10-22
 authors: [arquitecto, documenter]
 related:
   - "[[ADR-0001-modularizacion-monolito-flask]]"
   - "[[ADR-0002-sync-observable-y-backups]]"
   - "[[ADR-0004-tests-integracion-pgserver]]"
+  - "[[ADR-0005-scheduler-separado-y-lock-postgresql]]"
   - "[[ADR-0000-use-markdown-for-adrs]]"
   - "[[AUTENTICACION]]"
   - "[[API]]"
@@ -35,8 +36,8 @@ fue reemplazado por **Application Factory + Blueprints modulares (15 actualmente
 Ver `[[ADR-0001-modularizacion-monolito-flask]]` (status: completed) y `[[CHANGELOG]]` para el detalle
 de la migración física de los módulos top-level a `app/domain/*`.
 
-El sistema se ejecuta en producción como un solo contenedor Docker con `gunicorn --workers 1 --threads 4`
-(dado el scheduler in-process basado en `schedule` y un dict `_jobs` en memoria), expone HTTP bajo el
+El sistema se ejecuta con servicios Docker separados y `gunicorn --workers 2 --threads 4`
+(scheduler separado en `biometrico-scheduler` con advisory locks PostgreSQL), expone HTTP bajo el
 prefijo `/biometrico` mediante `DispatcherMiddleware`, y consume la BD vía SQLAlchemy Core + `text()`
 parametrizado (sin ORM declarativo). El scheduler ejecuta sync nocturna completa + sync incremental cada
 N horas; el patrón es **monolito modular**, no microservicios: el archivo huérfano `middleware.py` (FastAPI)
@@ -197,7 +198,7 @@ biometric_sistem_reports/
 │   ├── errors.py                       # Handlers 401/403/404/429/500
 │   ├── security_headers.py             # CSP, FrameOptions, X-Content-Type-Options
 │   ├── context_processors.py           # Inyección de contexto global Jinja
-│   ├── cleanup.py                      # Thread daemon de limpieza de archivos temporales
+│   ├── cleanup.py                      # Thread daemon por proceso para limpieza de archivos temporales
 │   ├── tenant.py                       # Resolve y loader de g.tenant_schema
 │   │
 │   ├── domain/                         # Servicios de dominio (sin Flask donde sea posible)
@@ -468,69 +469,33 @@ La conexión subyacente (`db.connection.get_connection()`) ejecuta `SET search_p
 
 ## Scheduler y ciclo de vida
 
-El scheduler está implementado sobre la librería `schedule` y se ejecuta en un thread daemon dentro
-del proceso gunicorn. **Esto obliga a `--workers 1`.**
+La aplicación web se ejecuta con varios workers Gunicorn. Los workers web no
+inician jobs programados (`SCHEDULER_PROCESS=false`); Compose ejecuta
+`python -m app.scheduler_main` en `biometrico-scheduler` cuando `SYNC_AUTO=true`.
 
-### ¿Por qué 1 worker?
+El proceso scheduler conserva un advisory lock de PostgreSQL durante su vida.
+Si hay más de una instancia, solo una obtiene el lock líder; las demás esperan y
+reintentan. Además, cada job usa un lock propio (`sync_nocturna`,
+`sync_incremental` o `backup_diario`) como protección frente a ejecuciones
+concurrentes. Si PostgreSQL no está disponible, el scheduler espera y registra
+el error; no ejecuta trabajos sin lock.
 
-- `schedule` guarda el plan en memoria del proceso.
-- `_jobs` (dict de jobs en curso) está en un dict Python a nivel de módulo.
-- Si hubiera >1 worker, cada uno tendría su propio scheduler y sus propios jobs: la misma sync se ejecutaría
-  N veces y el contador de `audit_log` se multiplicaría.
+Los resultados continúan en `public.scheduler_runs`, que es el historial
+compartido entre procesos. El endpoint `GET /api/scheduler/estado` consulta el
+lock de liderazgo y las últimas corridas desde la base de datos. El estado vivo
+de una sync manual aún usa `_jobs` en memoria del worker que la inició.
 
-### Inicialización (estado actual, pre-refactor)
-
-```python
-# app.py
-db_module.init_db()
-sync_module.iniciar_scheduler()  # arranca thread daemon con el plan
-
-def _cleanup_temp_files():
-    while True:
-        # Borra archivos de UPLOAD_FOLDER y REPORTS_FOLDER con > 15 min de antigüedad
-        ...
-        time.sleep(300)
-
-threading.Thread(target=_cleanup_temp_files, daemon=True).start()
-```
-
-### Inicialización objetivo (post-refactor)
-
-```python
-# app/__init__.py
-def create_app(config_name="production") -> Flask:
-    app = Flask(__name__)
-    app.config.from_object(config_map[config_name])
-
-    # ... registrar extensions ...
-    extensions.limiter.init_app(app)
-    extensions.csrf.init_app(app)
-
-    # Tenant loader PRIMERO — antes de cualquier blueprint
-    app.before_request(cargar_contexto_usuario)
-
-    # Registrar blueprints
-    for bp in all_blueprints:
-        app.register_blueprint(bp)
-
-    # Lifecycle: scheduler solo si SYNC_AUTO=true
-    if app.config.get("SYNC_AUTO"):
-        domain_schedule.init_app(app)
-
-    # Cleanup en background
-    iniciar_cleanup_thread(app)
-
-    return app
-```
-
+La factory inicia el thread programado solamente cuando ambas flags están
+activas: `SYNC_AUTO=true` y `SCHEDULER_PROCESS=true`. Compose fija la segunda a
+`false` para `biometrico-app` y a `true` para `biometrico-scheduler`.
 ### Plan del scheduler
 
 | Job | Frecuencia | Disparador | Acción | Persistencia |
 |---|---|---|---|---|
-| Sync nocturna completa | 1 vez al día (`SYNC_HORA_NOCTURNA`, default 02:00) | Thread daemon | `sincronizar(force_historico=True, fecha_inicio=hace-30d)` para todos los dispositivos activos, iterando tenants | 1 fila por tenant en `public.scheduler_runs` (job=`sync_nocturna`) |
-| Sync incremental | Cada `SYNC_INTERVALO_HORAS` (default 2h) | Thread daemon | `sincronizar(force_historico=False)` desde el watermark por tenant | 1 fila por tenant en `public.scheduler_runs` (job=`sync_incremental`) |
-| Backup diario | 1 vez al día (`BACKUP_HORA`, default 03:00) | Thread daemon | `pg_dump -Fc` → `BACKUP_DIR`, purga `.dump` > `BACKUP_RETENCION_DIAS` días | 1 fila global en `public.scheduler_runs` (job=`backup_diario`) |
-| Cleanup temp files | Cada 5 minutos | Thread daemon aparte (`app/cleanup.py`) | Borra archivos > 15 min en `UPLOAD_FOLDER` y `REPORTS_FOLDER` | — |
+| Sync nocturna completa | 1 vez al día (`SYNC_HORA_NOCTURNA`, default 02:00) | Thread daemon de `biometrico-scheduler` | `sincronizar(force_historico=True, fecha_inicio=hace-30d)` para todos los dispositivos activos, iterando tenants | 1 fila por tenant en `public.scheduler_runs` (job=`sync_nocturna`) |
+| Sync incremental | Cada `SYNC_INTERVALO_HORAS` (default 2h) | Thread daemon de `biometrico-scheduler` | `sincronizar(force_historico=False)` desde el watermark por tenant | 1 fila por tenant en `public.scheduler_runs` (job=`sync_incremental`) |
+| Backup diario | 1 vez al día (`BACKUP_HORA`, default 03:00) | Thread daemon de `biometrico-scheduler` | `pg_dump -Fc` → `BACKUP_DIR`, purga `.dump` > `BACKUP_RETENCION_DIAS` días | 1 fila global en `public.scheduler_runs` (job=`backup_diario`) |
+| Cleanup temp files | Cada 5 minutos | Thread daemon por proceso (`app/cleanup.py`) | Borra archivos > 15 min en `UPLOAD_FOLDER` y `REPORTS_FOLDER` | — |
 | Alerta dispositivo caído | Después de cada sync | Inline en `verificar_dispositivos_desconectados()` | Si 3 syncs consecutivas fallan para un dispositivo, envía email a `ADMIN_EMAIL` | — |
 | Retención `scheduler_runs` | Al cierre de cada sync nocturna | Inline | `DELETE WHERE inicio < NOW() - INTERVAL '90 days'` | — |
 
@@ -559,9 +524,9 @@ Se crea con la migración Alembic `0009` y se mantiene por 90 días
 La card "Sincronización automática" en `/configuracion` (tab "Sincronización") consume
 el endpoint `GET /api/scheduler/estado` (rol: `admin` o `superadmin`) y muestra:
 
-- Estado actual (`ACTIVO`/`INACTIVO` desde `SYNC_AUTO`).
+- Estado actual (`ACTIVO`/`INACTIVO`) consultando el advisory lock de liderazgo en PostgreSQL.
 - Hora nocturna e intervalo configurados.
-- Próxima corrida calculada desde `schedule.next_run`.
+- Próxima corrida calculada desde `schedule.next_run` cuando el endpoint corre dentro del scheduler; desde web puede ser `null`.
 - Las últimas 10 corridas (cualquier job) en una tabla con inicio, job, tenant, resultado, contadores y detalle.
 
 Helper: `app.domain.scheduler.listar_ultimas_corridas(limit)` envuelve
@@ -892,20 +857,16 @@ Importante: extraer **de a uno**, no todos a la vez. Cada sub-fase = 1 PR.
 - Cada servicio con ≥1 test unitario (`tests/unit/test_<servicio>.py`).
 - `script.py`, `analytics.py`, etc. ya no existen en la raíz.
 
-### Fase 5 — Scheduler y ciclo de vida (½ día)
+### Fase 5 — Scheduler y ciclo de vida (completada)
 
-**Alcance**: mover `_cleanup_temp_files` y `iniciar_scheduler` desde `app.py` al factory.
+El scheduler arranca solo desde el proceso dedicado cuando `SYNC_AUTO=true` y
+`SCHEDULER_PROCESS=true`. Los resultados quedan en `public.scheduler_runs`.
 
-**"Hecho"**: el scheduler arranca dentro de `create_app()` solo si `SYNC_AUTO=true`. Los jobs siguen
-trackeándose en `_jobs` (in-process).
+### Fase 6 — Cola de tareas distribuida (opcional)
 
-### Fase 6 — Multi-worker + Celery (opcional, separada)
-
-> Solo si el equipo necesita escalar. **NO en v1.**
-
-Requiere desacoplar `_jobs` (Redis) y mover el scheduler a Celery beat + workers. Acepta multi-worker
-gunicorn.
-
+La separación del scheduler permite varios workers Gunicorn sin duplicar jobs.
+Celery/RQ y Redis quedan para una necesidad futura de colas distribuidas; el
+estado vivo de una sync manual permanece asociado al worker web que la inició.
 ### Fase 7 — CI/CD + cobertura (1-2 días)
 
 **Alcance**: GitHub Actions / GitLab CI con `pytest --cov=app` mínimo **60%**.
@@ -928,7 +889,7 @@ actualizados en cada sub-fase.
 | **Ciclos de imports** entre `app/web/auth_bp.py` ↔ `app/domain/auth.py` ↔ `db/queries/auth.py` | Regla explícita: `domain/*` no importa `web/*`. Decoradores en `rbac.py` no importan nada de auth. Test `python -c "import app"` en CI. |
 | **CSRF custom al mover a factory** | `app/extensions.py` mantiene las mismas funciones `generate_csrf_token` y `validate_csrf`; se registra en `before_request` dentro del factory. NO migrar a Flask-WTF en esta fase — es cambio de comportamiento. |
 | **Multi-tenant `g.tenant_schema`** | El loader de tenant (`app/tenant.py`) se importa en factory y se registra como `before_request` **antes** de cualquier blueprint. Los blueprints **leen** `g.tenant_schema`; no lo setean. Patrón intacto. |
-| **Scheduler in-process + 1 worker gunicorn** | Se **mantiene** `--workers 1 --threads 4`. Migrar a Celery es un proyecto aparte (Fase 6). El scheduler se inicializa desde `create_app()` y se documenta como "no escalar workers hasta desacoplar". |
+| **Scheduler dedicado y Gunicorn multi-worker** | El scheduler se ejecuta fuera de Gunicorn y usa advisory locks PostgreSQL; los workers web se pueden escalar sin duplicar jobs. Celery sigue siendo una alternativa futura si aparece necesidad de cola. |
 | **`app.py` shim (compat)** | Se mantiene durante 1 release. `Dockerfile` se actualiza a `wsgi:app` al cierre de Fase 3. |
 | **`middleware.py` huérfano FastAPI** | **Eliminado** del repositorio en Fase 4e.8 (DoD-6). Ver [[ADR-0001-modularizacion-monolito-flask]]. |
 | **Templates Jinja con `url_for('login')`** | Después de mover a Blueprints, `url_for('login')` sigue funcionando porque Flask resuelve por nombre de endpoint, no por path. **Verificar**: `url_for('admin_grupos')` antes era inferido del nombre de función; en Blueprint se vuelve `admin_bp.admin_grupos`. Puede requerir 1 parche de búsqueda/reemplazo. |
@@ -964,7 +925,7 @@ Extraído de [[ADR-0001-modularizacion-monolito-flask]] y de este análisis.
 
 ### P3 (futuro)
 
-- Evaluar Celery + multi-worker (Fase 6 del roadmap).
+- Evaluar Celery/RQ y estado compartido de sync manual si la carga lo requiere.
 
 ---
 
@@ -1108,7 +1069,7 @@ Esta sección se conserva por trazabilidad; ver arriba para el backlog actualiza
 
 ### P3 (futuro)
 
-- Evaluar Celery + multi-worker (Fase 6 del roadmap).
+- Evaluar Celery/RQ y estado compartido de sync manual si la carga lo requiere.
 - Repository pattern solo si se introduce ORM declarativo (hoy SQLAlchemy Core + `text()` puro).
 - Refresh tokens / OAuth para integraciones externas.
 - Internacionalización (i18n) — hoy los mensajes están en español hardcodeado.
