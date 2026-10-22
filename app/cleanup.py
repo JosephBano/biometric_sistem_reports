@@ -41,9 +41,9 @@ def _cleanup_loop(app: Flask) -> None:
                     except OSError:
                         # Archivo puede haber sido borrado por otro hilo; ignorar.
                         pass
-        except Exception as e:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             # No matar el hilo bajo ningún concepto.
-            app.logger.debug("cleanup loop: %s", e)
+            app.logger.exception("cleanup loop falló")
         time.sleep(period)
 
 

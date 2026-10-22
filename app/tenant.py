@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import os
 
-from flask import g, jsonify, redirect, request, session, url_for
+from flask import current_app, g, jsonify, redirect, request, session, url_for
 
 # Endpoints que NO requieren autenticación (login, static).
 _ENDPOINTS_PUBLICOS = {"auth.login", "static", None}
@@ -66,7 +66,8 @@ def cargar_contexto_usuario():
             from db import get_tenant_by_slug
             tenant_info = get_tenant_by_slug(g.tenant_schema)
         except Exception:  # noqa: BLE001
-            tenant_info = None
+            current_app.logger.exception("No se pudo validar el tenant de la sesión")
+            raise
 
         if not tenant_info:
             # Tenant fue eliminado entre login y esta request
@@ -91,7 +92,8 @@ def cargar_contexto_usuario():
         from db import get_tipos_persona
         g.tenant_tipos = get_tipos_persona(g.tenant_schema)
     except Exception:  # noqa: BLE001
-        g.tenant_tipos = []
+        current_app.logger.exception("No se pudieron cargar los tipos de persona")
+        raise
 
     return None
 

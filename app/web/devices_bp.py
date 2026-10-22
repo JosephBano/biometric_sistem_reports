@@ -120,8 +120,9 @@ def api_get_dispositivos():
                 d["porcentaje_ocupado"] = 0.0
 
         return jsonify({"dispositivos": dispositivos})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error consultando dispositivos")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.post("/api/dispositivos")
@@ -133,8 +134,9 @@ def api_upsert_dispositivo():
             data["password_enc"] = encrypt_device_password(data["password_enc"])
         did = upsert_dispositivo(data)
         return jsonify({"status": "ok", "id": did})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando dispositivo")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.put("/api/dispositivos/<id>")
@@ -147,8 +149,9 @@ def api_editar_dispositivo(id: str):
             data["password_enc"] = encrypt_device_password(data["password_enc"])
         did = upsert_dispositivo(data)
         return jsonify({"status": "ok", "id": did})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando dispositivo")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.delete("/api/dispositivos/<id>")
@@ -158,8 +161,9 @@ def api_eliminar_dispositivo(id: str):
         if not eliminar_dispositivo(id):
             return jsonify({"error": "Dispositivo no encontrado"}), 404
         return jsonify({"status": "ok"})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error eliminando dispositivo")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.get("/api/dispositivos/<id>/test")
@@ -193,8 +197,9 @@ def api_usuarios_zk():
             "vinculados": vinculados,
             "sin_vincular": len(usuarios) - vinculados,
         })
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error leyendo usuarios del dispositivo")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.post("/api/usuarios-zk/<id_usuario>/vincular")
@@ -207,8 +212,9 @@ def api_vincular_usuario_zk(id_usuario: str):
     try:
         actualizar_persona(persona_id, {"id_usuario_zk": id_usuario})
         return jsonify({"ok": True})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error vinculando usuario del dispositivo")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.get("/api/personas-lista")
@@ -222,8 +228,9 @@ def api_personas_lista():
              "id_usuario_zk": p.get("id_usuario_zk")}
             for p in personas
         ]})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error consultando personas vinculadas")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 # ── Sync global ──────────────────────────────────────────────────────────
@@ -233,8 +240,9 @@ def api_personas_lista():
 def api_sync_estado():
     try:
         return jsonify(get_estado_sync_ui())
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error consultando estado de sincronización")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.post("/api/sincronizar")
@@ -294,10 +302,11 @@ def limpiar_dispositivo():
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            pass
+            current_app.logger.exception("No se pudo registrar auditoría de limpieza de marcaciones")
         return jsonify({"success": True, "registros_borrados": total_borrado})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error limpiando marcaciones")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 # ── Auxiliar para reportes: personas con horario cargado ─────────────────

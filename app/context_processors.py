@@ -48,6 +48,7 @@ def register_context_processors(app: Flask) -> None:
             from db import get_justificaciones_pendientes
             count = len(get_justificaciones_pendientes())
         except Exception:
+            app.logger.exception("No se pudieron cargar justificaciones pendientes")
             count = 0
 
         return dict(justificaciones_pendientes_count=count)

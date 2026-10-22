@@ -85,8 +85,8 @@ def generar_narrativo(hallazgos: dict, contexto: str = "") -> str:
                     f"{response.text[:200]}"
                 )
 
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"DeepSeek API falló, usando fallback: {e}")
+        except Exception:  # noqa: BLE001
+            logger.exception("DeepSeek API falló; se usará el fallback")
 
     # --- FALLBACK REGLA-BASE ---
     rango_inicio = hallazgos["rango"]["inicio"]

@@ -21,6 +21,7 @@ API pública:
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, timedelta
 
 import pandas as pd
@@ -113,6 +114,9 @@ def load_data_asistencia_dataframe(fecha_inicio: date, fecha_fin: date, grupo_id
                 )
                 horario = resuelto_inicio.get("plantilla")
             except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception(
+                    "No se pudo resolver el horario de la persona %s", persona_id
+                )
                 horario = None
             p_asist = asist_map.get(persona_id, {})
 
@@ -420,8 +424,10 @@ def ranking_departamento(grupo_id: str, fecha_inicio, fecha_fin) -> list[dict]:
                     "dias_presentes": pa["resumen"]["presentes"],
                     "dias_programados": pa["resumen"]["dias_programados"],
                 })
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception(
+                "No se pudo calcular el resumen del período %s", pid
+            )
 
     ranking.sort(key=lambda x: x["porcentaje_asistencia"], reverse=True)
     return ranking
@@ -555,8 +561,8 @@ def comparar_periodos_historicos(tipo_persona_id: str = None, n: int = 5) -> lis
                     "total_personas": resumen["total_personas"],
                     "distribucion_semaforo": resumen["distribucion_semaforo"],
                 })
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("No se pudo comparar el período %s", r[0])
     return resultado
 
 

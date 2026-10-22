@@ -16,7 +16,7 @@ Rutas (8):
 """
 from __future__ import annotations
 
-from flask import Blueprint, g, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, g, jsonify, redirect, render_template, request, url_for
 from sqlalchemy import text
 
 from app.domain import auth as auth_svc
@@ -59,7 +59,7 @@ def _get_grupos_periodos():
             ).fetchall()
             grupos = [dict(r._mapping) for r in rows]
     except Exception:  # noqa: BLE001
-        pass
+        current_app.logger.exception("No se pudieron cargar grupos para el selector admin")
     try:
         with get_connection() as conn:
             rows = conn.execute(
@@ -73,7 +73,7 @@ def _get_grupos_periodos():
             ).fetchall()
             periodos = [dict(r._mapping) for r in rows]
     except Exception:  # noqa: BLE001
-        pass
+        current_app.logger.exception("No se pudieron cargar períodos para el selector admin")
     return grupos, periodos
 
 
@@ -105,8 +105,9 @@ def crear_tenant():
         svc_crear_tenant(nombre, nombre_corto, slug, zona_horaria)
         provisionar_schema(slug, tipos_persona=["Empleado", "Practicante"])
         return redirect(url_for("admin.listar_tenants") + "?msg=Tenant+creado+con+éxito")
-    except Exception as e:  # noqa: BLE001
-        return f"Error al crear tenant: {str(e)}", 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando tenant")
+        return "Error interno del servidor", 500
 
 
 @bp.post("/admin/tenants/<tenant_id>")
@@ -116,8 +117,9 @@ def actualizar_tenant(tenant_id: str):
     try:
         svc_actualizar_tenant(tenant_id, {"activo": activo})
         return redirect(url_for("admin.listar_tenants") + "?msg=Tenant+actualizado")
-    except Exception as e:  # noqa: BLE001
-        return f"Error: {e}", 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando tenant")
+        return "Error interno del servidor", 500
 
 
 # ── Vista admin de dispositivos (placeholder UI) ────────────────────────
@@ -140,8 +142,9 @@ def listar_usuarios():
     if tenant_id:
         try:
             usuarios = get_usuarios_tenant(tenant_id)
-        except Exception as e:  # noqa: BLE001
-            mensaje = f"Error cargando usuarios: {e}"
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception("Error cargando usuarios del tenant")
+            mensaje = "Error cargando usuarios del tenant"
             mensaje_tipo = "danger"
     grupos, periodos = _get_grupos_periodos()
     return render_template(
@@ -195,11 +198,12 @@ def crear_usuario():
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            pass
+            current_app.logger.exception("No se pudo registrar auditoría de creación de usuario")
         return redirect(url_for("admin.listar_usuarios") + f"?msg=Usuario+'{nombre}'+creado+exitosamente")
     except ValueError as e:
         return redirect(url_for("admin.listar_usuarios") + f"?msg={str(e)}&tipo=danger")
     except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando usuario")
         return redirect(url_for("admin.listar_usuarios") + "?msg=Error+creando+usuario&tipo=danger")
 
 
@@ -234,7 +238,7 @@ def editar_usuario(usuario_id: str):
                     ip=request.remote_addr,
                 )
             except Exception:  # noqa: BLE001
-                pass
+                current_app.logger.exception("No se pudo registrar auditoría de actualización de usuario")
 
         try:
             registrar_audit(
@@ -247,10 +251,11 @@ def editar_usuario(usuario_id: str):
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            pass
+            current_app.logger.exception("No se pudo registrar auditoría de actualización de usuario")
 
         return redirect(url_for("admin.listar_usuarios") + "?msg=Usuario+actualizado+correctamente")
     except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando usuario")
         return redirect(url_for("admin.listar_usuarios") + "?msg=Error+actualizando+usuario&tipo=danger")
 
 
@@ -290,10 +295,11 @@ def api_superadmin_eliminar_usuario(usuario_id: str):
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            pass
+            current_app.logger.exception("No se pudo registrar auditoría de eliminación de usuario")
         return jsonify({"ok": True, "mensaje": "Usuario eliminado"}), 200
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"ok": False, "error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error eliminando usuario superadmin")
+        return jsonify({"ok": False, "error": "Error interno del servidor"}), 500
 
 
 @bp.post("/api/superadmin/usuarios")
@@ -337,7 +343,7 @@ def api_superadmin_crear_usuario():
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            pass
+            current_app.logger.exception("No se pudo registrar auditoría de creación de usuario superadmin")
         return jsonify({
             "ok": True,
             "usuario": {k: v for k, v in nuevo.items() if k != "password_hash"},
@@ -345,8 +351,9 @@ def api_superadmin_crear_usuario():
         }), 201
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 409
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"ok": False, "error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando usuario superadmin")
+        return jsonify({"ok": False, "error": "Error interno del servidor"}), 500
 
 
 @bp.post("/api/superadmin/usuarios/mover")
@@ -399,12 +406,13 @@ def api_superadmin_mover_usuario():
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            pass
+            current_app.logger.exception("No se pudo registrar auditoría de movimiento de usuario")
         return jsonify({
             "ok": True,
             "password_temporal": temp_pass if generar_pass else None,
         }), 200
     except ValueError as e:
         return jsonify({"ok": False, "error": str(e)}), 409
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"ok": False, "error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error moviendo usuario entre tenants")
+        return jsonify({"ok": False, "error": "Error interno del servidor"}), 500

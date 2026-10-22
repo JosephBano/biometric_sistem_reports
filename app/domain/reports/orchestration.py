@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 from collections import defaultdict
@@ -20,6 +21,8 @@ from app.domain.reports.data_loading import (
 from app.domain.reports.models import DEFAULT_CONFIG
 from app.domain.reports.pdf_render import generar_pdf, generar_pdf_persona
 from app.domain.reports.rules import analizar_dia, analizar_por_persona
+
+log = logging.getLogger(__name__)
 
 
 def build_pdf(
@@ -197,6 +200,7 @@ def main() -> None:
     try:
         registros = cargar_archivo(args.archivo)
     except Exception as e:
+        log.exception("No se pudo leer el archivo del reporte")
         print(f"❌ Error al leer el archivo: {e}")
         sys.exit(1)
 

@@ -10,7 +10,7 @@ Endpoint name: `auth.login`, `auth.logout`, `auth.switch_tenant`.
 """
 from __future__ import annotations
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
 from app.domain import auth as auth_svc
 from app.domain.auth import (
@@ -72,7 +72,7 @@ def login():
                         ip=ip,
                     )
                 except Exception:  # noqa: BLE001
-                    pass
+                    current_app.logger.exception("No se pudo registrar auditoría de inicio de sesión")
 
                 return redirect(url_for("dashboard.index"))
             else:
@@ -95,7 +95,7 @@ def logout():
                 ip=request.remote_addr,
             )
     except Exception:  # noqa: BLE001
-        pass
+        current_app.logger.exception("No se pudo registrar auditoría de cierre de sesión")
     session.clear()
     return redirect(url_for("auth.login"))
 

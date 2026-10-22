@@ -90,8 +90,9 @@ def importar_historicos():
             "insertados_nuevos": nuevos,
         })
 
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": f"Error procesando el archivo: {str(e)}"}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error procesando el archivo de respaldo")
+        return jsonify({"error": "Error interno del servidor"}), 500
     finally:
         try:
             os.remove(filepath)
@@ -118,12 +119,13 @@ def scheduler_estado():
     try:
         proxima = scheduler_svc.proxima_corrida()
     except Exception:  # noqa: BLE001
+        current_app.logger.exception("No se pudo calcular la próxima corrida del scheduler")
         proxima = None
 
     try:
         ultimas = scheduler_svc.listar_ultimas_corridas(limit=10)
-    except Exception as e:  # noqa: BLE001
-        current_app.logger.warning("scheduler_runs.listar_ultimos falló: %s", e)
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("scheduler_runs.listar_ultimos falló")
         ultimas = []
 
     # Serializar datetimes a ISO string (jsonify no sabe hacerlo solo).

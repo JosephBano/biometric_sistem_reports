@@ -10,9 +10,9 @@ No importa Flask: se puede llamar desde un hilo de background.
 """
 from __future__ import annotations
 
+import logging
 import os
 import smtplib
-import sys
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -72,6 +72,6 @@ def enviar_correo(
         server.send_message(msg)
         server.quit()
         return True
-    except Exception as e:  # noqa: BLE001
-        print(f"Error enviando correo: {e}", file=sys.stderr)
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception("Error enviando correo")
         return False

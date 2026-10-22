@@ -185,8 +185,9 @@ def cargar_horarios():
         })
     except RuntimeError as e:
         return jsonify({"error": str(e)}), 400
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error ejecutando sincronización solicitada")
+        return jsonify({"error": "Error interno del servidor"}), 500
     finally:
         try:
             import os

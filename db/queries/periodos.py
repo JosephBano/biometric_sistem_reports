@@ -5,6 +5,8 @@ grupos_periodo  → Concepto UI: el período como grupo (nombre, fechas, estado)
 periodos_vigencia → Registro por persona en ese período
 """
 
+import logging
+
 from sqlalchemy import text
 
 from db.connection import get_connection
@@ -214,27 +216,24 @@ def agregar_personas_a_periodo_bulk(periodo_id: str, personas_ids: list[str]) ->
         d = dict(gp._mapping)
         creados = 0
         for p_id in personas_ids:
-            try:
-                conn.execute(
-                    text("""
-                        INSERT INTO periodos_vigencia (persona_id, nombre, fecha_inicio, fecha_fin, estado, descripcion)
-                        SELECT CAST(:persona_id AS uuid), :nombre,
-                               CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc
-                        WHERE NOT EXISTS (
-                            SELECT 1 FROM periodos_vigencia
-                            WHERE persona_id = CAST(:persona_id AS uuid)
-                              AND nombre = :nombre
-                              AND fecha_inicio = CAST(:fi AS date)
-                              AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
-                        )
-                    """),
-                    {"persona_id": p_id, "nombre": d["nombre"],
-                     "fi": d["fecha_inicio"], "ff": d["fecha_fin"],
-                     "desc": d.get("descripcion")},
-                )
-                creados += 1
-            except Exception:
-                pass
+            result = conn.execute(
+                text("""
+                    INSERT INTO periodos_vigencia (persona_id, nombre, fecha_inicio, fecha_fin, estado, descripcion)
+                    SELECT CAST(:persona_id AS uuid), :nombre,
+                           CAST(:fi AS date), CAST(:ff AS date), 'activo', :desc
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM periodos_vigencia
+                        WHERE persona_id = CAST(:persona_id AS uuid)
+                          AND nombre = :nombre
+                          AND fecha_inicio = CAST(:fi AS date)
+                          AND (fecha_fin = CAST(:ff AS date) OR (:ff IS NULL AND fecha_fin IS NULL))
+                    )
+                """),
+                {"persona_id": p_id, "nombre": d["nombre"],
+                 "fi": d["fecha_inicio"], "ff": d["fecha_fin"],
+                 "desc": d.get("descripcion")},
+            )
+            creados += result.rowcount
         return {"exito": True, "creados": creados}
 
 
@@ -288,6 +287,8 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
             with open(filepath, newline="", encoding="utf-8-sig") as f:
                 reader = _csv.DictReader(f)
                 for idx, row in enumerate(reader, start=1):
+                    contadores_antes = (procesadas, nuevas, actualizadas)
+                    savepoint = conn.begin_nested()
                     try:
                         nombre_p = str(row.get("nombre", "")).strip()
                         identif = str(row.get("identificacion", "")).strip()
@@ -296,6 +297,7 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
 
                         if not nombre_p:
                             errores.append(f"Fila {idx}: nombre vacío.")
+                            savepoint.commit()
                             continue
 
                         # A. Upsert grupo
@@ -451,12 +453,20 @@ def procesar_csv_personas_periodo(filepath: str, periodo_id: str, tipo_persona_i
 
                         procesadas += 1
 
-                    except Exception as e:
-                        errores.append(f"Fila {idx} ({row.get('nombre','?')}): {e}")
+                    except Exception:  # noqa: BLE001
+                        savepoint.rollback()
+                        procesadas, nuevas, actualizadas = contadores_antes
+                        logging.getLogger(__name__).exception(
+                            "Error procesando fila %s del CSV de períodos", idx
+                        )
+                        errores.append(f"Fila {idx} ({row.get('nombre','?')}): error de datos")
+                    else:
+                        savepoint.commit()
 
             return {"exito": True, "procesadas": procesadas,
                     "nuevas": nuevas, "actualizadas": actualizadas,
                     "errores": errores}
 
-        except Exception as e:
-            return {"exito": False, "error": f"Error leyendo CSV: {e}"}
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Error leyendo CSV de períodos")
+            return {"exito": False, "error": "Error leyendo el archivo CSV"}

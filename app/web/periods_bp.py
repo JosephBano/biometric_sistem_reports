@@ -101,8 +101,9 @@ def crear():
             fecha_fin=fecha_fin, descripcion=descripcion,
         )
         flash("Período de seguimiento creado exitosamente", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error al crear período: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando período")
+        flash("Error al crear período", "danger")
 
     return redirect(url_for("periods.lista"))
 
@@ -215,8 +216,9 @@ def agregar_manual(id: str):
             )
             agregar_personas_a_periodo_bulk(id, [nueva_persona["id"]])
             flash(f"Persona «{nombre}» creada y agregada al período exitosamente.", "success")
-        except Exception as e:  # noqa: BLE001
-            flash(f"Error al registrar y agregar persona: {e}", "danger")
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception("Error registrando persona en el período")
+            flash("Error al registrar y agregar persona", "danger")
 
     return redirect(url_for("periods.detalle", id=id))
 
@@ -263,8 +265,9 @@ def importar_personas(id: str):
                 flash(f"Errores en {len(resultado['errores'])} registros.", "warning")
         else:
             flash(f"Error procesando CSV: {resultado.get('error')}", "danger")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error importando personas al período")
+        flash("Error procesando CSV", "danger")
     finally:
         try:
             os.remove(filepath)

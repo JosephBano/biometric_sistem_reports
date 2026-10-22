@@ -77,14 +77,14 @@ def provisionar_schema(slug: str, tipos_persona: list[str]) -> bool:
                           conn.execute(text("INSERT INTO alembic_version (version_num) VALUES (:rev)"), {"rev": head_rev})
                 else:
                      log.warning("alembic.ini no encontrado para sincronizar version_num.")
-            except Exception as e_alembic:
-                log.warning(f"No se pudo sincronizar version de Alembic: {e_alembic}")
+            except Exception:
+                log.exception("No se pudo sincronizar version de Alembic")
 
         log.info(f"Provisioning completado exitosamente para '{slug}'.")
         return True
 
-    except Exception as e:
-        log.error(f"Error durante el provisioning del tenant '{slug}': {e}")
+    except Exception:
+        log.exception("Error durante el provisioning del tenant '%s'", slug)
         # Rollback explícito de Provisioning
         if created_schema:
             try:
@@ -93,10 +93,10 @@ def provisionar_schema(slug: str, tipos_persona: list[str]) -> bool:
                     # DROP SCHEMA CASCADE para remover tablas asociadas
                     conn.execute(text(f"DROP SCHEMA IF EXISTS {slug} CASCADE"))
                     conn.commit()
-            except Exception as rollback_err:
-                 log.error(f"Error en rollback de schema para '{slug}': {rollback_err}")
+            except Exception:
+                 log.exception("Error en rollback de schema para '%s'", slug)
 
         # Remover de public.tenants para que no quede huérfano
         eliminar_tenant_de_public(slug)
 
-        raise e
+        raise
