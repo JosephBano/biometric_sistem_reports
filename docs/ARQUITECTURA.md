@@ -253,7 +253,7 @@ biometric_sistem_reports/
 ├── static/                             # Assets estáticos
 │   ├── tokens.css                      # Variables CSS de Design Tokens
 │   ├── style.css                       # Estilos UI Shell
-│   └── js/                             # 10 módulos JS cliente
+│   └── js/                             # 14 módulos JS cliente (modularizados < 800 líneas)
 │
 ├── templates/                          # Plantillas Jinja2 (UI Shell v2.0)
 ├── scripts/                            # Scripts CLI (cambiar_password.py, migraciones utilitarias)

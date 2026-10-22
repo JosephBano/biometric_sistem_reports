@@ -20,7 +20,9 @@ from db.queries.periodos import (
     listar_periodos_activos,
     listar_periodos_historial,
     procesar_csv_personas_periodo,
+    remover_persona_de_periodo,
 )
+from db.queries.personas_crud import crear_persona
 
 pytestmark = pytest.mark.integration
 
@@ -180,3 +182,19 @@ class TestAgregarPersonasBulk:
             personas_ids=[],
         )
         assert isinstance(result, dict)
+
+
+class TestRemoverPersonaDePeriodo:
+
+    def test_remover_persona_de_periodo(self, periodo_test):
+        """remover_persona_de_periodo elimina la asociación de vigencia."""
+        p = crear_persona(nombre=f"PerRem-{uuid.uuid4().hex[:6]}")
+        agregar_personas_a_periodo_bulk(periodo_test["id"], [p["id"]])
+
+        assert remover_persona_de_periodo(periodo_test["id"], p["id"]) is True
+        assert remover_persona_de_periodo(periodo_test["id"], p["id"]) is False
+
+    def test_remover_persona_periodo_inexistente(self):
+        """remover_persona_de_periodo con periodo inexistente retorna False."""
+        fake_id = str(uuid.uuid4())
+        assert remover_persona_de_periodo(fake_id, fake_id) is False
