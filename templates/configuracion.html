@@ -1,183 +1,336 @@
 {% extends "base.html" %}
 
+{% block title %}Configuración del Sistema - {{ super() }}{% endblock %}
+
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Configuración</h3>
-    <p class="text-muted">Atención de feriados, históricos y backups del sistema.</p>
-</div>
+<div class="page-shell">
 
-<!-- Tabs -->
-<ul class="nav nav-pills mb-4 gap-2" id="configTabs" role="tablist">
-  <li class="nav-item" role="presentation">
-    <button class="nav-link active fw-bold px-4 py-2 custom-tab shadow-sm" id="feriados-tab" data-bs-toggle="tab" data-bs-target="#feriados" type="button" role="tab" aria-controls="feriados" aria-selected="true">
-        <span class="d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined fs-5">event_available</span>
-            Feriados
-        </span>
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="mantenimiento-tab" data-bs-toggle="tab" data-bs-target="#mantenimiento" type="button" role="tab" aria-controls="mantenimiento" aria-selected="false">
-        <span class="d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined fs-5">cloud_sync</span>
-            Respaldos y Históricos
-        </span>
-    </button>
-  </li>
-  <li class="nav-item" role="presentation">
-    <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm" id="sync-tab" data-bs-toggle="tab" data-bs-target="#sync" type="button" role="tab" aria-controls="sync" aria-selected="false">
-        <span class="d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined fs-5">sync</span>
-            Sincronización
-        </span>
-    </button>
-  </li>
-</ul>
+    <!-- ── Header de Página ────────────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span class="rippling-pill rippling-pill-navy">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">settings</span>
+                    Sistema y Mantenimiento
+                </span>
+                <span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">tune</span>
+                    Configuración Global
+                </span>
+            </div>
+            <h1 class="title-hero mb-0">Configuración del Sistema</h1>
+            <p class="page-header-subtitle mb-0">
+                Administración de días no laborables, respaldos de base de datos, carga de datos históricos y monitor del daemon sincronizador.
+            </p>
+        </div>
+    </div>
 
-<div class="tab-content" id="configTabsContent">
+    <!-- ── KPIs Ejecutivos del Entorno ─────────────────────────────────────── -->
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Feriados -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">event_available</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Feriados e Inhábiles</div>
+                <div class="dashboard-kpi-value" id="kpi-feriados-val">—</div>
+            </div>
+        </div>
 
-    <!-- FERIADOS TAB -->
-    <div class="tab-pane fade show active" id="feriados" role="tabpanel" aria-labelledby="feriados-tab">
-        <div class="card shadow-sm border-0" style="border-radius: 12px;">
-            <div class="card-body">
-                <div class="row g-2 mb-4 align-items-end p-3 bg-light rounded">
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted mb-1">Fecha</label>
-                        <input type="date" class="form-control form-control-sm" id="feriado-fecha">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted mb-1">Descripción</label>
-                        <input type="text" class="form-control form-control-sm" id="feriado-descripcion" placeholder="Ej: Año Nuevo">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small text-muted mb-1">Tipo</label>
-                        <select class="form-select form-select-sm" id="feriado-tipo">
-                            <option value="nacional">Nacional</option>
-                            <option value="local">Local</option>
-                            <option value="institucional">Institucional</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-sm btn-primary w-100" onclick="agregarFeriado();">+ Agregar</button>
-                    </div>
-                </div>
+        <!-- KPI 2: Scheduler Daemon -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">sync</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Daemon Scheduler</div>
+                <div class="dashboard-kpi-value text-success" style="font-size: 1.15rem;">En Ejecución</div>
+            </div>
+        </div>
 
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold mb-0">Lista de Feriados</h5>
-                    <div class="d-flex gap-2">
-                        <label class="btn btn-sm btn-outline-secondary mb-0" for="feriados-import-file">
-                            Importar CSV
+        <!-- KPI 3: Respaldos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">database</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Base de Datos</div>
+                <div class="dashboard-kpi-value" style="font-size: 1.15rem;">SQLite / SaaS</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Integridad -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-gold">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">history</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Carga Histórica</div>
+                <div class="dashboard-kpi-value" style="font-size: 1.15rem;">CSV / XLSX</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Pestañas de Configuración ───────────────────────────────────────── -->
+    <ul class="nav nav-pills gap-2 mb-3" id="configTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active fw-bold px-4 py-2 custom-tab shadow-sm d-flex align-items-center gap-2"
+                    id="feriados-tab" data-bs-toggle="tab" data-bs-target="#feriados" type="button" role="tab" aria-controls="feriados" aria-selected="true"
+                    style="border-radius: var(--radius-md);">
+                <span class="material-symbols-outlined fs-5">event_available</span>
+                <span>Feriados e Inhábiles</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm d-flex align-items-center gap-2"
+                    id="mantenimiento-tab" data-bs-toggle="tab" data-bs-target="#mantenimiento" type="button" role="tab" aria-controls="mantenimiento" aria-selected="false"
+                    style="border-radius: var(--radius-md);">
+                <span class="material-symbols-outlined fs-5">cloud_sync</span>
+                <span>Respaldos y Datos Históricos</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link fw-bold px-4 py-2 custom-tab shadow-sm d-flex align-items-center gap-2"
+                    id="sync-tab" data-bs-toggle="tab" data-bs-target="#sync" type="button" role="tab" aria-controls="sync" aria-selected="false"
+                    style="border-radius: var(--radius-md);">
+                <span class="material-symbols-outlined fs-5">sync</span>
+                <span>Sincronización Daemon</span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- ── Contenido de Pestañas ───────────────────────────────────────────── -->
+    <div class="tab-content" id="configTabsContent">
+
+        <!-- 1. FERIADOS TAB -->
+        <div class="tab-pane fade show active" id="feriados" role="tabpanel" aria-labelledby="feriados-tab">
+            <div class="component-card-shell">
+                <div class="component-header-shell">
+                    <div class="component-title-slot">
+                        <div class="component-title-icon-wrapper">
+                            <span class="material-symbols-outlined">calendar_add_on</span>
+                        </div>
+                        <div>
+                            <h5 class="component-card-title mb-0">Gestión de Feriados y Calendario Laboral</h5>
+                            <small class="text-muted">Los días feriados registrados se excluyen automáticamente de los cálculos de tardanzas y ausencias injustificadas</small>
+                        </div>
+                    </div>
+                    <div class="component-tools-slot d-flex gap-2">
+                        <label class="btn btn-sm btn-rippling-secondary d-flex align-items-center gap-1 mb-0" for="feriados-import-file" style="cursor: pointer;">
+                            <span class="material-symbols-outlined fs-6">upload_file</span>
+                            <span>Importar CSV</span>
                             <input type="file" id="feriados-import-file" style="display:none" accept=".csv">
                         </label>
-                        <a href="{{ url_for('attendance.exportar_feriados') }}" class="btn btn-sm btn-outline-secondary">Exportar CSV</a>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="cargarFeriados();"><span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">sync</span></button>
+                        <a href="{{ url_for('attendance.exportar_feriados') }}" class="btn btn-sm btn-rippling-secondary d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined fs-6">download</span>
+                            <span>Exportar CSV</span>
+                        </a>
+                        <button class="btn btn-sm btn-rippling-secondary d-flex align-items-center justify-content-center" onclick="cargarFeriados();" title="Actualizar lista">
+                            <span class="material-symbols-outlined fs-6">sync</span>
+                        </button>
                     </div>
                 </div>
 
-                <div id="feriados-lista" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <!-- Loaded dynamically via configuracion.js -->
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- MANTENIMIENTO TAB (Fase 4: Paso 4.3) -->
-    <div class="tab-pane fade" id="mantenimiento" role="tabpanel" aria-labelledby="mantenimiento-tab">
-        <div class="row g-4 p-2">
-            <!-- Backups -->
-            <div class="col-md-6">
-                <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Copias de Seguridad (Backups)</h5>
-                        <p class="small text-muted mb-4">Descargue respaldos de seguridad de la base de datos completa para guardado externo.</p>
-                        <div class="d-flex flex-column gap-2" style="max-width: 320px;">
-                            <a href="{{ url_for('reports.descargar_backup_db') }}" class="btn btn-sm btn-outline-primary d-flex align-items-center justify-content-center gap-2">
-                                <span class="material-symbols-outlined" style="font-size: 1.1rem;">download</span> Descargar Base de Datos (.db)
-                            </a>
-                            <a href="{{ url_for('reports.descargar_backup_csv') }}" class="btn btn-sm btn-outline-secondary d-flex align-items-center justify-content-center gap-2">
-                                <span class="material-symbols-outlined" style="font-size: 1.1rem;">table_chart</span> Descargar Historial completo (CSV)
-                            </a>
+                <div class="component-body-shell p-4">
+                    <!-- Formulario de Alta Rápida -->
+                    <div class="p-3 bg-light rounded-3 border mb-4">
+                        <div class="fw-bold text-dark small mb-2 d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined text-primary fs-6">add_circle</span>
+                            <span>Registrar Nuevo Feriado</span>
+                        </div>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-muted mb-1">Fecha Inhabil</label>
+                                <input type="date" class="form-control form-control-sm" id="feriado-fecha" style="height: 38px;">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label small fw-bold text-muted mb-1">Descripción del Feriado</label>
+                                <input type="text" class="form-control form-control-sm" id="feriado-descripcion" placeholder="Ej: Año Nuevo, Día del Trabajador" style="height: 38px;">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold text-muted mb-1">Ámbito / Tipo</label>
+                                <select class="form-select form-select-sm" id="feriado-tipo" style="height: 38px;">
+                                    <option value="nacional">Nacional (Oficial)</option>
+                                    <option value="local">Local / Regional</option>
+                                    <option value="institucional">Institucional / Gremial</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button class="btn btn-rippling-primary btn-sm w-100 shadow-sm d-flex align-items-center justify-content-center gap-1" onclick="agregarFeriado();" style="height: 38px;">
+                                    <span class="material-symbols-outlined fs-6">add</span>
+                                    <span>Agregar</span>
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <!-- Carga de Históricos -->
-            <div class="col-md-6">
-                <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3">Carga de Datos Históricos</h5>
-                        <p class="small text-muted mb-3">Importe marcaciones antiguas desde archivos XLSX o CSV de forma segura.</p>
-                        <div class="p-2 bg-light border rounded mb-3">
-                            <small class="text-muted d-block mb-1 fw-bold">Columnas requeridas:</small>
-                            <code class="small text-dark">nombre, fecha_hora</code>
-                            <small class="text-muted d-block mt-1">Opcionales: <code class="text-dark">id_usuario, tipo</code></small>
-                        </div>
-                        <div class="mb-3">
-                             <input type="file" class="form-control form-control-sm" id="historico-input" accept=".csv,.xlsx">
-                        </div>
-                        <button class="btn btn-sm btn-primary w-100" onclick="subirHistorico();" id="btn-subir-historico">Importar Histórico</button>
-                        <div id="historico-status" class="mt-2" style="display:none"></div>
+                    <!-- Lista Dinámica de Feriados -->
+                    <div id="feriados-lista" class="table-responsive">
+                        <!-- Loaded dynamically via configuracion.js -->
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- SINCRONIZACIÓN TAB (Fase 1 — Sync observable) -->
-    <div class="tab-pane fade" id="sync" role="tabpanel" aria-labelledby="sync-tab">
-        <div class="row g-4 p-2">
-            <div class="col-12">
-                <div class="card shadow-sm border-0 h-100" style="border-radius: 12px;">
-                    <div class="card-body p-4">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="fw-bold mb-0">Sincronización automática</h5>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="cargarSchedulerEstado();">
-                                <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">refresh</span>
-                                Actualizar
+        <!-- 2. MANTENIMIENTO TAB -->
+        <div class="tab-pane fade" id="mantenimiento" role="tabpanel" aria-labelledby="mantenimiento-tab">
+            <div class="row g-4">
+                <!-- Backups -->
+                <div class="col-md-6">
+                    <div class="component-card-shell h-100">
+                        <div class="component-header-shell">
+                            <div class="component-title-slot">
+                                <div class="component-title-icon-wrapper">
+                                    <span class="material-symbols-outlined">backup</span>
+                                </div>
+                                <div>
+                                    <h5 class="component-card-title mb-0">Copias de Seguridad (Backups)</h5>
+                                    <small class="text-muted">Descargue snapshots completos de la base de datos para respaldo local o externo</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="component-body-shell p-4 d-flex flex-column justify-content-between">
+                            <p class="small text-muted mb-4">
+                                Se recomienda generar descargas periódicas de la base de datos antes de cierres contables mensuales o migraciones importantes.
+                            </p>
+                            <div class="d-flex flex-column gap-3">
+                                <a href="{{ url_for('reports.descargar_backup_db') }}" class="btn btn-rippling-primary py-2 px-3 shadow-sm d-flex align-items-center justify-content-center gap-2">
+                                    <span class="material-symbols-outlined fs-5">download</span>
+                                    <span class="fw-semibold">Descargar Base de Datos SQLite (.db)</span>
+                                </a>
+                                <a href="{{ url_for('reports.descargar_backup_csv') }}" class="btn btn-rippling-secondary py-2 px-3 shadow-sm d-flex align-items-center justify-content-center gap-2">
+                                    <span class="material-symbols-outlined fs-5">table_chart</span>
+                                    <span class="fw-semibold">Descargar Historial de Marcaciones (.csv)</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Carga de Históricos -->
+                <div class="col-md-6">
+                    <div class="component-card-shell h-100">
+                        <div class="component-header-shell">
+                            <div class="component-title-slot">
+                                <div class="component-title-icon-wrapper">
+                                    <span class="material-symbols-outlined">history_toggle_off</span>
+                                </div>
+                                <div>
+                                    <h5 class="component-card-title mb-0">Carga de Datos Históricos</h5>
+                                    <small class="text-muted">Importación masiva de marcaciones biométricas antiguas</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="component-body-shell p-4">
+                            <p class="small text-muted mb-3">
+                                Suba archivos de marcaciones recopiladas con anterioridad desde terminales independientes o sistemas externos.
+                            </p>
+                            <div class="p-3 bg-light border rounded-3 mb-3">
+                                <div class="small fw-bold text-dark mb-1">Columnas obligatorias requeridas:</div>
+                                <code class="small text-primary fw-bold">nombre, fecha_hora</code>
+                                <div class="small text-muted mt-1">Columnas opcionales: <code class="text-secondary">id_usuario, tipo</code></div>
+                            </div>
+                            <div class="mb-3">
+                                <input type="file" class="form-control" id="historico-input" accept=".csv,.xlsx" style="height: 42px;">
+                            </div>
+                            <button class="btn btn-rippling-primary w-100 shadow-sm d-flex align-items-center justify-content-center gap-2"
+                                    onclick="subirHistorico();" id="btn-subir-historico" style="height: 42px;">
+                                <span class="material-symbols-outlined fs-5">upload</span>
+                                <span>Importar Archivo Histórico</span>
                             </button>
-                        </div>
-                        <p class="small text-muted mb-4">Estado del scheduler en segundo plano y últimas corridas registradas.</p>
-
-                        <div id="sync-estado-resumen" class="row g-3 mb-4">
-                            <div class="col-md-3">
-                                <div class="p-3 bg-light border rounded text-center">
-                                    <small class="text-muted d-block">Estado</small>
-                                    <span id="sync-activo-badge" class="badge bg-secondary fs-6 mt-1">—</span>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="p-3 bg-light border rounded text-center">
-                                    <small class="text-muted d-block">Hora nocturna</small>
-                                    <strong id="sync-hora-nocturna" class="d-block mt-1">—</strong>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="p-3 bg-light border rounded text-center">
-                                    <small class="text-muted d-block">Intervalo</small>
-                                    <strong id="sync-intervalo" class="d-block mt-1">—</strong>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="p-3 bg-light border rounded text-center">
-                                    <small class="text-muted d-block">Próxima corrida</small>
-                                    <strong id="sync-proxima" class="d-block mt-1" style="font-size: 0.85rem;">—</strong>
-                                </div>
-                            </div>
-                        </div>
-
-                        <h6 class="fw-bold mb-2">Últimas 10 corridas</h6>
-                        <div id="sync-corridas-tabla" class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                            <p class="text-muted small">Haga clic en "Actualizar" o abra este tab para cargar.</p>
+                            <div id="historico-status" class="mt-3" style="display:none"></div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- 3. SINCRONIZACIÓN TAB -->
+        <div class="tab-pane fade" id="sync" role="tabpanel" aria-labelledby="sync-tab">
+            <div class="component-card-shell">
+                <div class="component-header-shell">
+                    <div class="component-title-slot">
+                        <div class="component-title-icon-wrapper">
+                            <span class="material-symbols-outlined">sync</span>
+                        </div>
+                        <div>
+                            <h5 class="component-card-title mb-0">Monitor del Daemon de Sincronización Automática</h5>
+                            <small class="text-muted">Supervisión en tiempo real de los procesos en segundo plano para recolección de marcaciones ZK</small>
+                        </div>
+                    </div>
+                    <div class="component-tools-slot">
+                        <button class="btn btn-sm btn-rippling-secondary d-flex align-items-center gap-1" onclick="cargarSchedulerEstado();">
+                            <span class="material-symbols-outlined fs-6">refresh</span>
+                            <span>Actualizar Estado</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="component-body-shell p-4">
+                    <!-- Resumen del Scheduler -->
+                    <div id="sync-estado-resumen" class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="p-3 bg-light border rounded-3 text-center">
+                                <small class="text-muted d-block fw-bold mb-1">Estado Daemon</small>
+                                <span id="sync-activo-badge" class="badge bg-secondary fs-6 mt-1">—</span>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-light border rounded-3 text-center">
+                                <small class="text-muted d-block fw-bold mb-1">Hora Nocturna de Cierre</small>
+                                <strong id="sync-hora-nocturna" class="d-block text-dark mt-1 fs-6">—</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-light border rounded-3 text-center">
+                                <small class="text-muted d-block fw-bold mb-1">Frecuencia de Polling</small>
+                                <strong id="sync-intervalo" class="d-block text-dark mt-1 fs-6">—</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 bg-light border rounded-3 text-center">
+                                <small class="text-muted d-block fw-bold mb-1">Próxima Ejecución Estimada</small>
+                                <strong id="sync-proxima" class="d-block text-primary mt-1" style="font-size: 0.9rem;">—</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabla de Corridas -->
+                    <div class="fw-bold text-dark small mb-2 d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-primary fs-6">history</span>
+                        <span>Historial de las Últimas 10 Corridas de Sincronización</span>
+                    </div>
+                    <div id="sync-corridas-tabla" class="table-responsive">
+                        <p class="text-muted small p-4 text-center">Cargando estado del scheduler...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
+
+    <!-- Hidden dummy element for offcanvasHorario if needed by old script -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvas-horario" style="display:none;"></div>
+
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/configuracion.js') }}"></script>
+<script>
+// Actualizar KPI contador de feriados
+document.addEventListener('DOMContentLoaded', () => {
+    fetch((window.APP_BASE || '') + '/api/feriados')
+        .then(r => r.json())
+        .then(data => {
+            const kpi = document.getElementById('kpi-feriados-val');
+            if (kpi && data.feriados) {
+                kpi.textContent = data.feriados.length;
+            }
+        })
+        .catch(() => {});
+});
+</script>
 {% endblock %}
+

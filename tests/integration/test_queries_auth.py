@@ -3,11 +3,10 @@ Tests de integración de `db.queries.auth` (Fase 7.4 — cobertura).
 """
 from __future__ import annotations
 
-import os
 import uuid
-from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from db import set_thread_tenant
 from db.queries.auth import (
@@ -26,7 +25,6 @@ from db.queries.auth import (
     registrar_audit,
     registrar_login_intento,
 )
-
 
 pytestmark = pytest.mark.integration
 
@@ -126,7 +124,7 @@ class TestCrearUsuario:
 
     def test_crear_usuario_email_duplicado_falla(self, tenant_id, usuario_test):
         """Email duplicado lanza excepción."""
-        with pytest.raises(Exception):
+        with pytest.raises(IntegrityError):
             crear_usuario_db(
                 tenant_id=tenant_id,
                 email=usuario_test["email"],
@@ -188,6 +186,7 @@ class TestRegistrarAudit:
     def test_registrar_audit_con_detalle(self, tenant_id, usuario_test):
         """registrar_audit con detalle JSONB no falla."""
         import sqlalchemy as sa
+
         from db.connection import get_engine
 
         registrar_audit(

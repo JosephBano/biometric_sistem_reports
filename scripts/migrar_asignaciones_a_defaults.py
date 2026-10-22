@@ -25,10 +25,10 @@ import argparse
 import csv
 import os
 
-from sqlalchemy import text
-
 # Permitir imports desde raíz.
 import sys
+
+from sqlalchemy import text
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

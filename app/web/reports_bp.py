@@ -184,6 +184,105 @@ def enviar_reporte_email():
         return jsonify({"error": str(e)}), 500
 
 
+
+@bp.get("/api/reportes/persona-data")
+@require_role("superadmin", "admin", "gestor")
+def api_reporte_persona_data():
+    """
+    Retorna el análisis detallado y resumen de asistencia de una persona
+    en formato JSON para visualización inmediata en pantalla.
+    """
+    persona = request.args.get("persona", "").strip()
+    fi_str = request.args.get("fecha_inicio")
+    ff_str = request.args.get("fecha_fin")
+    if not persona:
+        return jsonify({"error": "Parámetro persona requerido"}), 400
+    try:
+        fecha_inicio = datetime.strptime(fi_str, "%Y-%m-%d").date() if fi_str else date.today().replace(day=1)
+        fecha_fin = datetime.strptime(ff_str, "%Y-%m-%d").date() if ff_str else date.today()
+    except ValueError:
+        return jsonify({"error": "Formato de fecha inválido. Use YYYY-MM-DD"}), 400
+
+    registros = consultar_asistencias(fecha_inicio, fecha_fin)
+    if not registros:
+        return jsonify({
+            "persona": persona,
+            "resumen": {},
+            "dias": [],
+            "mensaje": "No hay registros de asistencia en la base de datos para el rango seleccionado.",
+        })
+
+    config = {"duplicado_min": DEFAULT_CONFIG["duplicado_min"], "excluidos": []}
+    justificaciones = get_justificaciones_dict(fecha_inicio, fecha_fin)
+    feriados = get_feriados_set(fecha_inicio, fecha_fin)
+    breaks_cat = get_breaks_categorizados_dict(fecha_inicio, fecha_fin)
+    horarios = get_horarios()
+
+    registros_dedup, _ = deduplicar(registros, config["duplicado_min"])
+    analisis = analizar_por_persona(
+        registros_dedup, config, horarios=horarios,
+        fecha_inicio=fecha_inicio, fecha_fin=fecha_fin,
+        justificaciones=justificaciones, feriados=feriados,
+        breaks_categorizados=breaks_cat,
+        mostrar_todos=True,
+        permitir_sin_horario=True,
+    )
+
+    persona_info = analisis.get(persona)
+    if not persona_info:
+        for p_key, p_val in analisis.items():
+            if p_key.strip().upper() == persona.upper():
+                persona_info = p_val
+                persona = p_key
+                break
+
+    if not persona_info:
+        return jsonify({
+            "persona": persona,
+            "resumen": {},
+            "dias": [],
+            "mensaje": f"No se encontraron registros de marcaciones para '{persona}' en el período indicado.",
+        })
+
+    # Días con formateo para frontend
+    dias_out = []
+    for d in persona_info.get("dias", []):
+        dia_copia = dict(d)
+        f = dia_copia.get("fecha")
+        if isinstance(f, (date, datetime)):
+            dia_copia["fecha_str"] = f.strftime("%d/%m/%Y")
+            dia_copia["fecha_iso"] = f.strftime("%Y-%m-%d")
+            nombres_dias = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+            dia_copia["dia_nombre"] = nombres_dias[f.weekday()]
+        dias_out.append(dia_copia)
+
+    try:
+        page = max(1, int(request.args.get("page", "1")))
+    except ValueError:
+        page = 1
+    try:
+        per_page = max(1, int(request.args.get("per_page", "15")))
+    except ValueError:
+        per_page = 15
+
+    total_dias = len(dias_out)
+    total_pages = max(1, (total_dias + per_page - 1) // per_page)
+
+    return jsonify({
+        "success": True,
+        "persona": persona,
+        "resumen": persona_info.get("resumen", {}),
+        "total_dias": total_dias,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "dias": dias_out,
+        "horario_info": persona_info.get("horario_info", {}),
+        "fecha_inicio": fecha_inicio.strftime("%Y-%m-%d"),
+        "fecha_fin": fecha_fin.strftime("%Y-%m-%d"),
+    })
+
+
 # ── Backups ──────────────────────────────────────────────────────────────
 
 @bp.get("/api/backup/descargar")
@@ -330,6 +429,16 @@ def alertas_tardanzas_severas():
         )
 
         alertas = []
+        try:
+            from app.domain.people import listar_personas
+            personas_db = listar_personas(activo=None) or []
+        except Exception:
+            personas_db = []
+
+        map_nom_uuid = {p["nombre"].strip().lower(): p["id"] for p in personas_db if p.get("nombre")}
+        map_zk_uuid = {str(p["id_usuario_zk"]).strip(): p["id"] for p in personas_db if p.get("id_usuario_zk")}
+        map_ci_uuid = {str(p["identificacion"]).strip(): p["id"] for p in personas_db if p.get("identificacion")}
+
         for persona, info in analisis.items():
             conteo = info["resumen"].get("tardanza_severa", 0)
             if conteo >= 3:
@@ -338,8 +447,15 @@ def alertas_tardanzas_severas():
                     if r["nombre"] == persona:
                         id_u = r.get("id_usuario") or ""
                         break
+                p_uuid = (
+                    map_nom_uuid.get(persona.strip().lower())
+                    or map_zk_uuid.get(str(id_u).strip())
+                    or map_ci_uuid.get(str(id_u).strip())
+                    or ""
+                )
                 alertas.append({
                     "persona": persona,
+                    "persona_uuid": p_uuid,
                     "id_usuario": id_u,
                     "conteo": conteo,
                 })

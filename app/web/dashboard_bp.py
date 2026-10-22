@@ -20,6 +20,7 @@ import os
 from flask import Blueprint, Response, current_app, render_template, request, send_file
 
 from app.domain.dashboard import consultar_asistencias
+from app.domain.people import listar_grupos, listar_grupos_funcionales
 
 bp = Blueprint("dashboard", __name__)
 
@@ -41,7 +42,14 @@ def justificaciones():
 
 @bp.route("/reportes")
 def reportes():
-    return render_template("reportes.html", active_page="reportes")
+    grupos = listar_grupos(activo=True)
+    grupos_funcionales = listar_grupos_funcionales(activo=True)
+    return render_template(
+        "reportes.html",
+        active_page="reportes",
+        grupos=grupos,
+        grupos_funcionales=grupos_funcionales,
+    )
 
 
 @bp.route("/descargar/<path:filename>")

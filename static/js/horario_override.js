@@ -21,13 +21,13 @@
         }
         tbody.innerHTML = overrides.map(o => `
             <tr>
-                <td>${o.persona_id || '—'}</td>
-                <td>${o.nombre_plantilla || o.plantilla_id || '—'}</td>
-                <td>${o.fecha_inicio || '—'}</td>
-                <td>${o.fecha_fin || '—'}</td>
-                <td>${o.notas || '—'}</td>
+                <td>${esc(o.persona_id || '—')}</td>
+                <td>${esc(o.nombre_plantilla || o.plantilla_id || '—')}</td>
+                <td>${esc(o.fecha_inicio || '—')}</td>
+                <td>${esc(o.fecha_fin || '—')}</td>
+                <td>${esc(o.notas || '—')}</td>
                 <td><button class="btn btn-sm btn-outline-secondary"
-                            onclick="cerrarOverride('${o.id}')">Cerrar</button></td>
+                            onclick="cerrarOverride('${esc(o.id)}')">Cerrar</button></td>
             </tr>
         `).join('');
     }

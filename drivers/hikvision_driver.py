@@ -1,31 +1,33 @@
 from datetime import datetime
+
 import requests
 
 from drivers.base import BiometricDriver
 
+
 class HikvisionDriver(BiometricDriver):
     """
     Comunicación vía HTTP ISAPI de Hikvision.
-    Nota: Esto es una implementación básica / de andamiaje. 
+    Nota: Esto es una implementación básica / de andamiaje.
     En Hikvision, se debe usar digest auth y XMLs, o JSON si lo soporta.
     """
 
     def __init__(self, dispositivo: dict):
         super().__init__(dispositivo)
-        
+
         self.ip = dispositivo.get('ip')
         self.port = dispositivo.get('puerto', 80)
         protocolo = dispositivo.get('protocolo', 'http').lower()
         if protocolo not in ('http', 'https'):
             protocolo = 'http'
-        
+
         self.base_url = f"{protocolo}://{self.ip}:{self.port}/ISAPI"
-        
+
         # Desencriptar la contraseña del dispositivo
         from app.domain.auth import decrypt_device_password
         self.username = "admin" # asume usuario admin para ISAPI
         pwd_enc = dispositivo.get('password_enc')
-        
+
         if pwd_enc:
             try:
                 self.password = decrypt_device_password(pwd_enc)
@@ -78,9 +80,9 @@ class HikvisionDriver(BiometricDriver):
     def get_asistencias(self, desde: datetime = None) -> list[dict]:
         """Obtiene eventos vía ISAPI/AccessControl/AcsEvent"""
         url = f"{self.base_url}/AccessControl/AcsEvent?format=json"
-        
+
         startTime = (desde or datetime(2000, 1, 1)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
-        
+
         payload = {
             "AcsEventCond": {
                 "searchID": "1",
@@ -91,7 +93,7 @@ class HikvisionDriver(BiometricDriver):
                 "startTime": startTime,
             }
         }
-        
+
         registros = []
         try:
             resp = requests.post(url, json=payload, auth=self._get_auth(), timeout=15)
@@ -104,13 +106,14 @@ class HikvisionDriver(BiometricDriver):
                     try:
                         ts = datetime.fromisoformat(ts_str.replace('+08:00', '+00:00'))
                         ts = ts.replace(tzinfo=None)
-                    except:
+                    except (ValueError, AttributeError):
+                        # Timestamp ausente o con formato no ISO: se descarta el evento.
                         continue
-                        
+
                     # Filtrar eventos
                     if desde and ts <= desde:
                         continue
-                        
+
                     registros.append({
                         "id_usuario": ev.get("employeeNoString"),
                         "nombre": ev.get("name", "Usuario"),
@@ -121,7 +124,7 @@ class HikvisionDriver(BiometricDriver):
                     })
         except Exception:
             pass
-            
+
         return registros
 
     def clear_asistencias(self) -> int:

@@ -9,19 +9,17 @@ from datetime import date
 import pytest
 
 from db import set_thread_tenant
-from db.queries.dispositivos import eliminar_dispositivo, upsert_dispositivo
 from db.queries.justificaciones import (
     actualizar_estado_justificacion,
     actualizar_justificacion_completa,
     eliminar_justificacion,
+    get_justificacion_by_id,
     get_justificaciones,
     get_justificaciones_dict,
     get_justificaciones_pendientes,
-    get_justificacion_by_id,
     insertar_justificacion,
 )
 from db.queries.personas_crud import crear_persona
-
 
 pytestmark = pytest.mark.integration
 
@@ -111,6 +109,29 @@ class TestGetJustificaciones:
         fechas = [j["fecha"] for j in result]
         assert "2026-07-02" in fechas
         assert "2026-07-15" not in fechas
+
+    def test_get_justificaciones_con_rango_recuperacion(self, persona_test):
+        """get_justificaciones retorna hora_recuperacion y hora_recuperacion_fin."""
+        insertar_justificacion(
+            id_usuario=persona_test["id_zk"],
+            nombre=persona_test["nombre"],
+            fecha="2026-05-01",
+            tipo="tardanza",
+            motivo="Prueba Rango Recuperacion",
+            recuperable=1,
+            fecha_recuperacion="2026-05-02",
+            hora_recuperacion="08:30",
+            hora_recuperacion_fin="10:45",
+        )
+        justs = get_justificaciones(date(2026, 5, 1), date(2026, 5, 1))
+        encontrada = [
+            j for j in justs
+            if j["nombre"] == persona_test["nombre"] and j["tipo"] == "tardanza"
+        ]
+        assert len(encontrada) == 1
+        j = encontrada[0]
+        assert j.get("hora_recuperacion") == "08:30:00"
+        assert j.get("hora_recuperacion_fin") == "10:45:00"
 
 
 class TestGetJustificacionesDict:

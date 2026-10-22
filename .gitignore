@@ -59,9 +59,10 @@ Thumbs.db
 logs/
 
 # --- Application Specific ---
-uploads/
-reports/
-data/
+/uploads/
+/reports/
+/data/
+!app/domain/reports/
 static/uploads/
 temp/
 *.xlsx

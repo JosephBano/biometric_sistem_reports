@@ -1,180 +1,323 @@
 {% extends "base.html" %}
 
-{% block extra_css %}
-<style>
-.tenant-row-inactive { opacity: 0.55; }
-.slug-badge { font-family: monospace; font-size: 0.8rem; }
-</style>
-{% endblock %}
+{% block title %}Gestión de Instituciones (Tenants) - {{ super() }}{% endblock %}
 
 {% block content %}
-<div class="page-header mb-4">
-    <h5 class="fw-bold mb-0">Gestión de Instituciones (Tenants)</h5>
-    <small class="text-muted">
-        Contexto activo:
-        <span class="badge bg-primary-subtle text-primary font-monospace">{{ session.get('tenant_schema', 'istpet') }}</span>
-        {% if session.get('tenant_schema') != (config.TENANT_DEFAULT or 'istpet') %}
-        <form method="POST" action="{{ url_for('auth.switch_tenant') }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="tenant_slug" value="{{ config.TENANT_DEFAULT or 'istpet' }}">
-            <button type="submit" class="btn btn-link btn-sm p-0 ms-1 text-muted">(volver al principal)</button>
-        </form>
-        {% endif %}
-    </small>
-    <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#modalCrear">
-        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">add_business</span>
-        Nueva Institución
-    </button>
-</div>
+<div class="page-shell">
 
-{% set msg = request.args.get('msg') %}
-{% if msg %}
-<div class="alert alert-success alert-dismissible fade show" role="alert">
-    {{ msg }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
+    <!-- ── Header de Página ────────────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
+                <span class="rippling-pill rippling-pill-navy">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">apartment</span>
+                    Multi-Tenancy
+                </span>
+                <span class="rippling-pill rippling-pill-gold">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">domain</span>
+                    Instituciones Globales
+                </span>
+            </div>
+            <h1 class="title-hero mb-0">Gestión de Instituciones (Tenants)</h1>
+            <p class="page-header-subtitle mb-0">
+                Aprovisionamiento y administración de entornos aislados multi-inquilino. Contexto activo:
+                <span class="rippling-pill rippling-pill-navy font-monospace px-2 py-0" style="font-size: 0.8rem;">
+                    {{ session.get('tenant_schema', 'istpet') }}
+                </span>
+                {% if session.get('tenant_schema') != (config.TENANT_DEFAULT or 'istpet') %}
+                <form method="POST" action="{{ url_for('auth.switch_tenant') }}" class="d-inline ms-1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="tenant_slug" value="{{ config.TENANT_DEFAULT or 'istpet' }}">
+                    <button type="submit" class="btn btn-link btn-sm p-0 text-decoration-none text-primary small fw-semibold">(Volver a principal)</button>
+                </form>
+                {% endif %}
+            </p>
+        </div>
 
-<!-- Tabla de tenants -->
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Institución</th>
-                        <th>Slug</th>
-                        <th>Zona horaria</th>
-                        <th>Creado</th>
-                        <th>Estado</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for t in tenants %}
-                    <tr class="{{ 'tenant-row-inactive' if not t.activo else '' }}">
-                        <td>
-                            <div class="fw-medium">{{ t.nombre }}</div>
-                            {% if t.nombre_corto %}<small class="text-muted">{{ t.nombre_corto }}</small>{% endif %}
-                        </td>
-                        <td><span class="badge bg-secondary slug-badge">{{ t.slug }}</span></td>
-                        <td class="text-muted small">{{ t.zona_horaria }}</td>
-                        <td class="text-muted small">{{ t.creado_en.strftime('%d/%m/%Y') if t.creado_en else '—' }}</td>
-                        <td>
-                            {% if t.activo %}
-                            <span class="badge bg-success-subtle text-success">Activo</span>
-                            {% else %}
-                            <span class="badge bg-danger-subtle text-danger">Inactivo</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end d-flex gap-1 justify-content-end">
-                            {% if t.slug == session.get('tenant_schema') %}
-                            <span class="badge bg-success-subtle text-success border border-success border-opacity-25 px-2 py-1">
-                                <span class="material-symbols-outlined" style="font-size:0.8rem;vertical-align:-2px;">check_circle</span>
-                                Activo
-                            </span>
-                            {% else %}
-                            <form method="POST" action="{{ url_for('auth.switch_tenant') }}">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                <input type="hidden" name="tenant_slug" value="{{ t.slug }}">
-                                <button type="submit" class="btn btn-sm btn-outline-primary"
-                                        title="Cambiar a esta institución">
-                                    <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:-3px;">swap_horiz</span>
-                                    Acceder
-                                </button>
-                            </form>
-                            {% endif %}
-                            <button class="btn btn-sm btn-outline-secondary"
-                                    data-bs-toggle="modal"
-                                    data-bs-target="#modalEstado"
-                                    data-tenant-id="{{ t.id }}"
-                                    data-tenant-nombre="{{ t.nombre }}"
-                                    data-tenant-activo="{{ '1' if t.activo else '0' }}">
-                                {{ 'Desactivar' if t.activo else 'Activar' }}
-                            </button>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="6" class="text-center text-muted py-4">No hay instituciones registradas.</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="page-actions-slot">
+            <button class="btn btn-rippling-primary shadow-sm d-inline-flex align-items-center gap-2"
+                    data-bs-toggle="modal" data-bs-target="#modalCrear">
+                <span class="material-symbols-outlined fs-5">add_business</span>
+                <span>Nueva Institución</span>
+            </button>
         </div>
     </div>
+
+    {% set msg = request.args.get('msg') %}
+    {% if msg %}
+    <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm" role="alert" style="border-radius: var(--radius-lg);">
+        <div class="d-flex align-items-center gap-2">
+            <span class="material-symbols-outlined fs-5">check_circle</span>
+            <span>{{ msg }}</span>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- ── KPIs Ejecutivos ─────────────────────────────────────────────────── -->
+    {% set total_t = tenants|length %}
+    {% set activos_t = tenants|selectattr('activo')|list|length %}
+    {% set inactivos_t = total_t - activos_t %}
+
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Tenants -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">apartment</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Instituciones Registradas</div>
+                <div class="dashboard-kpi-value">{{ total_t }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 2: Activas -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">verified</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Instituciones Activas</div>
+                <div class="dashboard-kpi-value text-success">{{ activos_t }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 3: Inactivas -->
+        <div class="dashboard-kpi-card" {% if inactivos_t > 0 %}style="border-left: 3px solid #f59e0b;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if inactivos_t > 0 %}dashboard-kpi-icon-gold{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">block</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Instituciones Inactivas</div>
+                <div class="dashboard-kpi-value">{{ inactivos_t }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Contexto Actual -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-slate">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">dataset</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Esquema en Sesión</div>
+                <div class="dashboard-kpi-value font-monospace text-primary" style="font-size: 1.15rem;">
+                    {{ session.get('tenant_schema', 'istpet') }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tabla de Instituciones ──────────────────────────────────────────── -->
+    <div class="component-card-shell">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <div class="component-title-icon-wrapper">
+                    <span class="material-symbols-outlined">corporate_fare</span>
+                </div>
+                <div>
+                    <h5 class="component-card-title mb-0">Directorio de Inquilinos (Tenants)</h5>
+                    <small class="text-muted">Lista de instituciones configuradas en la plataforma SaaS</small>
+                </div>
+            </div>
+            <div class="component-tools-slot">
+                <div class="input-group" style="max-width: 250px;">
+                    <span class="input-group-text bg-light border-end-0 text-muted" style="height: 38px;"><span class="material-symbols-outlined fs-6">search</span></span>
+                    <input type="text" class="form-control form-control-sm border-start-0 ps-0" id="search-tenants"
+                           placeholder="Buscar institución..." oninput="filtrarTenants();" style="height: 38px;">
+                </div>
+            </div>
+        </div>
+
+        <div class="component-body-shell p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="tablaTenants">
+                    <thead class="rippling-table-header">
+                        <tr>
+                            <th class="ps-4">Institución</th>
+                            <th>Slug / Schema</th>
+                            <th>Zona Horaria</th>
+                            <th>Fecha Creación</th>
+                            <th>Estado</th>
+                            <th class="text-end pe-4">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for t in tenants %}
+                        <tr class="tenant-row {{ 'opacity-50' if not t.activo else '' }}"
+                            data-nombre-upper="{{ (t.nombre or '')|upper }}"
+                            data-slug-upper="{{ (t.slug or '')|upper }}">
+                            <td class="ps-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold shadow-xs"
+                                         style="width: 36px; height: 36px; background: var(--navy-50, #eff6ff); color: var(--navy-700, #1e3a8a); font-size: 0.95rem;">
+                                        <span class="material-symbols-outlined fs-6">domain</span>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ t.nombre }}</div>
+                                        {% if t.nombre_corto %}<small class="text-muted">{{ t.nombre_corto }}</small>{% endif %}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border font-monospace" style="font-size: 0.8rem;">{{ t.slug }}</span>
+                            </td>
+                            <td class="text-muted small">
+                                <span class="material-symbols-outlined fs-6 align-middle text-secondary">schedule</span>
+                                {{ t.zona_horaria }}
+                            </td>
+                            <td class="text-muted small">
+                                {{ t.creado_en.strftime('%d/%m/%Y') if t.creado_en else '—' }}
+                            </td>
+                            <td>
+                                {% if t.activo %}
+                                <span class="rippling-pill rippling-pill-green" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">check_circle</span>
+                                    Activo
+                                </span>
+                                {% else %}
+                                <span class="rippling-pill rippling-pill-slate" style="font-size: 0.72rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.75rem;">cancel</span>
+                                    Inactivo
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-flex gap-1 justify-content-end align-items-center">
+                                    {% if t.slug == session.get('tenant_schema') %}
+                                    <span class="rippling-pill rippling-pill-green" style="font-size: 0.75rem;">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem;">radio_button_checked</span>
+                                        En Uso
+                                    </span>
+                                    {% else %}
+                                    <form method="POST" action="{{ url_for('auth.switch_tenant') }}" class="d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="tenant_slug" value="{{ t.slug }}">
+                                        <button type="submit" class="btn btn-sm btn-rippling-primary d-inline-flex align-items-center gap-1"
+                                                title="Cambiar a esta institución">
+                                            <span class="material-symbols-outlined fs-6">swap_horiz</span>
+                                            <span>Acceder</span>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <button class="btn btn-sm btn-rippling-secondary"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#modalEstado"
+                                            data-tenant-id="{{ t.id }}"
+                                            data-tenant-nombre="{{ t.nombre }}"
+                                            data-tenant-activo="{{ '1' if t.activo else '0' }}">
+                                        {{ 'Desactivar' if t.activo else 'Activar' }}
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">No hay instituciones registradas.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
 </div>
+{% endblock %}
 
-
-<!-- Modal: Crear tenant -->
+{% block modals %}
+<!-- ── Modal: Crear Tenant ──────────────────────────────────────────────── -->
 <div class="modal fade" id="modalCrear" tabindex="-1" aria-labelledby="modalCrearLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
             <form method="POST" action="{{ url_for('admin.crear_tenant') }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <div class="modal-header">
-                    <h6 class="modal-title fw-bold" id="modalCrearLabel">Nueva Institución</h6>
+                
+                <div class="modal-header bg-light border-bottom px-4 py-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                            <span class="material-symbols-outlined" style="font-size: 1.25rem;">add_business</span>
+                        </div>
+                        <div>
+                            <h5 class="modal-title fw-bold text-dark mb-0" id="modalCrearLabel" style="font-size: 1.1rem;">Nueva Institución (Tenant)</h5>
+                            <p class="text-muted small mb-0">Aprovisionamiento de esquema y entorno aislado para una nueva institución.</p>
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-medium">Nombre completo <span class="text-danger">*</span></label>
-                        <input type="text" name="nombre" class="form-control" placeholder="Ej: Instituto Superior Tecnológico" required>
+                
+                <div class="modal-body p-4">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-bold text-muted mb-1">Nombre Completo <span class="text-danger">*</span></label>
+                            <input type="text" name="nombre" class="form-control" placeholder="Ej: Instituto Superior Tecnológico Central" required style="height: 42px;">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted mb-1">Nombre Corto / Siglas</label>
+                            <input type="text" name="nombre_corto" class="form-control" placeholder="Ej: ISTC" style="height: 42px;">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-medium">Nombre corto</label>
-                        <input type="text" name="nombre_corto" class="form-control" placeholder="Ej: ISTPET">
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Slug de Schema <span class="text-danger">*</span></label>
+                            <input type="text" name="slug" class="form-control font-monospace"
+                                   placeholder="ej: istc" pattern="[a-z][a-z0-9_]{2,29}"
+                                   title="Solo minúsculas, números y guiones bajos. Mínimo 3 caracteres." required style="height: 42px;">
+                            <div class="form-text small">Solo letras minúsculas, números y guiones bajos (nombre técnico de base de datos).</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted mb-1">Zona Horaria</label>
+                            <select name="zona_horaria" class="form-select" style="height: 42px;">
+                                <option value="America/Guayaquil" selected>America/Guayaquil (Ecuador)</option>
+                                <option value="America/Bogota">America/Bogota (Colombia)</option>
+                                <option value="America/Lima">America/Lima (Perú)</option>
+                                <option value="America/New_York">America/New_York (EST)</option>
+                                <option value="UTC">UTC</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-medium">Slug <span class="text-danger">*</span></label>
-                        <input type="text" name="slug" class="form-control font-monospace"
-                               placeholder="ej: istpet" pattern="[a-z][a-z0-9_]{2,29}"
-                               title="Solo minúsculas, números y guiones bajos. Mínimo 3 caracteres." required>
-                        <div class="form-text">Solo letras minúsculas, números y guiones bajos. Se usará como nombre del schema PostgreSQL.</div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-medium">Zona horaria</label>
-                        <select name="zona_horaria" class="form-select">
-                            <option value="America/Guayaquil" selected>America/Guayaquil (Ecuador)</option>
-                            <option value="America/Bogota">America/Bogota (Colombia)</option>
-                            <option value="America/Lima">America/Lima (Perú)</option>
-                            <option value="America/New_York">America/New_York (EST)</option>
-                            <option value="UTC">UTC</option>
-                        </select>
-                    </div>
-                    <div class="alert alert-info small mb-0">
-                        <span class="material-symbols-outlined" style="font-size:1rem;vertical-align:middle;">info</span>
-                        Se crearán los tipos de persona <strong>Empleado</strong> y <strong>Practicante</strong> por defecto,
-                        junto con los feriados nacionales de Ecuador.
+
+                    <div class="alert alert-info border-0 shadow-xs small mb-0 d-flex align-items-center gap-2 p-3" style="border-radius: var(--radius-md);">
+                        <span class="material-symbols-outlined fs-5 text-primary">info</span>
+                        <div>
+                            Se crearán automáticamente los tipos de persona <strong>Empleado</strong> y <strong>Practicante</strong> por defecto,
+                            junto con los feriados nacionales oficiales de Ecuador.
+                        </div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm">Crear institución</button>
+
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm px-4 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">add_business</span>
+                        <span>Crear Institución</span>
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-
-<!-- Modal: Cambiar estado (activar/desactivar) -->
+<!-- ── Modal: Cambiar Estado (Activar/Desactivar) ────────────────────────── -->
 <div class="modal fade" id="modalEstado" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
             <form method="POST" id="formEstado" action="">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="activo" id="inputActivo" value="">
-                <div class="modal-header">
-                    <h6 class="modal-title fw-bold">Cambiar estado</h6>
+                
+                <div class="modal-header bg-light border-bottom px-4 py-3">
+                    <h6 class="modal-title fw-bold text-dark mb-0">Confirmar Estado</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-body">
-                    <p class="mb-0" id="modalEstadoTexto"></p>
+                
+                <div class="modal-body p-4">
+                    <p class="mb-0 text-dark small" id="modalEstadoTexto"></p>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary btn-sm" id="btnConfirmarEstado">Confirmar</button>
+                
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm" id="btnConfirmarEstado">Confirmar</button>
                 </div>
             </form>
         </div>
@@ -184,22 +327,35 @@
 
 {% block extra_js %}
 <script>
-document.getElementById('modalEstado').addEventListener('show.bs.modal', function (event) {
-    const btn = event.relatedTarget;
-    const tenantId = btn.dataset.tenantId;
-    const tenantNombre = btn.dataset.tenantNombre;
-    const activo = btn.dataset.tenantActivo === '1';
+const _modalEst = document.getElementById('modalEstado');
+if (_modalEst) {
+    _modalEst.addEventListener('show.bs.modal', function (event) {
+        const btn = event.relatedTarget;
+        const tenantId = btn.dataset.tenantId;
+        const tenantNombre = btn.dataset.tenantNombre;
+        const activo = btn.dataset.tenantActivo === '1';
 
-    // Si está activo, vamos a desactivar (activo=0); si no, activar (activo=1)
-    const nuevoActivo = activo ? '0' : '1';
-    const accion = activo ? 'desactivar' : 'activar';
+        const nuevoActivo = activo ? '0' : '1';
+        const accion = activo ? 'desactivar' : 'activar';
 
-    document.getElementById('formEstado').action = (window.APP_BASE || '') + '/admin/tenants/' + tenantId;
-    document.getElementById('inputActivo').value = nuevoActivo;
-    document.getElementById('modalEstadoTexto').textContent =
-        '¿Deseas ' + accion + ' la institución "' + tenantNombre + '"?';
-    document.getElementById('btnConfirmarEstado').textContent =
-        accion.charAt(0).toUpperCase() + accion.slice(1);
-});
+        document.getElementById('formEstado').action = (window.APP_BASE || '') + '/admin/tenants/' + tenantId;
+        document.getElementById('inputActivo').value = nuevoActivo;
+        document.getElementById('modalEstadoTexto').textContent =
+            '¿Deseas ' + accion + ' la institución "' + tenantNombre + '"?';
+        document.getElementById('btnConfirmarEstado').textContent =
+            accion.charAt(0).toUpperCase() + accion.slice(1);
+    });
+}
+
+function filtrarTenants() {
+    const q = (document.getElementById('search-tenants').value || '').toUpperCase();
+
+    document.querySelectorAll('.tenant-row').forEach(row => {
+        const nombre = row.dataset.nombreUpper || '';
+        const slug = row.dataset.slugUpper || '';
+        row.style.display = (nombre.includes(q) || slug.includes(q)) ? '' : 'none';
+    });
+}
 </script>
 {% endblock %}
+

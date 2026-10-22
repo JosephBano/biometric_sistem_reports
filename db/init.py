@@ -22,13 +22,18 @@ El seed vive en `db.init_seed` (Tarea 0.3 del plan), separado para que
 (idempotente con Alembic) por accidente y que las migraciones futuras
 no divergan del DDL que `init_db` aplicaría en el siguiente arranque.
 """
-import os
 import logging
+import os
+
 from sqlalchemy import text
 
-from db.connection import get_engine, get_connection, validate_schema_name
-from db.schema import PUBLIC_DDL, get_tenant_ddl
+from db.connection import (  # noqa: F401 — tests parchean db.init.get_connection
+    get_connection,
+    get_engine,
+    validate_schema_name,
+)
 from db.init_seed import _seed_datos_iniciales
+from db.schema import PUBLIC_DDL, get_tenant_ddl
 
 log = logging.getLogger(__name__)
 

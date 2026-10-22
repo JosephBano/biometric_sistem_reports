@@ -19,14 +19,10 @@ def listar(solo_activos: bool = True):
     return listar_grupos_funcionales(activo=True if solo_activos else None)
 
 
-def crear(codigo: str, nombre: str, **kwargs):
-    """Crea un grupo funcional. Idempotente por UNIQUE(nombre).
-
-    Nota: el modelo final ADR-0003 define UNIQUE(codigo). La Fase 1
-    actual usa UNIQUE(nombre). Mantener `codigo` como alias del nombre
-    para compat.
-    """
-    return crear_grupo_funcional(nombre=nombre, **kwargs)
+def crear(nombre: str = None, codigo: str = None, tipo_persona_id: str = None, **kwargs):
+    """Crea un grupo funcional. Idempotente por UNIQUE(nombre)."""
+    nombre_final = nombre or codigo or kwargs.get("nombre") or kwargs.get("codigo")
+    return crear_grupo_funcional(nombre=nombre_final, tipo_persona_id=tipo_persona_id)
 
 
 def actualizar(grupo_funcional_id: str, datos: dict):

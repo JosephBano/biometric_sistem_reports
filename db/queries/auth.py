@@ -9,10 +9,10 @@ Operan sobre:
 """
 
 import json
+
 from sqlalchemy import text
 
-from db.connection import get_engine, get_tenant_schema, get_connection
-
+from db.connection import get_connection, get_engine, get_tenant_schema
 
 # ── Usuarios ──────────────────────────────────────────────────────────────
 
@@ -123,7 +123,6 @@ def get_tenants_activos() -> list:
 def crear_usuario_db(tenant_id: str, email: str, password_hash: str, nombre: str,
                      roles: list, configuracion: dict) -> dict:
     """Inserta un nuevo usuario. Retorna el usuario creado (sin password_hash)."""
-    roles_pg = "{" + ",".join(roles) + "}"
     with get_engine().connect() as conn:
         row = conn.execute(
             text("""

@@ -8,8 +8,8 @@ Convenciones:
 `grupos_funcionales` reemplaza al antiguo `categorias` (ADR-0003, Opción A).
 """
 from sqlalchemy import text
-from db.connection import get_connection
 
+from db.connection import get_connection
 
 # ── Grupos (operativos) ────────────────────────────────────────────────────────
 

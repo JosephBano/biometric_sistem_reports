@@ -1,6 +1,7 @@
 """Queries de sync_log."""
 
 from sqlalchemy import text
+
 from db.connection import get_connection
 from db.queries.personas import _get_dispositivo_id
 

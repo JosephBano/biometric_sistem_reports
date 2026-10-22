@@ -34,7 +34,7 @@ LEGACY_TOP_LEVEL = {
 
 
 def _imported_names(py_file: Path) -> set[str]:
-    tree = ast.parse(py_file.read_text(), filename=str(py_file))
+    tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
     names = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
@@ -50,7 +50,7 @@ def _web_files():
 
 
 def _domain_files():
-    return sorted((ROOT / "app" / "domain").glob("*.py"))
+    return sorted(p for p in (ROOT / "app" / "domain").rglob("*.py") if p.is_file())
 
 
 def _db_query_files():
@@ -71,7 +71,7 @@ def test_web_no_importa_db_directamente(py_file: Path):
 @pytest.mark.parametrize("py_file", _domain_files(), ids=lambda p: p.name)
 def test_domain_no_importa_web(py_file: Path):
     """`app/domain/*` nunca debe importar de `app/web/*` (evita ciclos)."""
-    tree = ast.parse(py_file.read_text(), filename=str(py_file))
+    tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
             assert not node.module.startswith("app.web"), (
@@ -93,7 +93,7 @@ def test_no_quedan_imports_locales_de_db_en_blueprints():
     (anti-patrón que el ADR-0001 identificó y pidió eliminar).
     """
     for py_file in _web_files():
-        tree = ast.parse(py_file.read_text(), filename=str(py_file))
+        tree = ast.parse(py_file.read_text(encoding="utf-8"), filename=str(py_file))
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 for sub in ast.walk(node):
@@ -112,9 +112,9 @@ def test_no_quedan_modulos_top_level_de_negocio():
     utilitarios (no de negocio). Esta es la verificación final del DoD-7.
     """
     permitidos = {
-        "wsgi.py",            # entrypoint canónico (gunicorn)
-        "deduplicar_personas.py",  # script CLI de mantenimiento
-        "test_justificacion_rango_local.py",  # script manual de QA
+        "wsgi.py",  # entrypoint canónico WSGI (gunicorn)
+
+
     }
     encontrados = sorted(
         p.name for p in ROOT.glob("*.py")

@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import pytest
 
-
 pytestmark = pytest.mark.integration
 
 
@@ -82,9 +81,9 @@ class TestFiltroActivoEnGruposFuncionales:
 
     def test_servicio_de_dominio_respeta_solo_activos(self, app, tenant_id):
         """`grupos_funcionales.listar()` ignoraba su propio parámetro."""
+        from app.domain import grupos_funcionales as gf_svc
         from db import set_thread_tenant
         from db.connection import clear_thread_tenant
-        from app.domain import grupos_funcionales as gf_svc
 
         set_thread_tenant("istpet")
         try:

@@ -119,7 +119,6 @@ def generar_narrativo(hallazgos: dict, contexto: str = "") -> str:
 
     # Párrafo 2: Personas en riesgo alto con nombres
     if riesgos_altos:
-        nombres_riesgo = [r["nombre"] for r in riesgos_altos[:5]]
         text += f"**Personas en riesgo alto ({len(riesgos_altos)} detectadas):**\n"
         for r in riesgos_altos[:5]:
             grupo_str = f" — {r['grupo']}" if r.get("grupo") else ""

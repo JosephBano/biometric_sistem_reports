@@ -9,16 +9,24 @@ La persona canónica es la de menor creado_en (la más antigua del grupo).
 Las demás se eliminan después de reasignar asistencias y vínculos de dispositivo.
 
 Uso:
-    python deduplicar_personas.py          # dry-run (solo muestra lo que haría)
-    python deduplicar_personas.py --apply  # ejecuta los cambios
+    python scripts/deduplicar_personas.py          # dry-run (solo muestra lo que haría)
+    python scripts/deduplicar_personas.py --apply  # ejecuta los cambios
 """
 
+import os
 import sys
+
+# Permitir ejecución tanto desde la raíz como desde scripts/
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from db.connection import get_connection
-from sqlalchemy import text
+# Imports tras load_dotenv(): db.connection lee las variables de entorno.
+from sqlalchemy import text  # noqa: E402
+
+from db.connection import get_connection  # noqa: E402
 
 
 def obtener_grupos_duplicados(conn):
@@ -171,7 +179,7 @@ def main():
 
         if dry_run:
             print("\nEjemplos de fusiones que se harían (primeros 10):")
-            for i, (nombre, miembros) in enumerate(list(fusionables.items())[:10]):
+            for nombre, miembros in list(fusionables.items())[:10]:
                 ids = list({m["persona_id"] for m in miembros})
                 ordenados = sorted(
                     [m for m in miembros if m["persona_id"] in ids],
@@ -196,7 +204,7 @@ def main():
                 total_asistencias_afectadas += asis
 
             conn.commit()
-            print(f"\n✓ Fusiones aplicadas.")
+            print("\n✓ Fusiones aplicadas.")
             print(f"  Personas eliminadas          : {total_duplicados}")
             print(f"  Asistencias reasignadas/elim : {total_asistencias_afectadas}")
 

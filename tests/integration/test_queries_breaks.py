@@ -7,6 +7,7 @@ import uuid
 from datetime import date, time, timedelta
 
 import pytest
+from sqlalchemy.exc import DataError
 
 from db import set_thread_tenant
 from db.queries.breaks import (
@@ -15,7 +16,6 @@ from db.queries.breaks import (
     insertar_break_categorizado,
 )
 from db.queries.personas_crud import crear_persona
-
 
 pytestmark = pytest.mark.integration
 
@@ -128,7 +128,7 @@ class TestInsertarBreakCategorizado:
         """Si hora_inicio/hora_fin tienen formato inválido, propaga excepción
         al fallar el cast a TIME en PostgreSQL. (No es un comportamiento
         silencioso; el caller debe validar antes.)"""
-        with pytest.raises(Exception):
+        with pytest.raises(DataError):
             insertar_break_categorizado(
                 id_usuario=persona_test["id_zk"],
                 fecha="2026-07-04",

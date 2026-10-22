@@ -19,15 +19,25 @@ from flask import Blueprint, g, jsonify, render_template, request
 
 from app.domain import (
     asignacion_masiva as masiva_svc,
+)
+from app.domain import (
     grupos_funcionales as grupos_svc,
+)
+from app.domain import (
     horario_por_grupo_flag as flag_svc,
+)
+from app.domain import (
     horarios_default_grupo as defaults_svc,
+)
+from app.domain import (
     horarios_override as overrides_svc,
+)
+from app.domain import (
     persona_grupo_funcional as memberships_svc,
 )
 from app.domain.admin import registrar_audit  # noqa: E402  (capa de dominio)
-from app.domain.rbac import require_role
 from app.domain.horarios_resolucion import resolver_horario_vigente_para_persona
+from app.domain.rbac import require_role
 
 bp = Blueprint("functional_groups", __name__)
 

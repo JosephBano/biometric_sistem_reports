@@ -19,19 +19,17 @@ Políticas de desempate aceptadas (`horario_desempate`):
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
 
 from sqlalchemy import text
 
+from db import registrar_audit
 from db.connection import get_connection
-from db.queries.personas import listar_personas_para_filtros
 from db.queries.horarios_grupo_funcional import (
     listar_grupos_funcionales_vigentes_para_persona,
     obtener_asignacion_legacy_vigente,
     obtener_override_vigente_para_persona,
 )
-from db import registrar_audit
-
+from db.queries.personas import listar_personas_para_filtros
 
 POLITICAS_VALIDAS: set[str] = {"prioridad", "orden_grupo", "error"}
 
@@ -40,10 +38,10 @@ def set_horario_por_grupo_flag(
     *,
     tenant_id: str,
     usuario_id: str,
-    ip: Optional[str],
+    ip: str | None,
     enabled: bool,
     horario_desempate: str = "prioridad",
-    tenant_schema: Optional[str] = None,
+    tenant_schema: str | None = None,
     actualizar_configuracion_tenant_fn=None,
     registrar_audit_fn=None,
 ) -> dict:
@@ -71,7 +69,6 @@ def set_horario_por_grupo_flag(
     if actualizar_configuracion_tenant_fn is None:
         # Import perezoso para evitar ciclos: app.domain.admin importa
         # indirectamente db.queries.auth.
-        from app.domain.admin import actualizar_tenant
         # actualizar_tenant(tenant_id, {configuracion: ...}) requiere un
         # dict de cambios del tenant. Fusionar la nueva sub-llave
         # `configuracion` requiere `actualizar_tenant` o un helper
@@ -131,7 +128,7 @@ def set_horario_por_grupo_flag(
 def preflight(
     *,
     tenant_id: str,
-    fecha: Optional[date] = None,
+    fecha: date | None = None,
     activo: bool = True,
 ) -> dict:
     """Calcula counters para el modal de activación.

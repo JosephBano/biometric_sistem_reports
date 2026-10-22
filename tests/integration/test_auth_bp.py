@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pytest
 
-
 pytestmark = pytest.mark.integration
 
 
@@ -57,6 +56,7 @@ class TestAuthBlueprint:
     ):
         """POST /login con credenciales válidas → 302 + sesión + fila en audit_log."""
         import sqlalchemy as sa
+
         from db.connection import get_engine
 
         r = client.post(
@@ -94,6 +94,7 @@ class TestAuthBlueprint:
     ):
         """POST /logout con sesión activa → 302 + session.clear() + audit."""
         import sqlalchemy as sa
+
         from db.connection import get_engine
 
         r = admin_client.post(

@@ -28,16 +28,16 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from db.queries.auth import (
     activar_usuario_db,
     actualizar_roles_db,
-    actualizar_ultimo_acceso,
-    contar_intentos_fallidos,
+    actualizar_ultimo_acceso,  # noqa: F401 — re-export para app/web/auth_bp.py
+    contar_intentos_fallidos,  # noqa: F401 — re-export para app/web/auth_bp.py
     crear_usuario_db,
     desactivar_usuario_db,
     get_usuario_por_email,
     get_usuario_por_id,
-    registrar_audit,
-    registrar_login_intento,
+    registrar_audit,  # noqa: F401 — re-export para app/web/auth_bp.py
+    registrar_login_intento,  # noqa: F401 — re-export para app/web/auth_bp.py
 )
-from db.queries.tenants import get_tenant_by_slug
+from db.queries.tenants import get_tenant_by_slug  # noqa: F401 — re-export para app/web/auth_bp.py
 
 # ══════════════════════════════════════════════════════════════════════════
 # CONTRASEÑAS DE USUARIOS (bcrypt)

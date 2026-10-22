@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 
 import pytest
-from sqlalchemy import text
 
 from app.domain.horario_por_grupo_flag import (
     POLITICAS_VALIDAS,

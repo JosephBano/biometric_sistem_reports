@@ -21,7 +21,7 @@ import os
 
 from sqlalchemy import text
 
-from db.connection import get_engine, get_connection
+from db.connection import get_connection, get_engine
 
 log = logging.getLogger(__name__)
 
@@ -36,7 +36,8 @@ def _seed_datos_iniciales(tenant: str) -> None:
     nombre_inst = os.environ.get("NOMBRE_INSTITUCION", "ISTPET")
     zk_ip = os.environ.get("ZK_IP", "192.168.7.129")
     zk_port = int(os.environ.get("ZK_PORT", "4370"))
-    zk_pwd = os.environ.get("ZK_PASSWORD", "")
+    # ZK_PASSWORD no se siembra: si `password_enc` es NULL, ZKDriver la lee
+    # directamente de la variable de entorno.
     zk_proto = "udp" if os.environ.get("ZK_UDP", "false").lower() == "true" else "tcp"
     zk_timeout = int(os.environ.get("ZK_TIMEOUT", "120"))
 

@@ -1,81 +1,755 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    /* ── KPI Grid (Mismo de Entradas y Salidas) ── */
+    .kpi-grid-entradas {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+    @media (max-width: 992px) {
+        .kpi-grid-entradas {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (max-width: 576px) {
+        .kpi-grid-entradas {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* ── Avatar Circle ── */
+    .avatar-circle {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background-color: var(--token-color-navy-50, #f4f6fa);
+        color: var(--token-color-navy-900, #253259);
+        border: 1px solid var(--token-color-slate-200, #e2e8f0);
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.85rem;
+        flex-shrink: 0;
+    }
+
+    /* ── Filter Buttons ── */
+    .filter-state-btn {
+        border-radius: var(--radius-md, 8px) !important;
+        font-size: 0.8125rem !important;
+        font-weight: 600 !important;
+        padding: 0.35rem 0.85rem !important;
+        color: var(--token-color-slate-700, #464f69) !important;
+        border: 1px solid var(--color-border, #e2e8f0) !important;
+        background-color: var(--color-bg-card, #fff) !important;
+        transition: all 0.15s ease-in-out;
+    }
+    .filter-state-btn:hover {
+        background-color: var(--token-color-slate-50, #f8fafc) !important;
+        color: var(--token-color-navy-900, #253259) !important;
+    }
+    .filter-state-btn.active {
+        background-color: var(--token-color-navy-900, #253259) !important;
+        color: #ffffff !important;
+        border-color: var(--token-color-navy-900, #253259) !important;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header mb-4">
-    <h3>Horarios por Grupo Funcional</h3>
-    <p class="text-muted">Asigna una plantilla de horario predeterminada a cada grupo funcional. Las personas del grupo recibiran ese horario automaticamente, salvo override individual.</p>
-</div>
+<div class="page-shell" style="gap: 1.25rem;">
+    <!-- ── 1. Page Header Shell ───────────────────────────────────────────── -->
+    <div class="page-header-shell">
+        <div class="page-header-title-group">
+            <div class="d-flex align-items-center gap-2 mb-1">
+                <span class="rippling-pill rippling-pill-navy">Configuración de Turnos</span>
+                <span class="rippling-pill rippling-pill-gold">Grupos Funcionales</span>
+            </div>
+            <h1 class="title-hero">Horarios por Grupo de Trabajo</h1>
+            <p class="page-header-subtitle">
+                Define horarios estándar y plantillas base para departamentos y grupos laborales. Los colaboradores asignados heredan automáticamente su turno.
+            </p>
+        </div>
 
-{% if not detalles %}
-<div class="alert alert-info">
-    Aun no hay grupos funcionales creados. Crea primero uno en
-    <a href="{{ url_for('groups.listar_grupos_funcionales') }}">Gestion de Grupos Funcionales</a>.
-</div>
-{% endif %}
-
-{% for item in detalles %}
-{% set gf = item.gf %}
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-transparent py-3 d-flex justify-content-between align-items-center">
-        <h5 class="fw-bold mb-0">{{ gf.nombre }}</h5>
-        <small class="text-muted">Grupo funcional</small>
+        <div class="page-actions-slot">
+            <button class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCrearGrupo">
+                <span class="material-symbols-outlined" style="font-size: 1.05rem;">add</span>
+                <span>Nuevo Grupo</span>
+            </button>
+        </div>
     </div>
-    <div class="card-body">
-        {% if item.defaults %}
-        <table class="table table-sm align-middle mb-3">
-            <thead class="bg-light">
-                <tr>
-                    <th>Plantilla</th>
-                    <th>Vigente desde</th>
-                    <th>Hasta</th>
-                    <th>Prioridad</th>
-                    <th>Notas</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for d in item.defaults %}
-                <tr>
-                    <td class="fw-semibold">{{ d.plantilla_nombre }}</td>
-                    <td>{{ d.fecha_inicio }}</td>
-                    <td>{{ d.fecha_fin or 'Indefinido' }}</td>
-                    <td><span class="badge bg-primary bg-opacity-10 text-primary">{{ d.prioridad }}</span></td>
-                    <td class="text-muted small">{{ d.notas or '' }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted small mb-3"><em>Sin horario default asignado.</em></p>
-        {% endif %}
 
-        <form method="POST" action="{{ url_for('horarios_gf.asignar_default', id=gf.id) }}" class="row g-2 align-items-end">
-            <div class="col-md-5">
-                <label class="form-label small fw-bold text-muted mb-1">Plantilla de horario</label>
-                <select class="form-select form-select-sm" name="plantilla_id" required>
-                    <option value="">Seleccionar...</option>
-                    {% for p in plantillas %}
-                    <option value="{{ p.id }}">{{ p.nombre }}</option>
-                    {% endfor %}
-                </select>
+    {% set total_grupos = detalles|length %}
+    {% set con_horario_count = detalles | selectattr('defaults') | list | length %}
+    {% set sin_horario_count = total_grupos - con_horario_count %}
+    {% set total_colaboradores = detalles | map(attribute='total_personas') | sum %}
+
+    <!-- ── 2. KPIs Dinámicos de Grupos (Rippling Style) ─────────────────── -->
+    <div class="kpi-grid-entradas">
+        <!-- KPI 1: Total Grupos -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">workspaces</span>
             </div>
-            <div class="col-md-2">
-                <label class="form-label small fw-bold text-muted mb-1">Prioridad</label>
-                <input type="number" class="form-control form-control-sm" name="prioridad" value="0" min="0">
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Grupos de Trabajo</div>
+                <div class="dashboard-kpi-value">{{ total_grupos }}</div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted mb-1">Vigente desde</label>
-                <input type="date" class="form-control form-control-sm" name="fecha_inicio" value="{{ '' }}">
+        </div>
+
+        <!-- KPI 2: Con Horario -->
+        <div class="dashboard-kpi-card">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">event_available</span>
             </div>
-            <div class="col-md-2">
-                <button type="submit" class="btn btn-primary btn-sm w-100">Asignar</button>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label text-success">Con Horario Base</div>
+                <div class="dashboard-kpi-value text-success">{{ con_horario_count }}</div>
             </div>
-        </form>
+        </div>
+
+        <!-- KPI 3: Sin Horario -->
+        <div class="dashboard-kpi-card" {% if sin_horario_count > 0 %}style="border-left: 3px solid #f59e0b;"{% endif %}>
+            <div class="dashboard-kpi-icon-wrapper {% if sin_horario_count > 0 %}dashboard-kpi-icon-gold{% else %}dashboard-kpi-icon-slate{% endif %}">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">schedule</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label {% if sin_horario_count > 0 %}text-warning{% endif %}">Sin Horario Asignado</div>
+                <div class="dashboard-kpi-value {% if sin_horario_count > 0 %}text-warning{% endif %}">{{ sin_horario_count }}</div>
+            </div>
+        </div>
+
+        <!-- KPI 4: Colaboradores en Grupos -->
+        <div class="dashboard-kpi-card" style="border-left: 3px solid #10b981;">
+            <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-green">
+                <span class="material-symbols-outlined" style="font-size: 1.35rem;">groups</span>
+            </div>
+            <div class="min-w-0 flex-grow-1">
+                <div class="dashboard-kpi-label">Personas Asignadas</div>
+                <div class="dashboard-kpi-value" style="color: #047857;">{{ total_colaboradores }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 3. Tarjeta de Búsqueda y Filtros de Estado ────────────────────── -->
+    <div class="component-card-shell filter-card-container">
+        <div class="component-header-shell">
+            <div class="component-title-slot">
+                <span class="material-symbols-outlined" style="font-size: 1.2rem; color: var(--token-color-navy-900);">search</span>
+                <span class="fw-bold" style="font-size: 0.9375rem; color: var(--token-color-navy-900);">Búsqueda y Filtros</span>
+            </div>
+            <div class="component-tools-slot">
+                <span class="rippling-pill rippling-pill-navy" style="font-size:0.75rem;">Grupos</span>
+            </div>
+        </div>
+        <div class="component-body-shell p-3">
+            <div class="row g-2 align-items-center justify-content-between">
+                <div class="col-md-5">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0 text-muted" style="height: 42px;">
+                            <span class="material-symbols-outlined fs-6">search</span>
+                        </span>
+                        <input type="text" class="form-control border-start-0 ps-0" id="search-grupos-input"
+                            placeholder="Buscar grupo de trabajo o colaborador..." oninput="filtrarGruposCards();" style="height: 42px;">
+                    </div>
+                </div>
+                <div class="col-md-7 d-flex justify-content-md-end align-items-center gap-2 flex-wrap">
+                    <div class="btn-group gap-1" role="group" aria-label="Filtro de estado de horario">
+                        <button type="button" class="btn filter-state-btn active" id="filter-btn-todos" onclick="filtrarPorEstado('todos');">
+                            Todos ({{ total_grupos }})
+                        </button>
+                        <button type="button" class="btn filter-state-btn" id="filter-btn-con-horario" onclick="filtrarPorEstado('con-horario');">
+                            Con horario ({{ con_horario_count }})
+                        </button>
+                        <button type="button" class="btn filter-state-btn" id="filter-btn-sin-horario" onclick="filtrarPorEstado('sin-horario');">
+                            Sin horario ({{ sin_horario_count }})
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 4. Lista de Grupos de Trabajo (Cards Modernas) ────────────────── -->
+    {% if not detalles %}
+    <div class="component-card-shell text-center py-5">
+        <div class="component-body-shell p-5">
+            <div class="d-inline-flex align-items-center justify-content-center bg-light rounded-circle mb-3" style="width: 64px; height: 64px;">
+                <span class="material-symbols-outlined text-muted" style="font-size: 2.2rem;">workspaces</span>
+            </div>
+            <h5 class="fw-bold text-dark mb-1">No hay grupos de trabajo configurados</h5>
+            <p class="text-muted small mb-4" style="max-width: 480px; margin: 0 auto;">
+                Crea tu primer grupo de trabajo para asignar horarios base y gestionar colaboradores de forma individual o masiva mediante CSV.
+            </p>
+            <button class="btn btn-rippling-primary d-inline-flex align-items-center gap-1 shadow-sm" data-bs-toggle="modal" data-bs-target="#modalCrearGrupo">
+                <span class="material-symbols-outlined fs-6">add</span>
+                <span>Crear Primer Grupo</span>
+            </button>
+        </div>
+    </div>
+    {% else %}
+    <div class="d-flex flex-column gap-3" id="grupos-cards-container">
+        {% for item in detalles %}
+        {% set gf = item.gf %}
+        <div class="component-card-shell grupo-card-wrapper"
+             data-nombre-upper="{{ gf.nombre|upper }}"
+             data-personas-upper="{% for p in item.personas %}{{ p.nombre_mostrar|upper }} {{ p.identificacion or '' }} {% endfor %}"
+             data-estado-horario="{% if item.defaults %}con-horario{% else %}sin-horario{% endif %}">
+            
+            <!-- Header de Tarjeta de Grupo -->
+            <div class="component-header-shell flex-wrap gap-2">
+                <div class="component-title-slot d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">workspaces</span>
+                    </div>
+                    <div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <h5 class="fw-bold text-dark mb-0" style="font-size: 1.05rem;">{{ gf.nombre }}</h5>
+                            {% if gf.tipo_persona_nombre %}
+                            <span class="rippling-pill rippling-pill-slate" style="font-size:0.72rem; padding: 2px 8px;">
+                                {{ gf.tipo_persona_nombre }}
+                            </span>
+                            {% endif %}
+                            {% if item.defaults %}
+                            <span class="rippling-pill" style="background-color: #ecfdf5; color: #047857; border-color: #a7f3d0; font-size:0.72rem; padding: 2px 8px;">
+                                <span class="material-symbols-outlined" style="font-size:0.8rem;">check_circle</span>
+                                Horario asignado
+                            </span>
+                            {% else %}
+                            <span class="rippling-pill" style="background-color: #fffbeb; color: #b45309; border-color: #fde68a; font-size:0.72rem; padding: 2px 8px;">
+                                <span class="material-symbols-outlined" style="font-size:0.8rem;">warning</span>
+                                Sin horario base
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="text-muted small mt-1" style="font-size: 0.78rem;">
+                            <strong>{{ item.total_personas }}</strong> {% if item.total_personas == 1 %}colaborador asignado{% else %}colaboradores asignados{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="component-tools-slot d-flex align-items-center gap-2 flex-wrap">
+                    <button class="btn btn-sm btn-rippling-primary d-inline-flex align-items-center gap-1 shadow-sm"
+                            onclick="abrirModalAgregarPersonas('{{ gf.id }}', '{{ gf.nombre|escape }}');"
+                            title="Agregar personas de forma manual o masiva CSV">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">person_add</span>
+                        <span>Agregar Personas</span>
+                    </button>
+                    
+                    <button class="btn btn-sm btn-rippling-secondary d-inline-flex align-items-center gap-1"
+                            type="button" data-bs-toggle="collapse" data-bs-target="#collapse-asignar-horario-{{ gf.id }}"
+                            aria-expanded="false" title="Configurar horario del grupo">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">edit_calendar</span>
+                        <span>Configurar Horario</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Cuerpo de Tarjeta de Grupo -->
+            <div class="component-body-shell p-4">
+                <!-- Horario Base Asignado -->
+                <div class="mb-4">
+                    <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2" style="font-size: 0.88rem;">
+                        <span class="material-symbols-outlined text-muted fs-5">schedule</span>
+                        <span>Horario Base de Grupo</span>
+                    </h6>
+
+                    {% if item.defaults %}
+                    <div class="d-flex flex-column gap-2">
+                        {% for d in item.defaults %}
+                        <div class="p-3 bg-light rounded-3 border d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="avatar-circle" style="background-color: #ecfdf5; color: #047857; width: 34px; height: 34px;">
+                                    <span class="material-symbols-outlined fs-6">calendar_today</span>
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark" style="font-size: 0.88rem;">{{ d.plantilla_nombre }}</div>
+                                    <div class="text-muted small" style="font-size:0.78rem;">
+                                        Vigente desde: <strong>{{ d.fecha_inicio }}</strong>
+                                        {% if d.fecha_fin %}hasta <strong>{{ d.fecha_fin }}</strong>{% else %}· Vigencia permanente{% endif %}
+                                        {% if d.notas %}· <span class="fst-italic">{{ d.notas }}</span>{% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% if d.prioridad > 0 %}
+                            <span class="rippling-pill rippling-pill-navy" style="font-size:0.72rem; padding: 2px 8px;">
+                                Prioridad {{ d.prioridad }}
+                            </span>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="p-3 bg-light rounded-3 border text-muted small d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined text-warning fs-5">info</span>
+                        <span>Este grupo aún no tiene un horario base asignado. Las personas vinculadas no podrán registrar asistencia automáticamente hasta configurar uno.</span>
+                    </div>
+                    {% endif %}
+
+                    <!-- Formulario Desplegable para Asignar/Cambiar Horario -->
+                    <div class="collapse mt-3" id="collapse-asignar-horario-{{ gf.id }}">
+                        <div class="p-3 bg-white border rounded-3 shadow-sm">
+                            <form method="POST" action="{{ url_for('horarios_gf.asignar_default', id=gf.id) }}" class="row g-2 align-items-end">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-bold text-muted mb-1">Plantilla de Horario</label>
+                                    <select class="form-select form-select-sm" name="plantilla_id" required style="height: 38px;">
+                                        <option value="">Seleccionar plantilla...</option>
+                                        {% for p in plantillas %}
+                                        <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-bold text-muted mb-1">Vigente Desde</label>
+                                    <input type="date" class="form-control form-control-sm" name="fecha_inicio" value="{{ now_date or '' }}" style="height: 38px;">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-bold text-muted mb-1">Prioridad</label>
+                                    <input type="number" class="form-control form-control-sm" name="prioridad" value="0" min="0" style="height: 38px;">
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="submit" class="btn btn-sm btn-rippling-primary w-100 d-flex align-items-center justify-content-center gap-1 shadow-sm" style="height: 38px;">
+                                        <span class="material-symbols-outlined fs-6">save</span>
+                                        <span>Guardar</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Integrantes del Grupo -->
+                <div>
+                    <h6 class="fw-bold text-dark mb-2 d-flex align-items-center gap-2" style="font-size: 0.88rem;">
+                        <span class="material-symbols-outlined text-muted fs-5">groups</span>
+                        <span>Integrantes Asignados</span>
+                        <span class="badge bg-secondary bg-opacity-25 text-dark ms-1" style="font-size:0.72rem;">
+                            {{ item.total_personas }}
+                        </span>
+                    </h6>
+
+                    {% if item.personas %}
+                    <div class="table-responsive border rounded-3" style="max-height: 280px; overflow-y: auto;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.86rem;">
+                            <thead class="rippling-table-header sticky-top">
+                                <tr>
+                                    <th>Colaborador</th>
+                                    <th>ID Reloj ZK</th>
+                                    <th>Vigencia en Grupo</th>
+                                    <th class="text-end">Acción</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for p in item.personas %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <div class="avatar-circle" style="width: 30px; height: 30px; font-size: 0.78rem;">
+                                                {{ (p.nombre_mostrar or p.nombre or 'P')[0] | upper }}
+                                            </div>
+                                            <div>
+                                                <div class="fw-bold text-dark" style="font-size: 0.86rem;">{{ p.nombre_mostrar or p.nombre }}</div>
+                                                {% if p.identificacion %}
+                                                <div class="text-muted" style="font-size: 0.74rem;">C.I: {{ p.identificacion }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if p.id_usuario_zk %}
+                                        <span class="rippling-pill rippling-pill-navy" style="font-size: 0.72rem; padding: 2px 8px;">
+                                            ID: {{ p.id_usuario_zk }}
+                                        </span>
+                                        {% else %}
+                                        <span class="rippling-pill" style="background-color: #fef2f2; color: #b91c1c; border-color: #fecaca; font-size: 0.72rem; padding: 2px 8px;">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">warning</span>
+                                            Sin asignar
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="text-muted small">
+                                            Desde: {{ p.fecha_inicio }}
+                                            {% if p.fecha_fin %}hasta {{ p.fecha_fin }}{% else %}· Activo{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <form method="POST" action="{{ url_for('horarios_gf.cerrar_persona_gf', id=p.persona_id) }}" class="d-inline"
+                                              onsubmit="return confirm('¿Desvincular a {{ p.nombre_mostrar|escape }} de este grupo?');">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="grupo_funcional_id" value="{{ gf.id }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2 d-inline-flex align-items-center gap-1" title="Desvincular del grupo" style="font-size: 0.75rem;">
+                                                <span class="material-symbols-outlined" style="font-size: 0.88rem;">person_remove</span>
+                                                <span>Desvincular</span>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="p-4 bg-light rounded-3 border text-center">
+                        <span class="material-symbols-outlined text-muted fs-3 mb-1">group_off</span>
+                        <p class="text-muted small mb-2">No hay personas asignadas a este grupo aún.</p>
+                        <button class="btn btn-sm btn-rippling-primary d-inline-flex align-items-center gap-1 shadow-sm"
+                                onclick="abrirModalAgregarPersonas('{{ gf.id }}', '{{ gf.nombre|escape }}');">
+                            <span class="material-symbols-outlined fs-6">person_add</span>
+                            <span>Asignar Colaboradores (Manual o CSV)</span>
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+{# ── Modal: Crear Nuevo Grupo ─────────────────────────────────────────── #}
+<div class="modal fade" id="modalCrearGrupo" tabindex="-1" aria-labelledby="modalCrearGrupoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">workspaces</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="modalCrearGrupoLabel" style="font-size: 1.1rem;">Nuevo Grupo de Trabajo</h5>
+                        <p class="text-muted small mb-0">Crea un departamento o agrupación de personal para asignación de turnos.</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('horarios_gf.crear_grupo') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Nombre del Grupo <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="nombre" placeholder="Ej: Administrativos, Docentes, Operarios" required style="height: 42px;">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold text-muted mb-1">Tipo de Personal (Opcional)</label>
+                        <select class="form-select" name="tipo_persona_id" style="height: 42px;">
+                            <option value="">Cualquier tipo de personal</option>
+                            {% for t in tipos_persona %}
+                            <option value="{{ t.id }}">{{ t.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="p-3 bg-light rounded-3 border mb-1">
+                        <label class="form-label small fw-bold text-muted mb-1 d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined text-primary fs-6">calendar_month</span>
+                            <span>Horario Base Inicial (Opcional)</span>
+                        </label>
+                        <div class="row g-2">
+                            <div class="col-md-7">
+                                <select class="form-select form-select-sm" name="plantilla_id" style="height: 38px;">
+                                    <option value="">Asignar horario más adelante...</option>
+                                    {% for p in plantillas %}
+                                    <option value="{{ p.id }}">{{ p.nombre }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="date" class="form-control form-control-sm" name="fecha_inicio" value="{{ now_date or '' }}" style="height: 38px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-top px-4 py-3 d-flex justify-content-end gap-2">
+                    <button type="button" class="btn btn-rippling-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-rippling-primary btn-sm d-flex align-items-center gap-1 shadow-sm">
+                        <span class="material-symbols-outlined fs-6">add</span>
+                        <span>Crear Grupo</span>
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
-{% endfor %}
 
-<div class="alert alert-secondary small">
-    <span class="material-symbols-outlined align-middle" style="font-size:1.1rem;">info</span>
-    La precedencia del resolutor es: override por persona &gt; asignacion legacy 1:1 &gt; default del grupo funcional principal &gt; sin horario. Las personas con varios grupos se rigen por el marcado como principal.
+{# ── Modal: Agregar Personas al Grupo (Manual o CSV) ───────────────────── #}
+<div class="modal fade" id="modalAgregarPersonasGrupo" tabindex="-1" aria-labelledby="modalAgregarPersonasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content" style="border-radius: var(--radius-xl); border: 1px solid var(--color-border); box-shadow: var(--shadow-dropdown); overflow: hidden;">
+            <div class="modal-header bg-light border-bottom px-4 py-3">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="dashboard-kpi-icon-wrapper dashboard-kpi-icon-navy" style="width: 38px; height: 38px;">
+                        <span class="material-symbols-outlined" style="font-size: 1.25rem;">group_add</span>
+                    </div>
+                    <div>
+                        <h5 class="modal-title fw-bold text-dark mb-0" id="modalAgregarPersonasLabel" style="font-size: 1.1rem;">Agregar Colaboradores al Grupo</h5>
+                        <p class="text-muted small mb-0" id="modal-grupo-nombre-sub">Grupo: —</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body p-4">
+                {# ── Tabs: Seleccionar del Personal / Nueva Persona / CSV ── #}
+                <ul class="nav nav-pills nav-fill mb-4 gap-2 p-1 bg-light rounded-3" id="agregarPersonasTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold small py-2 d-flex align-items-center justify-content-center gap-1 rounded-2"
+                                id="tab-sel-existente" data-bs-toggle="tab" data-bs-target="#pane-sel-existente" type="button" role="tab">
+                            <span class="material-symbols-outlined fs-6">checklist</span>
+                            <span>Seleccionar del Directorio</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold small py-2 d-flex align-items-center justify-content-center gap-1 rounded-2"
+                                id="tab-crear-nuevo" data-bs-toggle="tab" data-bs-target="#pane-crear-nuevo" type="button" role="tab">
+                            <span class="material-symbols-outlined fs-6">person_add</span>
+                            <span>Registrar Nueva Persona</span>
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold small py-2 d-flex align-items-center justify-content-center gap-1 rounded-2"
+                                id="tab-cargar-csv" data-bs-toggle="tab" data-bs-target="#pane-cargar-csv" type="button" role="tab">
+                            <span class="material-symbols-outlined fs-6">upload_file</span>
+                            <span>Carga Masiva CSV</span>
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="agregarPersonasTabContent">
+                    
+                    {# ── TAB 1: SELECCIONAR DEL PERSONAL EXISTENTE ── #}
+                    <div class="tab-pane fade show active" id="pane-sel-existente" role="tabpanel">
+                        <form method="POST" id="form-agregar-personas-manual" action="">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <div class="input-group input-group-sm" style="max-width: 320px;">
+                                    <span class="input-group-text bg-white border-end-0 text-muted">
+                                        <span class="material-symbols-outlined fs-6">search</span>
+                                    </span>
+                                    <input type="text" class="form-control border-start-0 ps-0" id="search-personas-modal"
+                                        placeholder="Buscar por nombre o cédula..." oninput="filtrarPersonasModal();">
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none" onclick="seleccionarTodasPersonasModal(true);">
+                                        Seleccionar todos
+                                    </button>
+                                    <span class="text-muted">|</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none text-muted" onclick="seleccionarTodasPersonasModal(false);">
+                                        Deseleccionar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="border rounded-3 p-2 bg-light bg-opacity-50" style="max-height: 260px; overflow-y: auto;">
+                                <div class="row g-2" id="personas-modal-checklist">
+                                    {% for p in todas_personas %}
+                                    <div class="col-md-6 persona-modal-item"
+                                         data-nombre-upper="{{ (p.nombre_mostrar or p.nombre)|upper }}"
+                                         data-ident="{{ p.identificacion or '' }}"
+                                         data-id="{{ p.id }}">
+                                        <label class="d-flex align-items-center gap-3 p-2 bg-white rounded-3 border shadow-sm cursor-pointer w-100 mb-0 hover-card">
+                                            <input class="form-check-input flex-shrink-0 mt-0" type="checkbox" name="persona_ids" value="{{ p.id }}" onchange="actualizarContadorModal();">
+                                            <div class="avatar-circle" style="width: 28px; height: 28px; font-size: 0.75rem;">
+                                                {{ (p.nombre_mostrar or p.nombre or 'P')[0] | upper }}
+                                            </div>
+                                            <div class="overflow-hidden" style="flex: 1;">
+                                                <div class="fw-bold text-dark text-truncate" style="font-size: 0.85rem;">{{ p.nombre_mostrar or p.nombre }}</div>
+                                                <div class="text-muted small" style="font-size: 0.72rem;">C.I: {{ p.identificacion or 'Sin C.I' }}</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                    {% else %}
+                                    <div class="col-12 text-center py-4 text-muted small">No hay personas registradas en el sistema.</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+                                <small class="text-muted">
+                                    <span id="modal-sel-count" class="fw-bold text-primary">0</span> personas seleccionadas
+                                </small>
+                                <button type="submit" class="btn btn-sm btn-rippling-primary shadow-sm">
+                                    Asignar al Grupo
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {# ── TAB 2: REGISTRAR NUEVA PERSONA ── #}
+                    <div class="tab-pane fade" id="pane-crear-nuevo" role="tabpanel">
+                        <form method="POST" id="form-crear-persona-grupo" action="">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-7">
+                                    <label class="form-label small fw-bold text-muted mb-1">Nombre Completo <span class="text-danger">*</span></label>
+                                    <input type="text" class="form-control" name="nombre" placeholder="Ej: Perez Juan" required style="height: 42px;">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-bold text-muted mb-1">Identificación / Cédula</label>
+                                    <input type="text" class="form-control" name="identificacion" placeholder="Ej: 1723456789" style="height: 42px;">
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">ID Biométrico (Reloj ZK)</label>
+                                    <input type="number" class="form-control" name="id_usuario_zk" placeholder="Ej: 15" min="1" style="height: 42px;">
+                                    <small class="text-muted" style="font-size: 0.72rem;">Número asignado en el dispositivo físico ZK.</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Tipo de Personal</label>
+                                    <select class="form-select" name="tipo_persona_id" style="height: 42px;">
+                                        <option value="">Sin tipo específico</option>
+                                        {% for t in tipos_persona %}
+                                        <option value="{{ t.id }}">{{ t.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Email (Opcional)</label>
+                                    <input type="email" class="form-control" name="email" placeholder="correo@institucion.edu" style="height: 42px;">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small fw-bold text-muted mb-1">Teléfono (Opcional)</label>
+                                    <input type="text" class="form-control" name="telefono" placeholder="0999999999" style="height: 42px;">
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end align-items-center mt-3 pt-2 border-top">
+                                <button type="submit" class="btn btn-sm btn-rippling-primary shadow-sm">
+                                    Guardar y Asignar al Grupo
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    {# ── TAB 3: CARGA MASIVA CSV ── #}
+                    <div class="tab-pane fade" id="pane-cargar-csv" role="tabpanel">
+                        <form method="POST" id="form-csv-personas-grupo" action="" enctype="multipart/form-data">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                            <div class="p-3 bg-light rounded-3 border mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <label class="form-label small fw-bold text-muted mb-0 d-flex align-items-center gap-1">
+                                        <span class="material-symbols-outlined text-primary fs-6">csv</span>
+                                        <span>Seleccionar archivo CSV</span>
+                                    </label>
+                                    <a href="javascript:void(0);" onclick="descargarPlantillaCsv();" class="text-decoration-none small d-flex align-items-center gap-1 text-primary fw-semibold">
+                                        <span class="material-symbols-outlined" style="font-size: 0.9rem;">download</span>
+                                        <span>Descargar plantilla CSV</span>
+                                    </a>
+                                </div>
+                                <input type="file" class="form-control" name="archivo_csv" accept=".csv" required style="height: 42px;">
+                                <small class="text-muted d-block mt-2" style="font-size: 0.75rem;">
+                                    Columnas aceptadas: <code>nombre, identificacion, id_biometrico, email, telefono</code>.
+                                </small>
+                            </div>
+
+                            <div class="d-flex justify-content-end align-items-center mt-3 pt-2 border-top">
+                                <button type="submit" class="btn btn-sm btn-rippling-primary d-flex align-items-center gap-1 shadow-sm">
+                                    <span class="material-symbols-outlined fs-6">upload_file</span>
+                                    <span>Procesar Carga Masiva</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentGfId = null;
+
+function abrirModalAgregarPersonas(gfId, gfNombre) {
+    currentGfId = gfId;
+    document.getElementById('modal-grupo-nombre-sub').textContent = 'Grupo destino: ' + gfNombre;
+    
+    // Configurar actions de formularios
+    document.getElementById('form-agregar-personas-manual').action = (window.APP_BASE || '') + '/admin/horarios-grupo-funcional/' + gfId + '/personas/agregar';
+    document.getElementById('form-crear-persona-grupo').action = (window.APP_BASE || '') + '/admin/horarios-grupo-funcional/' + gfId + '/personas/crear';
+    document.getElementById('form-csv-personas-grupo').action = (window.APP_BASE || '') + '/admin/horarios-grupo-funcional/' + gfId + '/personas/csv';
+    
+    // Limpiar campos y checklist
+    seleccionarTodasPersonasModal(false);
+    document.getElementById('search-personas-modal').value = '';
+    filtrarPersonasModal();
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalAgregarPersonasGrupo'));
+    modal.show();
+}
+
+function filtrarGruposCards() {
+    const q = document.getElementById('search-grupos-input').value.trim().toUpperCase();
+    document.querySelectorAll('.grupo-card-wrapper').forEach(card => {
+        const nombreMatch = card.getAttribute('data-nombre-upper').includes(q);
+        const personasMatch = card.getAttribute('data-personas-upper').includes(q);
+        card.style.display = (nombreMatch || personasMatch) ? '' : 'none';
+    });
+}
+
+function filtrarPorEstado(estado) {
+    document.getElementById('filter-btn-todos').classList.toggle('active', estado === 'todos');
+    document.getElementById('filter-btn-con-horario').classList.toggle('active', estado === 'con-horario');
+    document.getElementById('filter-btn-sin-horario').classList.toggle('active', estado === 'sin-horario');
+
+    document.querySelectorAll('.grupo-card-wrapper').forEach(card => {
+        if (estado === 'todos') {
+            card.style.display = '';
+        } else {
+            const cardEstado = card.getAttribute('data-estado-horario');
+            card.style.display = (cardEstado === estado) ? '' : 'none';
+        }
+    });
+}
+
+function filtrarPersonasModal() {
+    const q = document.getElementById('search-personas-modal').value.trim().toUpperCase();
+    document.querySelectorAll('.persona-modal-item').forEach(item => {
+        const matchNombre = item.getAttribute('data-nombre-upper').includes(q);
+        const matchIdent = item.getAttribute('data-ident').toUpperCase().includes(q);
+        item.style.display = (matchNombre || matchIdent) ? '' : 'none';
+    });
+}
+
+function seleccionarTodasPersonasModal(check) {
+    document.querySelectorAll('#personas-modal-checklist input[type="checkbox"]').forEach(cb => {
+        const parent = cb.closest('.persona-modal-item');
+        if (parent && parent.style.display !== 'none') {
+            cb.checked = check;
+        }
+    });
+    actualizarContadorModal();
+}
+
+function actualizarContadorModal() {
+    const checked = document.querySelectorAll('#personas-modal-checklist input[type="checkbox"]:checked').length;
+    document.getElementById('modal-sel-count').textContent = checked;
+}
+
+function descargarPlantillaCsv() {
+    const header = "nombre,identificacion,id_biometrico,email,telefono\n";
+    const sample = "Acosta Alejandra,1723456789,12,alejandra@institucion.edu,0991234567\nBenitez Carlos,1723456790,13,carlos@institucion.edu,0991234568\n";
+    const blob = new Blob([header + sample], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "plantilla_personas_grupo.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+</script>
 {% endblock %}

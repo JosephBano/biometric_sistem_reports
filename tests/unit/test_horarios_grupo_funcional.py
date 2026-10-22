@@ -21,7 +21,6 @@ import pytest
 
 from db.queries import horarios_grupo_funcional
 
-
 # ── listar_vigentes_para_grupo_funcional ──────────────────────────
 
 

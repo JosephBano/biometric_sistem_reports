@@ -57,62 +57,121 @@ docker compose version
 ## 2. Estructura del proyecto
 
 ```
-script_informe_asistencia/
+biometric_sistem_reports/
 │
-├── app.py                  # Servidor Flask — todas las rutas HTTP
-├── script.py               # Motor de análisis y generación de PDF
-├── analytics.py            # Motor de analytics estadísticos (pandas/numpy)
-├── ia_report.py            # Narrativos ejecutivos con IA (DeepSeek) o fallback
-├── sync.py                 # Conector al dispositivo ZK (pyzk) + scheduler
-├── auth.py                 # Lógica de autenticación con bcrypt
-├── decorators.py           # @require_role — control de acceso por rol
-├── crear_superadmin.py     # Script CLI para crear la cuenta maestra inicial
+├── wsgi.py                  # Entrypoint canónico WSGI (DispatcherMiddleware + ProxyFix)
 │
-├── db/                     # Capa de acceso a PostgreSQL
-│   ├── __init__.py         # Re-exporta todas las funciones públicas (from db import *)
-│   ├── connection.py       # Pool de conexiones SQLAlchemy + set search_path por tenant
-│   ├── migrations/         # Migraciones Alembic (0001 → 0005)
-│   └── queries/            # Módulos por dominio
+├── app/                     # Núcleo modular de la aplicación Flask
+│   ├── __init__.py          # Application Factory (create_app)
+│   ├── config.py            # Configuraciones por entorno (Dev, Prod, Testing)
+│   ├── extensions.py        # Extensiones desacopladas (CSRF, Limiter)
+│   ├── errors.py            # Handlers de errores HTTP (JSON / HTML)
+│   ├── security_headers.py  # Headers de seguridad HTTP (CSP, FrameOptions, etc.)
+│   ├── context_processors.py# Context processors para Jinja2
+│   ├── tenant.py            # Inyección y resolución de tenant en request
+│   ├── cleanup.py           # Daemon de limpieza de temporales
+│   │
+│   ├── domain/              # Capa de lógica de negocio y servicios
+│   │   ├── auth.py          # Autenticación, bcrypt, tokens, AES-GCM
+│   │   ├── rbac.py          # Control de acceso basado en roles (@require_role)
+│   │   ├── reports/         # Módulos de reporte PDF (cálculos, filtros, render)
+│   │   ├── report_docx.py   # Generación de reportes ejecutivos en Word
+│   │   ├── attendance.py    # Procesamiento y cálculo de asistencia
+│   │   ├── analytics.py     # Métricas y estadísticas de asistencia
+│   │   ├── ai_narrative.py  # Narrativa analítica con IA (DeepSeek / fallback)
+│   │   ├── schedule.py      # Sincronización con dispositivos y scheduler
+│   │   ├── backup.py        # Generación y purga de respaldos
+│   │   ├── emailer.py       # Notificaciones por correo electrónico
+│   │   └── ...              # Horarios de grupos funcionales, asignaciones, etc.
+│   │
+│   └── web/                 # Blueprints modulares (Routing y Jinja)
+│       ├── auth_bp.py       # /login, /logout, switch-tenant
+│       ├── dashboard_bp.py  # Vistas principales y resumen
+│       ├── devices_bp.py    # API de dispositivos biométricos y sincronización
+│       ├── schedule_bp.py   # Gestión y asignación de horarios
+│       ├── attendance_bp.py # Asistencias, justificaciones y feriados
+│       ├── breaks_bp.py     # Manejo y categorización de descansos
+│       ├── reports_bp.py    # Generación y descarga de informes
+│       ├── periods_bp.py    # Períodos de vigencia institucional
+│       ├── people_bp.py     # Directorio de personas e historial
+│       ├── groups_bp.py     # Grupos institucionales
+│       ├── grupos_funcionales_bp.py # Gestión de grupos funcionales
+│       ├── horarios_gf_bp.py# Horarios por grupo funcional
+│       ├── admin_bp.py      # Panel administrativo y usuarios
+│       ├── analytics_bp.py  # Vistas de métricas analíticas
+│       └── system_bp.py     # Estado del sistema y utilitarios
+│
+├── db/                      # Capa de persistencia y base de datos PostgreSQL
+│   ├── __init__.py          # Re-export de funciones de acceso a datos
+│   ├── connection.py        # Pool de conexiones SQLAlchemy + multitenancy search_path
+│   ├── init.py              # Inicialización de BD
+│   ├── init_seed.py         # Sembrado inicial de tenants y superadmin
+│   ├── tenant_provisioner.py# Aprovisionamiento dinámico de esquemas por tenant
+│   ├── migrations/          # Migraciones Alembic (db/migrations/versions/)
+│   └── queries/             # Módulos de consulta SQL parametrizada por dominio
 │       ├── asistencias.py
-│       ├── asistencia_periodo.py
 │       ├── auth.py
-│       ├── breaks.py
 │       ├── dispositivos.py
-│       ├── feriados.py
-│       ├── grupos.py
-│       ├── horarios.py
-│       ├── justificaciones.py
-│       ├── periodos.py
+│       ├── horarios_grupo_funcional.py
 │       ├── personas.py
-│       ├── personas_crud.py
-│       ├── sync_log.py
-│       └── tenants.py
+│       └── ...
 │
-├── templates/
-│   ├── base.html           # Layout base (sidebar, toasts, scripts comunes)
-│   ├── dashboard.html      # Panel principal
-│   ├── reportes.html       # Generación de PDF e informe por email
-│   ├── justificaciones.html
-│   ├── analytics.html      # Analytics estadísticos + narrativo IA
-│   ├── configuracion.html  # Feriados + respaldos
-│   ├── login.html
-│   ├── periodos/           # Listado y detalle de períodos
-│   └── admin/              # Gestión de usuarios, grupos, dispositivos, tenants
+├── drivers/                 # Controladores de hardware biométrico (Strategy + Factory)
+│   ├── base.py              # Interfaz base y fábrica de drivers
+│   ├── zk_driver.py         # Driver para relojes biométricos ZKTeco
+│   └── hikvision_driver.py  # Driver para terminales faciales Hikvision
 │
-├── static/
-│   ├── style.css
-│   └── js/
-│       ├── api.js          # Helper fetch centralizado
+├── templates/               # Plantillas Jinja2 adaptadas al nuevo UI Shell
+│   ├── base.html            # Shell base (navbar superior, sidebar, tokens de diseño)
+│   ├── dashboard.html       # Panel principal
+│   ├── reportes.html        # Generación de reportes
+│   ├── periodos/            # Vistas de períodos
+│   ├── personas/            # Vistas de personas
+│   └── admin/               # Paneles de administración
+│
+├── static/                  # Archivos estáticos del frontend
+│   ├── tokens.css           # Variables CSS del Design System (Design Tokens)
+│   ├── style.css            # Estilos del UI Shell y componentes visuales
+│   └── js/                  # Módulos JavaScript del cliente
+│       ├── api.js           # Helper fetch centralizado
+│       ├── asignacion_masiva.js
+│       ├── configuracion.js
 │       ├── dashboard.js
-│       ├── reportes.js
+│       ├── grupos_funcionales.js
+│       ├── horario_override.js
+│       ├── horarios_default_grupo.js
 │       ├── justificaciones.js
-│       └── configuracion.js
+│       ├── persona_grupos_funcionales.js
+│       ├── reportes.js      # Orquestador de reportes
+│       ├── reportes_rapido.js # Filtros rápidos y renderizado
+│       ├── reportes_marcaciones.js # Marcaciones por día y exportación
+│       ├── reportes_detallado.js # Reporte detallado y dual listbox
+│       └── reportes_edicion.js # Edición inline de personas y horarios
 │
-├── .env                    # Variables de entorno (NO subir al repo)
-├── .env.example            # Plantilla
-├── Dockerfile
-├── docker-compose.yml
-└── requirements.txt
+├── scripts/                 # Scripts auxiliares y de mantenimiento
+│   ├── cambiar_password.py  # Cambio interactivo de contraseña de usuarios
+│   ├── deduplicar_personas.py # Fusión segura de registros duplicados de personas
+│   └── ...
+│
+├── tests/                   # Suite de pruebas automatizadas (pytest)
+│   ├── unit/                # Pruebas unitarias de fábrica, dominio y arquitectura AST
+│   └── integration/         # Pruebas de integración con PostgreSQL (pgserver)
+│
+├── docs/                    # Documentación del proyecto
+│   ├── adr/                 # Architectural Decision Records (ADRs)
+│   ├── ARQUITECTURA.md      # Descripción técnica de arquitectura
+│   ├── CHANGELOG.md         # Registro de versiones y cambios
+│   ├── DESIGN_SYSTEM_TOKENS.md # Guía del Design System
+│   ├── tokens.json          # Definición fuente de Design Tokens
+│   └── ...
+│
+├── .env.example             # Plantilla de variables de entorno
+├── Dockerfile               # Configuración del contenedor de aplicación (wsgi:app)
+├── docker-compose.yml       # Orquestación de servicios (app + PostgreSQL 16)
+├── pyproject.toml           # Configuración de herramientas (Ruff, Pytest, Coverage)
+├── requirements.txt         # Dependencias de producción
+├── requirements-dev.txt     # Dependencias de desarrollo y testing
+└── wsgi.py                  # Entrypoint canónico WSGI: wsgi:app
 ```
 
 ### Base de datos PostgreSQL
@@ -133,8 +192,8 @@ Las migraciones se aplican con Alembic y están versionadas en `db/migrations/ve
 ### Paso 1 — Clonar el proyecto
 
 ```bash
-git clone <url-del-repo> script_informe_asistencia
-cd script_informe_asistencia
+git clone <url-del-repo> biometric_sistem_reports
+cd biometric_sistem_reports
 ```
 
 ### Paso 2 — Entorno virtual y dependencias
@@ -169,19 +228,27 @@ alembic upgrade head
 
 ### Paso 6 — Crear el superadmin inicial
 
+El superadmin inicial se provisiona automáticamente en el primer arranque si se configuran en `.env` las variables:
+
+```env
+INITIAL_SUPERADMIN_EMAIL=admin@istpet.edu.ec
+INITIAL_SUPERADMIN_PASSWORD=contraseña_segura_inicial
+```
+
+Para cambiar o restablecer contraseñas interactivamente por consola:
+
 ```bash
-python crear_superadmin.py --email admin@istpet.edu.ec --nombre "Administrador"
-# Ingresa una contraseña segura cuando se solicite
+python scripts/cambiar_password.py
 ```
 
 ### Paso 7 — Iniciar el servidor
 
 ```bash
-# Desarrollo
-python app.py
+# Desarrollo (servidor de desarrollo Flask)
+flask --app "app:create_app('development')" run --port 5000
 
-# Más cercano a producción
-gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 --timeout 120 app:app
+# Producción / WSGI (Gunicorn con DispatcherMiddleware /biometrico)
+gunicorn --bind 0.0.0.0:5000 --workers 1 --threads 4 --timeout 120 wsgi:app
 ```
 
 Disponible en `http://localhost:5000`.
@@ -219,11 +286,14 @@ La primera vez puede tardar 3–5 minutos (descarga de imagen + instalación de 
 docker compose exec biometrico-app alembic upgrade head
 ```
 
-**4 — Crear el superadmin inicial (solo la primera vez):**
+**4 — Superadmin inicial (solo la primera vez):**
+
+Se provisiona automáticamente en el primer inicio de la app a partir de `INITIAL_SUPERADMIN_EMAIL` e `INITIAL_SUPERADMIN_PASSWORD` definidos en `.env`.
+
+Para cambiar o restablecer contraseñas dentro del contenedor:
 
 ```bash
-docker compose exec biometrico-app python crear_superadmin.py \
-  --email admin@istpet.edu.ec --nombre "Administrador"
+docker compose exec biometrico-app python scripts/cambiar_password.py
 ```
 
 **5 — Verificar:**
@@ -363,18 +433,24 @@ Para Outlook el proceso es equivalente. Para servidor institucional, consultar c
 
 ## 6. Primera vez: crear el superadmin
 
-El sistema no tiene usuarios por defecto. Antes de poder iniciar sesión se debe crear la cuenta maestra:
+El sistema no incluye usuarios predeterminados fijos. La cuenta maestra inicial se crea automáticamente durante el sembrado de base de datos (`db.init_seed`) en el primer inicio de la aplicación si se configuran en el archivo `.env`:
+
+```env
+INITIAL_SUPERADMIN_EMAIL=admin@istpet.edu.ec
+INITIAL_SUPERADMIN_PASSWORD=contraseña_segura_inicial
+```
+
+Una vez iniciado el servidor, ingresa a `http://localhost:5000/login` (o `/biometrico/login` bajo gunicorn/proxy).
+
+Para modificar o restablecer la contraseña de cualquier usuario sin exponerla en los comandos de la terminal:
 
 ```bash
 # En desarrollo
-python crear_superadmin.py --email admin@istpet.edu.ec --nombre "Administrador"
+python scripts/cambiar_password.py
 
 # En Docker
-docker compose exec biometrico-app python crear_superadmin.py \
-  --email admin@istpet.edu.ec --nombre "Administrador"
+docker compose exec biometrico-app python scripts/cambiar_password.py
 ```
-
-El script solicita una contraseña de forma interactiva. Tras esto, iniciar sesión en `http://localhost:5000/login`.
 
 ### Roles del sistema
 

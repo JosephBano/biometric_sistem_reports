@@ -2,11 +2,12 @@
 Queries de breaks_categorizados con compatibilidad total hacia atrás.
 """
 
-from datetime import datetime, date
+from datetime import date, datetime
+
 from sqlalchemy import text
 
 from db.connection import get_connection
-from db.queries.personas import resolver_persona_id, _get_dispositivo_id
+from db.queries.personas import _get_dispositivo_id, resolver_persona_id
 
 
 def get_breaks_categorizados_dict(

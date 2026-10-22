@@ -1,5 +1,7 @@
+import logging
 import os
-from datetime import datetime, time as dt_time
+from datetime import datetime
+from datetime import time as dt_time
 
 try:
     from zk import ZK
@@ -9,22 +11,25 @@ except ImportError:
 
 from drivers.base import BiometricDriver
 
+log = logging.getLogger(__name__)
+
+
 class ZKDriver(BiometricDriver):
     """Driver para dispositivos biométricos ZKTeco usando pyzk."""
 
     def __init__(self, dispositivo: dict):
         super().__init__(dispositivo)
-        
+
         self.ip = dispositivo.get('ip')
         self.port = dispositivo.get('puerto', 4370)
         self.timeout = dispositivo.get('timeout_seg', 120)
         self.udp = dispositivo.get('protocolo', 'tcp').lower() == 'udp'
-        
+
         # Desencriptar la contraseña del dispositivo
         # Asume que si password_enc está vacío, usa 0 (default pyzk)
         from app.domain.auth import decrypt_device_password
         pwd_enc = dispositivo.get('password_enc')
-        
+
         # Retro-compatibilidad con la variable de entorno si pwd_enc es None (Fase 1/2)
         if pwd_enc:
             try:
@@ -81,8 +86,10 @@ class ZKDriver(BiometricDriver):
             ]
         finally:
             if conn:
-                try: conn.disconnect()
-                except: pass
+                try:
+                    conn.disconnect()
+                except Exception as e:
+                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
 
     def get_asistencias(self, desde: datetime = None) -> list[dict]:
         zk = self._make_zk()
@@ -92,17 +99,19 @@ class ZKDriver(BiometricDriver):
             conn = zk.connect()
             # Cache de usuarios para mapear IDs a nombres (útil pero nombre en BD manda)
             user_dict = {str(u.user_id): str(u.name).strip() for u in conn.get_users()}
-            
+
             attendances = conn.get_attendance()
-            
+
             for att in attendances:
                 ts = att.timestamp
                 if not isinstance(ts, datetime):
-                    try: ts = datetime.combine(ts, dt_time.min)
-                    except Exception: continue
+                    try:
+                        ts = datetime.combine(ts, dt_time.min)
+                    except Exception:
+                        continue
                 if ts.tzinfo is not None:
                     ts = ts.replace(tzinfo=None)
-                
+
                 # Filtrar desde (si aplica)
                 if desde and ts <= desde:
                     continue
@@ -112,7 +121,7 @@ class ZKDriver(BiometricDriver):
                     continue
 
                 nombre = user_dict.get(str(att.user_id), f"Usuario {att.user_id}")
-                
+
                 registros.append({
                     "id_usuario": str(att.user_id),
                     "nombre": nombre,
@@ -121,12 +130,14 @@ class ZKDriver(BiometricDriver):
                     "tipo": tipo,
                     "fuente": "zk"
                 })
-            
+
             return registros
         finally:
             if conn:
-                try: conn.disconnect()
-                except: pass
+                try:
+                    conn.disconnect()
+                except Exception as e:
+                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
 
     def clear_asistencias(self) -> int:
         zk = self._make_zk()
@@ -138,8 +149,10 @@ class ZKDriver(BiometricDriver):
             return total
         finally:
             if conn:
-                try: conn.disconnect()
-                except: pass
+                try:
+                    conn.disconnect()
+                except Exception as e:
+                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
 
     def get_capacidad(self) -> dict:
         total = 0
@@ -149,8 +162,8 @@ class ZKDriver(BiometricDriver):
             conn = zk.connect()
             total = len(conn.get_attendance())
             conn.disconnect()
-        except:
-            pass
+        except Exception as e:
+            log.warning("get_capacidad %s:%s falló: %s", self.ip, self.port, e)
         return {
             "total_registros": total,
             "capacidad_max": cap_max

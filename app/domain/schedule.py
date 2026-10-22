@@ -39,10 +39,12 @@ import os
 import threading
 import time as time_module
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime, time as dt_time, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
+from datetime import time as dt_time
 from pathlib import Path
-from typing import Optional
 
+import db as db_module
+from db import connection as _db_connection
 from db import (  # noqa: E402  (re-exports para cumplir regla de capas)
     delete_horario,
     get_estado_horarios,
@@ -52,8 +54,6 @@ from db import (  # noqa: E402  (re-exports para cumplir regla de capas)
     upsert_horario,
     upsert_horarios,
 )
-import db as db_module
-from db import connection as _db_connection
 from drivers import get_driver
 
 log = logging.getLogger("app.domain.schedule")
@@ -84,7 +84,7 @@ BACKUP_RETENCION_DIAS: int = int(os.getenv("BACKUP_RETENCION_DIAS", "30"))
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def _set_job(job_id: Optional[str], data: dict) -> None:
+def _set_job(job_id: str | None, data: dict) -> None:
     """Guarda `data` en `_jobs[job_id]`. No-op si `job_id` es None."""
     if job_id:
         with _jobs_lock:
@@ -102,7 +102,7 @@ def get_job_status(job_id: str) -> dict:
 # ══════════════════════════════════════════════════════════════════════════
 
 
-def ping_dispositivo(dispositivo_id: Optional[str] = None) -> bool:
+def ping_dispositivo(dispositivo_id: str | None = None) -> bool:
     """
     Verifica si el dispositivo (o el primero activo) responde.
     """
@@ -127,7 +127,7 @@ def ping_dispositivo(dispositivo_id: Optional[str] = None) -> bool:
 
 def sincronizar_dispositivo(
     dispositivo_id: str,
-    desde: Optional[datetime] = None,
+    desde: datetime | None = None,
     force_historico: bool = False,
 ) -> tuple[int, int]:
     """
@@ -219,7 +219,7 @@ def sincronizar_dispositivo(
 
 def sincronizar_con_reintento(
     dispositivo_id: str,
-    desde: Optional[datetime] = None,
+    desde: datetime | None = None,
     force_historico: bool = False,
     max_intentos: int = 3,
 ):
@@ -249,9 +249,9 @@ def sincronizar_con_reintento(
 
 
 def sincronizar(
-    fecha_inicio: Optional[date] = None,
-    fecha_fin: Optional[date] = None,
-    job_id: Optional[str] = None,
+    fecha_inicio: date | None = None,
+    fecha_fin: date | None = None,
+    job_id: str | None = None,
     force_historico: bool = False,
 ):
     """
@@ -285,7 +285,6 @@ def sincronizar(
             for d in dispositivos
         }
         for future in as_completed(futures):
-            d = futures[future]
             try:
                 descargados, insertados = future.result()
                 tot_descargados += descargados
@@ -391,13 +390,13 @@ def _redactar_error(mensaje: str) -> str:
 
 def _registrar_corrida_sync(
     job: str,
-    tenant_slug: Optional[str],
+    tenant_slug: str | None,
     inicio: datetime,
     fin: datetime,
     ok: bool,
-    descargados: Optional[int],
-    insertados: Optional[int],
-    detalle: Optional[str],
+    descargados: int | None,
+    insertados: int | None,
+    detalle: str | None,
 ) -> None:
     """Wrapper que no propaga excepciones del helper de persistencia.
 
@@ -434,7 +433,7 @@ def _backup_diario() -> None:
     from app.domain.backup import generar_dump, purgar_backups_viejos
     from app.domain.emailer import enviar_correo
 
-    inicio = datetime.now(timezone.utc)
+    inicio = datetime.now(UTC)
     timestamp = inicio.strftime("%Y%m%d_%H%M")
     filename = f"backup_completo_{timestamp}.dump"
     destino = Path(BACKUP_DIR) / filename
@@ -457,7 +456,7 @@ def _backup_diario() -> None:
             job="backup_diario",
             tenant_slug=None,
             inicio=inicio,
-            fin=datetime.now(timezone.utc),
+            fin=datetime.now(UTC),
             ok=True,
             descargados=None,
             insertados=None,
@@ -470,7 +469,7 @@ def _backup_diario() -> None:
             job="backup_diario",
             tenant_slug=None,
             inicio=inicio,
-            fin=datetime.now(timezone.utc),
+            fin=datetime.now(UTC),
             ok=False,
             descargados=None,
             insertados=None,
@@ -503,7 +502,7 @@ def _sync_automatico() -> None:
     log.info("Iniciando sync incremental (scheduler)")
     for slug in _get_tenant_slugs():
         db_module.set_thread_tenant(slug)
-        inicio = datetime.now(timezone.utc)
+        inicio = datetime.now(UTC)
         try:
             descargados, insertados = sincronizar(force_historico=False)
             from db.queries.periodos import cerrar_periodos_vencidos
@@ -513,7 +512,7 @@ def _sync_automatico() -> None:
                 job="sync_incremental",
                 tenant_slug=slug,
                 inicio=inicio,
-                fin=datetime.now(timezone.utc),
+                fin=datetime.now(UTC),
                 ok=True,
                 descargados=descargados,
                 insertados=insertados,
@@ -525,7 +524,7 @@ def _sync_automatico() -> None:
                 job="sync_incremental",
                 tenant_slug=slug,
                 inicio=inicio,
-                fin=datetime.now(timezone.utc),
+                fin=datetime.now(UTC),
                 ok=False,
                 descargados=None,
                 insertados=None,
@@ -544,7 +543,7 @@ def _sync_nocturna_completa() -> None:
     treinta_dias_atras = date.today() - timedelta(days=30)
     for slug in _get_tenant_slugs():
         db_module.set_thread_tenant(slug)
-        inicio = datetime.now(timezone.utc)
+        inicio = datetime.now(UTC)
         try:
             descargados, insertados = sincronizar(
                 fecha_inicio=treinta_dias_atras, force_historico=True,
@@ -553,7 +552,7 @@ def _sync_nocturna_completa() -> None:
                 job="sync_nocturna",
                 tenant_slug=slug,
                 inicio=inicio,
-                fin=datetime.now(timezone.utc),
+                fin=datetime.now(UTC),
                 ok=True,
                 descargados=descargados,
                 insertados=insertados,
@@ -565,7 +564,7 @@ def _sync_nocturna_completa() -> None:
                 job="sync_nocturna",
                 tenant_slug=slug,
                 inicio=inicio,
-                fin=datetime.now(timezone.utc),
+                fin=datetime.now(UTC),
                 ok=False,
                 descargados=None,
                 insertados=None,
@@ -700,7 +699,7 @@ def init_scheduler(app) -> None:
     )
 
 
-def proxima_corrida() -> Optional[str]:
+def proxima_corrida() -> str | None:
     """ISO timestamp de la próxima corrida programada, o `None`.
 
     Encapsula el acceso a la librería `schedule` (paquete de terceros) para

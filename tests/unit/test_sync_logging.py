@@ -23,8 +23,8 @@ class TestLoggerSchedule:
 
     def test_init_scheduler_con_sync_auto_false_loggea_inactivo(self, caplog):
         """Si `app.config['SYNC_AUTO']` es False, loguear 'Scheduler INACTIVO'."""
-        from app.domain import schedule as schedule_svc
         from app import create_app
+        from app.domain import schedule as schedule_svc
 
         app = create_app("testing")
         # TestingConfig tiene SYNC_AUTO=False por default.

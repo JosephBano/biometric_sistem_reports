@@ -30,21 +30,90 @@ y un esquema por tenant (datos operativos: `personas`, `asistencias`, `justifica
 tenant antes de ejecutar SQL. La autenticación se apoya en sesión Flask + bcrypt + CSRF custom, con AES-256-GCM
 para cifrar las credenciales de los dispositivos biométricos en la BD.
 
-**Estado actual (post-refactor ADR-0001, 2026-07-02)**: el monolito `app.py` (2 512 líneas)
-fue reemplazado por **Application Factory + 13 Blueprints + 20 módulos de dominio** en `app/`.
+**Estado actual (post-refactor ADR-0001)**: el monolito `app.py` (2 512 líneas)
+fue reemplazado por **Application Factory + Blueprints modulares (15 actualmente) + módulos de dominio** en `app/`.
 Ver `[[ADR-0001-modularizacion-monolito-flask]]` (status: completed) y `[[CHANGELOG]]` para el detalle
-de la migración física de los 11 módulos top-level a `app/domain/*`.
+de la migración física de los módulos top-level a `app/domain/*`.
 
 El sistema se ejecuta en producción como un solo contenedor Docker con `gunicorn --workers 1 --threads 4`
 (dado el scheduler in-process basado en `schedule` y un dict `_jobs` en memoria), expone HTTP bajo el
 prefijo `/biometrico` mediante `DispatcherMiddleware`, y consume la BD vía SQLAlchemy Core + `text()`
 parametrizado (sin ORM declarativo). El scheduler ejecuta sync nocturna completa + sync incremental cada
-N horas; el patrón es **monolito modular**, no microservicios: el `middleware.py` huérfano (FastAPI) no se
-importa desde la app y queda como deuda documentada para extraer o eliminar.
+N horas; el patrón es **monolito modular**, no microservicios: el archivo huérfano `middleware.py` (FastAPI)
+fue eliminado del repositorio durante el refactor (DoD-6).
 
 ---
 
-## Vista de capas actual (pre-refactor)
+## Vista de capas actual (monolito modular)
+
+```mermaid
+flowchart TB
+  subgraph Web["app/web/ (15 blueprints — solo routing y Jinja)"]
+    direction TB
+    AuthBP["auth_bp<br/>/login /logout /admin/switch-tenant"]
+    DashBP["dashboard_bp<br/>/ /configuracion /reportes /presencia"]
+    DevBP["devices_bp<br/>/api/dispositivos* /api/sincronizar"]
+    SchedBP["schedule_bp<br/>/api/horarios*"]
+    AttBP["attendance_bp<br/>/api/justificaciones* /api/feriados*"]
+    BreakBP["breaks_bp<br/>/api/categorizar-break"]
+    RepBP["reports_bp<br/>/api/generar-desde-db /api/reportes/* /api/backup/*"]
+    PerBP["periods_bp<br/>/periodos*"]
+    PeopleBP["people_bp<br/>/personas*"]
+    GroupsBP["groups_bp<br/>/admin/grupos*"]
+    GFBP["grupos_funcionales_bp<br/>/admin/grupos-funcionales*"]
+    HGFBP["horarios_gf_bp<br/>/admin/horarios-grupos-funcionales*"]
+    AdminBP["admin_bp<br/>/admin/tenants* /admin/usuarios* /admin/superadmin/*"]
+    AnaBP["analytics_bp<br/>/analytics* /api/analytics*"]
+    SysBP["system_bp<br/>/api/historicos/importar /admin/dispositivos"]
+  end
+
+  subgraph Domain["app/domain/ (servicios puros y orquestación)"]
+    direction TB
+    AuthSvc["auth.py<br/>hash/bcrypt, AES-GCM, login"]
+    RBACSvc["rbac.py<br/>@require_role / @require_tipo_persona"]
+    ReportsSvc["reports/<br/>PDF + análisis modularizado"]
+    DocxSvc["report_docx.py<br/>DOCX"]
+    AnaSvc["analytics.py<br/>resumen_periodo"]
+    AINarr["ai_narrative.py<br/>generar_narrativo"]
+    SchedSvc["schedule.py<br/>init_app + _jobs"]
+    AttSvc["attendance.py<br/>cálculo y motor de horarios"]
+    EmailSvc["emailer.py<br/>SMTP"]
+    GFSvc["grupos_funcionales.py<br/>horarios_grupo_funcional.py"]
+  end
+
+  subgraph Data["db/ (persistencia limpia)"]
+    QAuth[db/queries/auth]
+    QPer[db/queries/personas]
+    QAsis[db/queries/asistencias]
+    QPer2[db/queries/periodos]
+    QDisp[db/queries/dispositivos]
+    QGF[db/queries/horarios_grupo_funcional]
+    Migr[db/migrations/ Alembic]
+  end
+
+  subgraph Infra["Infraestructura y utilitarios"]
+    Ext["extensions.py<br/>CSRF · Limiter"]
+    Drivers["drivers/<br/>Strategy + Factory (ZK + Hikvision)"]
+    Tenant["tenant.py<br/>g.tenant_schema loader"]
+  end
+
+  Web --> Domain
+  Domain --> Data
+  Domain --> Drivers
+  Web --> Tenant
+  Web --> Ext
+  Tenant --> Data
+```
+
+Regla visual: las flechas **solo bajan**. Cualquier flecha hacia arriba es un ciclo y bloquea el PR (verificado en CI por AST con `tests/unit/test_arquitectura.py`).
+
+---
+
+## Histórico: Vista de capas pre-refactor (monolito legacy)
+
+> [!NOTE]
+> **Registro histórico**: Esta sección documenta el estado arquitectónico previo al refactor del ADR-0001 (julio 2026).
+> El monolito original (`app.py`, 2 512 LOC) y los módulos top-level sin empaquetar fueron reorganizados en `app/` bajo el patrón Application Factory.
 
 ```mermaid
 flowchart TB
@@ -67,7 +136,7 @@ flowchart TB
     M7[auth.py]
     M8[decorators.py]
     M9[email_utils.py]
-    MH[middleware.py<br/>FastAPI — huérfano]
+    MH[middleware.py<br/>FastAPI — huérfano (eliminado)]
   end
 
   subgraph Data["db/queries/* (limpio)"]
@@ -101,80 +170,19 @@ flowchart TB
   M3 --> Drivers
 ```
 
-### Señales del monolito
+### Señales del monolito original
 
-| Señal | Valor verificado | Implicación |
+| Señal | Valor verificado | Implicación histórica |
 |---|---|---|
-| `app.py` LOC | **2 512** | Único archivo concentra routing, auth, middleware, helpers de reporte, PDF, decoradores, jobs. |
-| Rutas (`@app.route`) | **81** | Cualquier merge toca todas. |
-| Decoradores RBAC | **61** (`@require_role` / `@require_tipo_persona`) | Política de acceso entremezclada con la lógica. |
-| `script.py` LOC | **2 281** | Motor de reporte acoplado a la app web. |
-| `middleware.py` | **206 LOC FastAPI** | Microservicio sin integrarse; deuda. |
-| `auth.py` | Imports locales de `db.queries.auth` dentro de cada función (líneas 94, 116, 131, 147, 153, 159) | Anti-patrón por miedo a ciclos. |
-| `decorators.py` | Estable (114 líneas) pero acoplado a `flask.session/g` | Listo para moverse a `app/domain/rbac.py`. |
-| `sync.py` | 305 líneas con `threading.Thread(target=_cleanup_temp_files)` + `iniciar_scheduler()` | Acoplamiento al `--workers 1`. |
-| `before_request` | `app.py:156-227` mezcla 5 responsabilidades | Acoplamiento vertical. |
-
----
-
-## Vista de capas objetivo (post-refactor)
-
-```mermaid
-flowchart TB
-  subgraph Web["app/web/ (blueprints — solo routing/Jinja)"]
-    direction TB
-    AuthBP["auth_bp<br/>/login /logout /admin/switch-tenant"]
-    DashBP["dashboard_bp<br/>/ /configuracion /reportes /presencia"]
-    DevBP["devices_bp<br/>/api/dispositivos* /api/sincronizar"]
-    SchedBP["schedule_bp<br/>/api/horarios*"]
-    AttBP["attendance_bp<br/>/api/justificaciones* /api/feriados*"]
-    BreakBP["breaks_bp<br/>/api/categorizar-break"]
-    RepBP["reports_bp<br/>/api/generar-desde-db /api/reportes/* /api/backup/*"]
-    PerBP["periods_bp<br/>/periodos*"]
-    PeopleBP["people_bp<br/>/personas*"]
-    GroupsBP["groups_bp<br/>/admin/grupos* /admin/categorias*"]
-    AdminBP["admin_bp<br/>/admin/tenants* /admin/usuarios* /admin/superadmin/*"]
-    AnaBP["analytics_bp<br/>/analytics* /api/analytics*"]
-    SysBP["system_bp<br/>/api/historicos/importar /admin/dispositivos"]
-  end
-
-  subgraph Domain["app/domain/ (servicios puros, sin Flask donde posible)"]
-    direction TB
-    AuthSvc["auth.py<br/>hash/bcrypt, AES-GCM, login"]
-    RBACSvc["rbac.py<br/>@require_role / @require_tipo_persona"]
-    ReportsSvc["reports.py<br/>PDF + análisis"]
-    DocxSvc["report_docx.py<br/>DOCX"]
-    AnaSvc["analytics.py<br/>resumen_periodo"]
-    AINarr["ai_narrative.py<br/>generar_narrativo"]
-    SchedSvc["schedule.py<br/>init_app + _jobs"]
-    AttSvc["attendance.py<br/>horarios.py motor"]
-    EmailSvc["emailer.py<br/>SMTP"]
-    TenantSvc["middleware_helpers.py<br/>tenant loader"]
-  end
-
-  subgraph Data["db/queries (intacto)"]
-    QAuth[auth]
-    QPer[personas]
-    QAsis[asistencias]
-    QPer2[periodos]
-    QDisp[dispositivos]
-  end
-
-  subgraph Infra["Infraestructura"]
-    Ext["extensions.py<br/>CSRF · Limiter"]
-    Drivers["drivers/<br/>Strategy + Factory"]
-    Tenant["tenant.py<br/>g.tenant_schema loader"]
-  end
-
-  Web --> Domain
-  Domain --> Data
-  Domain --> Drivers
-  Web --> Tenant
-  Web --> Ext
-  Tenant --> Data
-```
-
-Regla visual: las flechas **solo bajan**. Cualquier flecha hacia arriba es un ciclo y bloquea el PR.
+| `app.py` LOC | **2 512** | Único archivo concentraba routing, auth, middleware, helpers de reporte, PDF, decoradores, jobs. |
+| Rutas (`@app.route`) | **81** | Cualquier merge tocaba todas. Reorganizadas en Blueprints modulares. |
+| Decoradores RBAC | **61** (`@require_role` / `@require_tipo_persona`) | Política de acceso entremezclada con la lógica. Movida a `app/domain/rbac.py`. |
+| `script.py` LOC | **2 281** | Motor de reporte acoplado a la app web. Migrado a `app/domain/reports/`. |
+| `middleware.py` | **206 LOC FastAPI** | Microservicio sin integrarse; eliminado en Fase 4e.8 (DoD-6). |
+| `auth.py` | Imports locales de `db.queries.auth` dentro de cada función | Anti-patrón por miedo a ciclos. Resuelto en `app/domain/auth.py`. |
+| `decorators.py` | Acoplado a `flask.session/g` | Migrado a `app/domain/rbac.py`. |
+| `sync.py` | 305 líneas con scheduler in-process y limpieza de temporales | Separado en `app/domain/schedule.py` y `app/cleanup.py`. |
+| `before_request` | `app.py:156-227` mezclaba 5 responsabilidades | Desacoplado en `app/tenant.py`, `app/security_headers.py` y extensiones. |
 
 ---
 
@@ -185,114 +193,91 @@ biometric_sistem_reports/
 ├── app/                                # Paquete principal (post-refactor)
 │   ├── __init__.py                     # create_app() factory
 │   ├── config.py                       # Clases DevConfig / ProdConfig / TestConfig
-│   ├── extensions.py                   # limiter, csrf (instancia única)
-│   ├── errors.py                       # handlers 401/403/404/429/500
+│   ├── extensions.py                   # limiter, csrf (instancias sin app, init_app en factory)
+│   ├── errors.py                       # Handlers 401/403/404/429/500
+│   ├── security_headers.py             # CSP, FrameOptions, X-Content-Type-Options
+│   ├── context_processors.py           # Inyección de contexto global Jinja
+│   ├── cleanup.py                      # Thread daemon de limpieza de archivos temporales
+│   ├── tenant.py                       # Resolve y loader de g.tenant_schema
 │   │
-│   ├── domain/                         # Servicios de dominio (sin Flask donde posible)
+│   ├── domain/                         # Servicios de dominio (sin Flask donde sea posible)
 │   │   ├── __init__.py
-│   │   ├── auth.py                     # ← de auth.py (raíz) — bcrypt + AES-GCM
-│   │   ├── rbac.py                     # ← de decorators.py — @require_role / @require_tipo_persona
-│   │   ├── reports.py                  # ← de script.py — analizar_dia / generar_pdf
-│   │   ├── report_docx.py              # ← de script_docx.py
-│   │   ├── analytics.py                # ← de analytics.py (sin imports web)
-│   │   ├── ai_narrative.py             # ← de ia_report.py
-│   │   ├── schedule.py                 # ← de sync.py — scheduler + jobs (init_app)
-│   │   ├── attendance.py               # ← de horarios.py — motor .ods/.obd
-│   │   ├── emailer.py                  # ← de email_utils.py
-│   │   └── middleware_helpers.py       # ← tenant loader, request helpers
+│   │   ├── auth.py                     # Bcrypt + AES-GCM + sesión
+│   │   ├── rbac.py                     # @require_role / @require_tipo_persona
+│   │   ├── reports/                    # Motor modularizado de reportes PDF y cálculos
+│   │   ├── report_docx.py              # Generación de reportes DOCX
+│   │   ├── analytics.py                # Estadísticas y métricas
+│   │   ├── ai_narrative.py             # Narrativas con IA / reglas
+│   │   ├── schedule.py                 # Scheduler y sincronización
+│   │   ├── scheduler.py                # Persistencia de corridas
+│   │   ├── attendance.py               # Asistencias y parsing
+│   │   ├── emailer.py                  # Envío SMTP
+│   │   ├── backup.py                   # Backups portables
+│   │   ├── grupos_funcionales.py       # Lógica de grupos funcionales
+│   │   ├── horarios_grupo_funcional.py # Horarios por grupo funcional
+│   │   └── ...
 │   │
-│   ├── web/                            # Blueprints — solo routing/Jinja
-│   │   ├── __init__.py
-│   │   ├── auth_bp.py                  # /login /logout /admin/switch-tenant
-│   │   ├── dashboard_bp.py             # /  /configuracion /justificaciones-vista /reportes /descargar /presencia
-│   │   ├── devices_bp.py               # /api/dispositivos*  + /api/estado-sync /api/sincronizar /api/sync-status
-│   │   ├── schedule_bp.py              # /api/horarios* CRUD
-│   │   ├── attendance_bp.py            # /api/justificaciones* /api/feriados*
-│   │   ├── breaks_bp.py                # /api/categorizar-break
-│   │   ├── reports_bp.py               # /api/generar-desde-db /api/reportes/enviar-email /api/backup/*
-│   │   ├── periods_bp.py               # /periodos* + /api/personas-db/lista /api/personas-lista
-│   │   ├── people_bp.py                # /personas* /personas/historico
-│   │   ├── groups_bp.py                # /admin/grupos* /admin/categorias*
-│   │   ├── admin_bp.py                 # /admin/tenants* /admin/usuarios* /api/superadmin/usuarios*
-│   │   ├── analytics_bp.py             # /analytics* /api/analytics* /api/alertas/tardanzas-severas
-│   │   └── system_bp.py                # /api/historicos/importar /admin/dispositivos
-│   │
-│   └── tenant.py                       # resolve / g.tenant_schema loader
+│   └── web/                            # 15 Blueprints modulares (Routing y Jinja)
+│       ├── __init__.py                 # all_blueprints
+│       ├── auth_bp.py                  # /login /logout /admin/switch-tenant
+│       ├── dashboard_bp.py             # / /configuracion /reportes /presencia /preview-shell
+│       ├── devices_bp.py               # /api/dispositivos* + sync
+│       ├── schedule_bp.py              # /api/horarios* CRUD
+│       ├── attendance_bp.py            # /api/justificaciones* /api/feriados*
+│       ├── breaks_bp.py                # /api/categorizar-break
+│       ├── reports_bp.py               # /api/generar-desde-db /api/reportes/* /api/backup/*
+│       ├── periods_bp.py               # /periodos*
+│       ├── people_bp.py                # /personas* /personas/historico
+│       ├── groups_bp.py                # /admin/grupos*
+│       ├── grupos_funcionales_bp.py    # /admin/grupos-funcionales*
+│       ├── horarios_gf_bp.py           # /admin/horarios-grupos-funcionales*
+│       ├── admin_bp.py                 # /admin/tenants* /admin/usuarios* /api/superadmin/*
+│       ├── analytics_bp.py             # /analytics* /api/analytics*
+│       └── system_bp.py                # /api/historicos/importar /admin/dispositivos
 │
-├── db/                                 # ← SE RESPETA INTACTO
-│   ├── __init__.py                     # re-exports
-│   ├── connection.py                   # get_connection / set_thread_tenant / clear_thread_tenant
-│   ├── init.py                         # init_db (DDL idempotente + seed — NO ejecuta Alembic; ver riesgo "Migraciones duales")
-│   ├── schema.py                       # modelo ER (PostgreSQL schema por tenant)
-│   ├── migrations/                     # Alembic
-│   └── queries/                        # 15 módulos por dominio (no ciclos)
-│       ├── asistencia_periodo.py
-│       ├── asistencias.py
-│       ├── auth.py
-│       ├── breaks.py
-│       ├── dispositivos.py
-│       ├── feriados.py
-│       ├── grupos.py
-│       ├── horarios.py
-│       ├── justificaciones.py
-│       ├── periodos.py
-│       ├── personas.py
-│       ├── personas_crud.py
-│       ├── sync_log.py
-│       └── tenants.py
+├── db/                                 # Capa de persistencia PostgreSQL
+│   ├── __init__.py                     # Re-exports
+│   ├── connection.py                   # Conexiones SQLAlchemy + search_path multitenant
+│   ├── init.py                         # init_db (orquestador)
+│   ├── init_seed.py                    # Sembrado idempotente de datos y superadmin
+│   ├── tenant_provisioner.py           # Aprovisionamiento dinámico de schemas
+│   ├── schema.py                       # Definición de schemas y DDL
+│   ├── migrations/                     # Migraciones Alembic (db/migrations/versions/)
+│   └── queries/                        # Módulos de consulta SQL parametrizada por dominio
 │
-├── drivers/                            # ← SE RESPETA — Strategy + Factory
-│   ├── base.py
-│   ├── zk_driver.py
-│   ├── hikvision_driver.py
-│   └── __init__.py
+├── drivers/                            # Strategy + Factory para hardware biométrico
+│   ├── base.py                         # Interfaz Strategy y Factory get_driver()
+│   ├── zk_driver.py                    # Driver ZKTeco
+│   └── hikvision_driver.py             # Driver Hikvision ISAPI
 │
-├── templates/                          # Jinja2 (no se tocan)
-├── static/
+├── static/                             # Assets estáticos
+│   ├── tokens.css                      # Variables CSS de Design Tokens
+│   ├── style.css                       # Estilos UI Shell
+│   └── js/                             # 14 módulos JS cliente (modularizados < 800 líneas)
 │
-├── tests/                              # NUEVO — pytest
-│   ├── conftest.py
-│   ├── unit/
-│   │   ├── test_rbac.py
-│   │   ├── test_reports.py
-│   │   └── test_analytics.py
-│   └── integration/
-│       ├── test_auth_flow.py
-│       └── test_periodos_e2e.py
+├── templates/                          # Plantillas Jinja2 (UI Shell v2.0)
+├── scripts/                            # Scripts CLI (cambiar_password.py, migraciones utilitarias)
+├── tests/                              # Suite de pruebas automatizadas
+│   ├── conftest.py                     # Fixtures pytest
+│   ├── unit/                           # Pruebas unitarias de fábrica, dominio y AST
+│   └── integration/                    # Pruebas de integración con pgserver
 │
-├── docs/
-│   ├── ER.md                           # actual
-│   ├── SUPERADMIN.md                   # actual
-│   ├── README.md
-│   ├── ARQUITECTURA.md                 # ← este doc
-│   ├── API.md                          # ← inventario de las 81 rutas
-│   ├── AUTENTICACION.md                # ← flujo auth completo
-│   └── adr/
-│       ├── README.md
-│       ├── 0000-use-markdown-for-adrs.md
-│       └── 0001-modularizacion-monolito-flask.md
+├── docs/                               # Documentación técnica
+│   ├── adr/                            # Decisiones de arquitectura (ADR-0000 a ADR-0004)
+│   ├── ARQUITECTURA.md                 # Este documento
+│   ├── CHANGELOG.md                    # Registro de cambios
+│   ├── DESIGN_SYSTEM_TOKENS.md         # Tokens y guía de componentes
+│   ├── OPERATIONS.md                   # Runbook de operaciones y despliegue
+│   ├── tokens.json                     # Definición fuente de Design Tokens
+│   └── ...
 │
-├── wsgi.py                             # NUEVO — entrypoint para gunicorn: `wsgi:app`
-├── pyproject.toml                      # opcional (ruff/black config)
-├── alembic.ini
-├── docker-compose.yml
-├── Dockerfile                          # gunicorn wsgi:app (no app:app)
-├── .env.example
-├── requirements.txt
-└── README.md
+├── wsgi.py                             # Entrypoint canónico WSGI: `wsgi:app`
+├── Dockerfile                          # Contenedor de producción
+├── docker-compose.yml                  # Orquestación de app y base de datos
+├── pyproject.toml                      # Configuración de linting (Ruff) y testing
+├── requirements.txt                    # Dependencias de producción
+└── requirements-dev.txt                # Dependencias de desarrollo
 
-# Estado actual (pre-refactor) — se conserva durante la transición:
-├── app.py                              # shim: `from app import create_app; app = create_app()`
-├── auth.py                             # se moverá a app/domain/auth.py
-├── decorators.py                       # se moverá a app/domain/rbac.py
-├── script.py                           # se moverá a app/domain/reports.py (motor) + app/web/reports_bp.py
-├── script_docx.py                      # se moverá a app/domain/report_docx.py
-├── analytics.py                        # se moverá a app/domain/analytics.py
-├── ia_report.py                        # se moverá a app/domain/ai_narrative.py
-├── sync.py                             # se moverá a app/domain/schedule.py
-├── horarios.py                         # se moverá a app/domain/attendance.py
-├── email_utils.py                      # se moverá a app/domain/emailer.py
-└── middleware.py                       # FastAPI — extraer o eliminar
 ```
 
 ### Notas por paquete
@@ -310,8 +295,7 @@ biometric_sistem_reports/
 
 ## Mapa de Blueprints
 
-Las 81 rutas se redistribuyen en 13 Blueprints según dominio. La asignación completa ruta-por-ruta está
-en [[API]]. Aquí se resume por Blueprint.
+Las rutas se distribuyen modularmente en 15 Blueprints según su dominio funcional (13 Blueprints introducidos en el refactor ADR-0001, más 2 Blueprints incorporados en el ADR-0003 para grupos funcionales y horarios).
 
 | # | Blueprint | Dominio | Rutas asignadas | Endpoints HTML | Endpoints JSON | Prefijo |
 |---|---|---|---|---|---|---|
@@ -328,6 +312,8 @@ en [[API]]. Aquí se resume por Blueprint.
 | 11 | `admin_bp` | Administración cross-tenant (superadmin) | 8 | 3 (`/admin/tenants*`, `/admin/dispositivos`, `/admin/usuarios*`, `/admin/superadmin/usuarios`) | 5 (`/api/superadmin/usuarios*`) | `/admin/tenants*`, `/admin/usuarios*`, `/admin/superadmin/*` |
 | 12 | `analytics_bp` | Analytics e IA | 4 | 2 (`/analytics`, `/analytics/periodo/<id>`) | 2 (`/api/analytics*`, `/api/alertas/tardanzas-severas`) | `/analytics*` |
 | 13 | `system_bp` | Ingesta histórica, descargas | 5 | 1 (`/admin/dispositivos`) | 4 (`/api/historicos/importar` + reportes varios) | misceláneo |
+| 14 | `grupos_funcionales_bp` | Grupos funcionales (ADR-0003) | Variable | 2 (`/admin/grupos-funcionales*`) | APIs de CRUD y asignación | `/admin/grupos-funcionales*`, `/api/grupos-funcionales*` |
+| 15 | `horarios_gf_bp` | Horarios por grupo funcional (ADR-0003) | Variable | 1 (`/admin/horarios-grupos-funcionales*`) | APIs de turnos y overrides | `/admin/horarios-grupos-funcionales*`, `/api/horarios-grupos-funcionales*` |
 
 > **Nota**: la separación entre `admin_bp` (HTML) y `system_bp` (varios) puede reasignarse durante la fase 3 si el @implementer lo considera más limpio. Ver [[API]] para el inventario exacto ruta por ruta.
 
@@ -944,7 +930,7 @@ actualizados en cada sub-fase.
 | **Multi-tenant `g.tenant_schema`** | El loader de tenant (`app/tenant.py`) se importa en factory y se registra como `before_request` **antes** de cualquier blueprint. Los blueprints **leen** `g.tenant_schema`; no lo setean. Patrón intacto. |
 | **Scheduler in-process + 1 worker gunicorn** | Se **mantiene** `--workers 1 --threads 4`. Migrar a Celery es un proyecto aparte (Fase 6). El scheduler se inicializa desde `create_app()` y se documenta como "no escalar workers hasta desacoplar". |
 | **`app.py` shim (compat)** | Se mantiene durante 1 release. `Dockerfile` se actualiza a `wsgi:app` al cierre de Fase 3. |
-| **`middleware.py` huérfano FastAPI** | **Eliminarlo** del repo o moverlo a `services/biometric_proxy/` separado con su propio `Dockerfile`. Decisión documentada en ADR. Ver también [[ADR-0001-modularizacion-monolito-flask]] (P2). |
+| **`middleware.py` huérfano FastAPI** | **Eliminado** del repositorio en Fase 4e.8 (DoD-6). Ver [[ADR-0001-modularizacion-monolito-flask]]. |
 | **Templates Jinja con `url_for('login')`** | Después de mover a Blueprints, `url_for('login')` sigue funcionando porque Flask resuelve por nombre de endpoint, no por path. **Verificar**: `url_for('admin_grupos')` antes era inferido del nombre de función; en Blueprint se vuelve `admin_bp.admin_grupos`. Puede requerir 1 parche de búsqueda/reemplazo. |
 | **Alembic** | Los archivos en `db/migrations/versions/` **no se mueven**. La conexión sigue siendo `db.connection.get_connection()` que ya aplica `SET search_path`. |
 | **Migraciones duales (init_db vs Alembic)** | `init_db()` ejecuta DDL en cada arranque mientras Alembic (0001-0008) no se ejecuta en el deploy: dos fuentes de verdad que van a divergir. Se consolida en **Fase −1** (Alembic única fuente de verdad, `init_db` solo seed, `alembic upgrade head` como paso de deploy). |
@@ -1015,13 +1001,13 @@ biometric_sistem_reports/
 │   │   ├── system.py                  # funciones misceláneas
 │   │   ├── analytics.py               # load_data, calcular_risk_score, analizar, etc.
 │   │   ├── attendance.py              # parsear_csv, parsear_obd, get_info_dia
-│   │   ├── reports.py                 # DEFAULT_CONFIG, deduplicar, analizar_dia, generar_pdf
+│   │   ├── reports/                   # DEFAULT_CONFIG, deduplicar, analizar_dia, generar_pdf (modularizado)
 │   │   ├── report_docx.py             # generar_docx, generar_docx_persona
 │   │   ├── ai_narrative.py            # generar_narrativo (DeepSeek + fallback regla-base)
 │   │   ├── schedule.py                # init_scheduler, sincronizar, get_job_status
 │   │   ├── scheduler.py               # registrar_corrida, listar_ultimas_corridas, proxima_corrida
 │   │   └── backup.py                  # generar_dump, purgar_backups_viejos
-│   └── web/                           # 13 Blueprints por dominio
+│   └── web/                           # 15 Blueprints por dominio
 │       ├── auth_bp.py                 # /login, /logout, /admin/switch-tenant
 │       ├── dashboard_bp.py            # /, /configuracion
 │       ├── devices_bp.py              # /admin/dispositivos, /api/dispositivos, /api/sync/...
@@ -1034,7 +1020,9 @@ biometric_sistem_reports/
 │       ├── groups_bp.py               # /admin/grupos, /admin/categorias
 │       ├── admin_bp.py                # /admin/tenants, /admin/usuarios, /admin/superadmin/...
 │       ├── analytics_bp.py            # /analytics, /api/analytics, /api/analytics/narrativo
-│       └── system_bp.py               # /api/scheduler/estado, /api/insertar-asistencias
+│       ├── system_bp.py               # /api/scheduler/estado, /api/insertar-asistencias
+│       ├── grupos_funcionales_bp.py   # /admin/grupos-funcionales*
+│       └── horarios_gf_bp.py          # /admin/horarios-grupos-funcionales*
 ├── db/                                # capa de datos (intacta desde el inicio)
 │   ├── __init__.py                    # re-exports de todas las funciones
 │   ├── connection.py                  # get_connection, set_thread_tenant, clear_thread_tenant
@@ -1046,7 +1034,7 @@ biometric_sistem_reports/
 └── tests/
     ├── conftest.py                    # fixtures base (app, client, admin_session)
     ├── unit/                          # 192 tests, cobertura rápida
-    │   ├── test_factory.py            # 13 blueprints, 82 rutas, headers de seguridad
+    │   ├── test_factory.py            # 15 blueprints, headers de seguridad
     │   ├── test_arquitectura.py       # regla de capas (AST), no módulos top-level
     │   ├── test_arquitectura.py       # DoD-7: no quedan .py de negocio en raíz
     │   ├── test_auth.py               # hash_password, verificar_login, csrf, etc.

@@ -14,7 +14,7 @@
                 if (!sel) return;
                 sel.innerHTML = '<option value="">Seleccione…</option>' +
                     (data.grupos || []).map(g =>
-                        `<option value="${g.id}">${g.nombre || g.codigo}</option>`
+                        `<option value="${esc(g.id)}">${esc(g.nombre || g.codigo)}</option>`
                     ).join('');
             })
             .catch(() => {});
@@ -37,13 +37,13 @@
         }
         tbody.innerHTML = defaults.map(d => `
             <tr>
-                <td>${d.grupo_funcional_nombre || d.codigo_gf || '—'}</td>
-                <td>${d.nombre_plantilla || d.plantilla_id || '—'}</td>
-                <td>${d.prioridad}</td>
-                <td>${d.fecha_inicio || '—'}</td>
-                <td>${d.fecha_fin || '—'}</td>
+                <td>${esc(d.grupo_funcional_nombre || d.codigo_gf || '—')}</td>
+                <td>${esc(d.nombre_plantilla || d.plantilla_id || '—')}</td>
+                <td>${esc(d.prioridad)}</td>
+                <td>${esc(d.fecha_inicio || '—')}</td>
+                <td>${esc(d.fecha_fin || '—')}</td>
                 <td><button class="btn btn-sm btn-outline-secondary"
-                            onclick="cerrarDefault('${d.id}')">Cerrar</button></td>
+                            onclick="cerrarDefault('${esc(d.id)}')">Cerrar</button></td>
             </tr>
         `).join('');
     }

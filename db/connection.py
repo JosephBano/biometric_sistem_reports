@@ -7,6 +7,7 @@ Fase 2+: leerá g.tenant_schema del contexto Flask.
 import os
 import threading
 from contextlib import contextmanager
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 

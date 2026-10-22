@@ -4,7 +4,9 @@ Cruza el periodo, las personas de ese periodo, feriados, horarios y marcaciones.
 """
 
 from datetime import date, timedelta
+
 from sqlalchemy import text
+
 from db.connection import get_connection
 from db.queries.feriados import get_feriados_set
 from db.queries.horarios import get_horario_en_fecha
@@ -14,7 +16,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
     """
     Calcula la asistencia de todas las personas que comparten el mismo nombre
     y rango de fechas que el periodo_id proporcionado.
-    
+
     Retorna una lista con el detalle y resúmenes de cada persona.
     """
     with get_connection() as conn:
@@ -37,10 +39,10 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
         nombre = p_data["nombre"]
         fecha_inicio = p_data["fecha_inicio"]
         fecha_fin = p_data["fecha_fin"] or date.today() # fallback si es indefinido
-        
+
         # 2. Obtener feriados dentro del rango
         feriados = get_feriados_set(fecha_inicio, fecha_fin)
-        
+
         # 3. Obtener todas las personas en este determinado período (mismo nombre y fechas)
         # DISTINCT ON (p.id) evita duplicados cuando la misma persona tiene
         # múltiples filas en periodos_vigencia para el mismo período.
@@ -64,13 +66,13 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 "fecha_fin": p_data["fecha_fin"]
             }
         ).fetchall()
-        
+
         resultado = []
-        
+
         for p in personas:
-            p_dict = dict(p._mapping) if hasattr(p, "_mapping") else dict(zip(['persona_id', 'nombre', 'identificacion', 'grupo', 'categoria'], p))
+            p_dict = dict(p._mapping) if hasattr(p, "_mapping") else dict(zip(['persona_id', 'nombre', 'identificacion', 'grupo', 'categoria'], p, strict=True))
             persona_id = str(p_dict["persona_id"])
-            
+
             # 4. Obtener todas las asistencias de esta persona en el rango
             marcaciones = conn.execute(
                 text("""
@@ -83,7 +85,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 """),
                 {"persona_id": persona_id, "inicio": fecha_inicio, "fin": fecha_fin}
             ).fetchall()
-            
+
             # Agrupar marcaciones por fecha
             asist_by_date = {}
             for m in marcaciones:
@@ -92,12 +94,12 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 if d not in asist_by_date:
                     asist_by_date[d] = []
                 asist_by_date[d].append(m_data)
-                
+
             dias_detalle = []
             presentes = 0
             ausentes = 0
             dias_programados = 0
-            
+
             current_date = fecha_inicio
             while current_date <= fecha_fin:
                 status = "no_programado"
@@ -106,7 +108,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 entrada_esperada = None
                 salida_esperada = None
                 tardanza = False
-                
+
                 # Check holiday
                 if current_date in feriados:
                     status = "feriado"
@@ -115,17 +117,17 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                     horario = get_horario_en_fecha(conn, persona_id, current_date,
                                                    nombre=p_dict.get("nombre"))
                     current_weekday = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"][current_date.weekday()]
-                    
+
                     if horario and horario.get(current_weekday):
                         dias_programados += 1
                         entrada_esperada = horario[current_weekday]
                         salida_esperada = horario.get(f"{current_weekday}_salida")
-                        
+
                         marcs = asist_by_date.get(current_date, [])
                         if marcs:
                             presentes += 1
                             status = "presente"
-                            
+
                             # Find first entry
                             entries = [m for m in marcs if m["tipo"] in ("entrada", "0")]
                             if entries:
@@ -133,7 +135,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                                 if entrada_esperada and entrada_marcada > entrada_esperada:
                                     status = "presente_tarde"
                                     tardanza = True
-                                    
+
                             # Find last exit
                             exits = [m for m in marcs if m["tipo"] in ("salida", "1")]
                             if exits:
@@ -141,7 +143,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                         else:
                             ausentes += 1
                             status = "ausente"
-                            
+
                 dias_detalle.append({
                     "fecha": current_date.strftime("%Y-%m-%d"),
                     "dia_semana": ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"][current_date.weekday()],
@@ -153,7 +155,7 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                     "tardanza": tardanza
                 })
                 current_date += timedelta(days=1)
-                
+
             # Calcular % y semáforo
             sin_horario = dias_programados == 0
             if sin_horario:
@@ -184,5 +186,5 @@ def calcular_asistencia_periodo(periodo_id: str) -> list[dict]:
                 "sin_horario": sin_horario,
             }
             resultado.append(p_dict)
-            
+
         return resultado
