@@ -110,8 +110,9 @@ def generar_desde_db():
         })
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error generando reporte")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.post("/api/reportes/enviar-email")
@@ -178,10 +179,11 @@ def enviar_reporte_email():
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
         return jsonify({"error": str(e)}), 400
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error preparando descarga de reporte")
         if os.path.exists(pdf_path):
             os.remove(pdf_path)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 
@@ -325,9 +327,7 @@ def descargar_backup_db():
                 ip=request.remote_addr,
             )
         except Exception:  # noqa: BLE001
-            current_app.logger.warning(
-                "No se pudo registrar backup en audit_log", exc_info=True,
-            )
+            current_app.logger.exception("No se pudo registrar backup en audit_log")
 
         return send_file(
             str(ruta),
@@ -432,7 +432,8 @@ def alertas_tardanzas_severas():
         try:
             from app.domain.people import listar_personas
             personas_db = listar_personas(activo=None) or []
-        except Exception:
+        except Exception:  # noqa: BLE001
+            current_app.logger.exception("No se pudieron cargar personas para alertas")
             personas_db = []
 
         map_nom_uuid = {p["nombre"].strip().lower(): p["id"] for p in personas_db if p.get("nombre")}
@@ -460,8 +461,9 @@ def alertas_tardanzas_severas():
                     "conteo": conteo,
                 })
         return jsonify({"alertas": alertas})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error generando alertas de reporte")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 # ── Analytics (Fase 5) — endpoint JSON ──────────────────────────────────

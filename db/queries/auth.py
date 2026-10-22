@@ -9,6 +9,7 @@ Operan sobre:
 """
 
 import json
+import logging
 
 from sqlalchemy import text
 
@@ -290,7 +291,10 @@ def get_device_password_enc(schema: str = None) -> str | None:
                 """)
             ).fetchone()
         return row[0] if row else None
-    except Exception:
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).exception(
+            "No se pudo leer la contraseña cifrada del dispositivo"
+        )
         return None
 
 

@@ -34,7 +34,8 @@ class ZKDriver(BiometricDriver):
         if pwd_enc:
             try:
                 self.password = int(decrypt_device_password(pwd_enc))
-            except Exception:
+            except Exception:  # noqa: BLE001
+                log.exception("No se pudo descifrar la contraseña del dispositivo ZK")
                 self.password = int(os.getenv("ZK_PASSWORD", "0"))
         else:
             self.password = int(os.getenv("ZK_PASSWORD", "0"))
@@ -66,9 +67,8 @@ class ZKDriver(BiometricDriver):
             conn = zk.connect()
             conn.disconnect()
             return True
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning("test_conexion %s:%s falló: %s", self.ip, self.port, e)
+        except Exception:  # noqa: BLE001
+            log.exception("test_conexion %s:%s falló", self.ip, self.port)
             return False
 
     def get_usuarios(self) -> list[dict]:
@@ -88,8 +88,8 @@ class ZKDriver(BiometricDriver):
             if conn:
                 try:
                     conn.disconnect()
-                except Exception as e:
-                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
+                except Exception:  # noqa: BLE001
+                    log.exception("Error al desconectar de %s:%s", self.ip, self.port)
 
     def get_asistencias(self, desde: datetime = None) -> list[dict]:
         zk = self._make_zk()
@@ -107,7 +107,7 @@ class ZKDriver(BiometricDriver):
                 if not isinstance(ts, datetime):
                     try:
                         ts = datetime.combine(ts, dt_time.min)
-                    except Exception:
+                    except (TypeError, ValueError):
                         continue
                 if ts.tzinfo is not None:
                     ts = ts.replace(tzinfo=None)
@@ -136,8 +136,8 @@ class ZKDriver(BiometricDriver):
             if conn:
                 try:
                     conn.disconnect()
-                except Exception as e:
-                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
+                except Exception:  # noqa: BLE001
+                    log.exception("Error al desconectar de %s:%s", self.ip, self.port)
 
     def clear_asistencias(self) -> int:
         zk = self._make_zk()
@@ -151,8 +151,8 @@ class ZKDriver(BiometricDriver):
             if conn:
                 try:
                     conn.disconnect()
-                except Exception as e:
-                    log.debug("Error al desconectar de %s:%s: %s", self.ip, self.port, e)
+                except Exception:  # noqa: BLE001
+                    log.exception("Error al desconectar de %s:%s", self.ip, self.port)
 
     def get_capacidad(self) -> dict:
         total = 0
@@ -162,8 +162,8 @@ class ZKDriver(BiometricDriver):
             conn = zk.connect()
             total = len(conn.get_attendance())
             conn.disconnect()
-        except Exception as e:
-            log.warning("get_capacidad %s:%s falló: %s", self.ip, self.port, e)
+        except Exception:  # noqa: BLE001
+            log.exception("get_capacidad %s:%s falló", self.ip, self.port)
         return {
             "total_registros": total,
             "capacidad_max": cap_max

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from flask import (
     Blueprint,
+    current_app,
     flash,
     jsonify,
     redirect,
@@ -121,8 +122,9 @@ def crear():
             id_usuario_zk=request.form.get("id_usuario_zk") or None,
         )
         flash("Persona creada exitosamente", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error al crear persona: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando persona")
+        flash("Error al crear persona", "danger")
     return redirect(url_for("people.lista"))
 
 
@@ -147,10 +149,11 @@ def editar(id: str):
         if is_ajax:
             return jsonify({"ok": True, "mensaje": "Persona actualizada exitosamente", "persona_id": id})
         flash("Persona actualizada", "success")
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando persona")
         if is_ajax:
-            return jsonify({"ok": False, "error": str(e)}), 400
-        flash(f"Error al actualizar persona: {e}", "danger")
+            return jsonify({"ok": False, "error": "Error interno del servidor"}), 500
+        flash("Error al actualizar persona", "danger")
     return redirect(url_for("people.lista"))
 
 
@@ -251,10 +254,11 @@ def historico():
                                 "origen"
                             )
                         except Exception:  # noqa: BLE001
+                            current_app.logger.exception("No se pudo resolver origen de horario de período")
                             periodo["horario_origen"] = None
             except Exception:  # noqa: BLE001
                 # Enriquecimiento opcional; nunca debe romper la vista.
-                pass
+                current_app.logger.exception("No se pudo enriquecer el historial de la persona")
 
     return render_template(
         "personas/historico.html",

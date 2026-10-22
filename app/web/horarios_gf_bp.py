@@ -16,7 +16,7 @@ import os
 import tempfile
 from datetime import date
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
 from app.domain.grupos_funcionales import (
@@ -113,8 +113,9 @@ def crear_grupo():
                 prioridad=0,
             )
         flash(f"Grupo '{nombre}' creado exitosamente", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error al crear grupo: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando grupo funcional y su horario")
+        flash("Error al crear grupo funcional", "danger")
 
     return redirect(url_for("horarios_gf.vista_horarios_gf"))
 
@@ -138,8 +139,9 @@ def asignar_default(id: str):
             prioridad=prioridad,
         )
         flash("Horario asignado al grupo", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error asignando horario default al grupo")
+        flash("Error al asignar el horario", "danger")
     return redirect(url_for("horarios_gf.vista_horarios_gf"))
 
 
@@ -163,8 +165,9 @@ def agregar_personas_manual(id: str):
             es_principal=True,
         )
         flash(f"Se agregaron {count} personas al grupo correctamente", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error al asignar personas: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error asignando personas al grupo funcional")
+        flash("Error al asignar personas al grupo", "danger")
 
     return redirect(url_for("horarios_gf.vista_horarios_gf"))
 
@@ -203,8 +206,9 @@ def crear_persona_en_grupo(id: str):
                 es_principal=True,
             )
             flash(f"Persona '{nombre}' creada y asignada al grupo", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error al crear persona: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando y asignando persona al grupo funcional")
+        flash("Error al crear persona", "danger")
 
     return redirect(url_for("horarios_gf.vista_horarios_gf"))
 
@@ -245,8 +249,9 @@ def importar_csv_personas_gf(id: str):
                 flash(f"Advertencias ({len(res['errores'])}): " + "; ".join(res["errores"][:3]), "warning")
         else:
             flash(f"Error en CSV: {res.get('error')}", "danger")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error procesando CSV: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error procesando CSV de grupo funcional")
+        flash("Error procesando CSV", "danger")
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -269,6 +274,7 @@ def cerrar_persona_gf(id: str):
             fecha_fin=date.today(),
         )
         flash("Persona desvinculada del grupo", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error cerrando vínculo de persona y grupo funcional")
+        flash("Error al desvincular persona del grupo", "danger")
     return redirect(url_for("horarios_gf.vista_horarios_gf"))

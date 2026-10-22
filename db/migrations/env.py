@@ -8,12 +8,15 @@ Alembic env.py — configurado para schema-por-tenant.
   o directamente del entorno del proceso).
 """
 
+import logging
 import os
 import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool, text
+
+log = logging.getLogger(__name__)
 
 # Asegurar que el raíz del proyecto está en el path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
@@ -55,8 +58,9 @@ def _get_tenant_slugs(connection) -> list[str]:
             text("SELECT slug FROM public.tenants WHERE activo = true ORDER BY slug")
         ).fetchall()
         slugs = [row[0] for row in rows]
-    except Exception:
-        slugs = []
+    except Exception:  # noqa: BLE001
+        log.exception("No se pudieron consultar tenants para las migraciones")
+        raise
     return slugs or [os.environ.get("TENANT_DEFAULT", "istpet")]
 
 

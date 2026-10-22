@@ -26,6 +26,7 @@ Reglas arquitectónicas (no negociables):
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from sqlalchemy import text
@@ -730,6 +731,8 @@ def procesar_csv_personas_grupo_funcional(
             with open(filepath, newline="", encoding="utf-8-sig") as f:
                 reader = _csv.DictReader(f)
                 for idx, row in enumerate(reader, start=1):
+                    contadores_antes = (procesadas, nuevas, asociadas)
+                    savepoint = conn.begin_nested()
                     try:
                         nombre_p = str(row.get("nombre", "") or row.get("Nombre", "")).strip()
                         identif = str(row.get("identificacion", "") or row.get("Identificacion", "") or row.get("cedula", "") or row.get("Cedula", "")).strip()
@@ -738,6 +741,7 @@ def procesar_csv_personas_grupo_funcional(
                         telefono = str(row.get("telefono", "") or row.get("celular", "")).strip() or None
 
                         if not nombre_p and not identif:
+                            savepoint.commit()
                             continue
 
                         persona_id = None
@@ -811,10 +815,18 @@ def procesar_csv_personas_grupo_funcional(
                             {"pid": persona_id, "gfid": grupo_funcional_id, "fi": fecha_inicio},
                         )
                         procesadas += 1
-                    except Exception as ex:
-                        errores.append(f"Fila {idx}: {ex}")
-        except Exception as e:
-            return {"exito": False, "error": f"Error al leer CSV: {e}"}
+                    except Exception:  # noqa: BLE001
+                        savepoint.rollback()
+                        procesadas, nuevas, asociadas = contadores_antes
+                        logging.getLogger(__name__).exception(
+                            "Error procesando fila %s del CSV de grupo funcional", idx
+                        )
+                        errores.append(f"Fila {idx}: error de datos")
+                    else:
+                        savepoint.commit()
+        except Exception:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Error leyendo CSV de grupo funcional")
+            return {"exito": False, "error": "Error leyendo el archivo CSV"}
 
     return {
         "exito": True,

@@ -4,12 +4,15 @@ Carga de archivos, filtrado, deduplicación y resolución canónica (`app.domain
 from __future__ import annotations
 
 import csv
+import logging
 import os
 from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
 from app.domain.reports.models import DEFAULT_CONFIG
+
+log = logging.getLogger(__name__)
 
 
 def cargar_archivo(ruta: str) -> list[dict[str, Any]]:
@@ -219,6 +222,7 @@ def enriquecer_analisis_con_origen(
                 if not dia.get("plantilla_id") and resuelto.get("plantilla_id"):
                     dia["plantilla_id"] = resuelto["plantilla_id"]
             except Exception:  # noqa: BLE001
+                log.exception("No se pudo resolver el origen de horario para un día del reporte")
                 dia["horario_origen"] = None
 
     return analisis

@@ -18,6 +18,7 @@ Políticas de desempate aceptadas (`horario_desempate`):
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from sqlalchemy import text
@@ -120,7 +121,9 @@ def set_horario_por_grupo_flag(
         )
     except Exception:  # noqa: BLE001
         # No fallar la operación por un error de auditoría.
-        pass
+        logging.getLogger(__name__).exception(
+            "No se pudo registrar auditoría del feature flag horario_por_grupo"
+        )
 
     return actualizado or {"configuracion": nueva_config}
 

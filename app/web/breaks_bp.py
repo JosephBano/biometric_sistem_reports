@@ -6,7 +6,7 @@ Rutas (1):
 """
 from __future__ import annotations
 
-from flask import Blueprint, g, jsonify, request, session
+from flask import Blueprint, current_app, g, jsonify, request, session
 
 from app.domain.breaks import insertar_break_categorizado
 from app.domain.rbac import require_role
@@ -35,5 +35,6 @@ def categorizar_break():
     try:
         insertar_break_categorizado(id_usuario, fecha, h_ini, h_fin, cat, motivo, aprobado)
         return jsonify({"success": True})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error categorizando break")
+        return jsonify({"error": "Error interno del servidor"}), 500

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from flask import Blueprint, g, jsonify, render_template, request
+from flask import Blueprint, current_app, g, jsonify, render_template, request
 
 from app.domain import (
     asignacion_masiva as masiva_svc,
@@ -69,7 +69,7 @@ def _audit(accion: str, entidad: str, entidad_id: str | None,
         )
     except Exception:  # noqa: BLE001
         # No fallar el request por error de auditoría.
-        pass
+        current_app.logger.exception("No se pudo registrar auditoría de grupo funcional")
 
 
 def _parse_date_or_today(value, field_name):

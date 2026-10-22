@@ -76,7 +76,8 @@ def presencia():
     try:
         registros = consultar_asistencias(fecha_inicio, fecha_fin) or []
     except Exception:  # noqa: BLE001
-        registros = []
+        current_app.logger.exception("No se pudieron consultar asistencias para presencia")
+        raise
 
     if request.args.get("export") == "csv":
         buf = io.StringIO()

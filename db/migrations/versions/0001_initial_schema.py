@@ -8,6 +8,7 @@ Aplica el schema completo de la Fase 1.
 Es idempotente: usa CREATE TABLE IF NOT EXISTS.
 """
 
+import logging
 import os
 from collections.abc import Sequence
 
@@ -15,6 +16,8 @@ from alembic import op
 from sqlalchemy import text
 
 from db.schema import PUBLIC_DDL, get_tenant_ddl
+
+log = logging.getLogger(__name__)
 
 revision: str = "0001"
 down_revision: str | None = None
@@ -34,8 +37,9 @@ def upgrade() -> None:
             text("SELECT slug FROM public.tenants WHERE activo = true ORDER BY slug")
         ).fetchall()
         slugs = [r[0] for r in rows] if rows else [os.environ.get("TENANT_DEFAULT", "istpet")]
-    except Exception:
-        slugs = [os.environ.get("TENANT_DEFAULT", "istpet")]
+    except Exception:  # noqa: BLE001
+        log.exception("No se pudieron consultar tenants durante la migración inicial")
+        raise
 
     for slug in slugs:
         if not all(c.isalnum() or c == "_" for c in slug):

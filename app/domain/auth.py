@@ -55,7 +55,7 @@ def verificar_password(plain: str, hashed: str) -> bool:
     """Verifica si el texto plano coincide con el hash bcrypt."""
     try:
         return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:  # noqa: BLE001
+    except (TypeError, ValueError):
         return False
 
 

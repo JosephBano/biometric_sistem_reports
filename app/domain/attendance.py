@@ -80,8 +80,8 @@ def parsear_obd(ruta: str) -> list[dict]:
 
     try:
         doc = load(ruta)
-    except Exception as e:
-        raise RuntimeError(f"No se pudo leer el archivo de horarios: {e}") from e
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError("No se pudo leer el archivo de horarios") from e
 
     tablas = doc.spreadsheet.getElementsByType(Table)
     if not tablas:
@@ -368,8 +368,8 @@ def parsear_csv(ruta: str) -> list[dict]:
 
     except RuntimeError:
         raise
-    except Exception as e:
-        raise RuntimeError(f"No se pudo leer el CSV de horarios: {e}") from e
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError("No se pudo leer el CSV de horarios") from e
 
     if not horarios:
         raise RuntimeError("El CSV no contiene filas de datos válidas.")

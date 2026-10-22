@@ -238,11 +238,13 @@ def sincronizar_con_reintento(
             )
             time_module.sleep(espera)
         except Exception as e:  # noqa: BLE001
+            log.exception("Falló sincronización del dispositivo %s", dispositivo_id)
+            detalle_redactado = _redactar_error(str(e))
             db_module.actualizar_estado_sync_ui(
-                dispositivo_id, "error", 0, 0, str(e),
+                dispositivo_id, "error", 0, 0, detalle_redactado,
             )
             db_module.registrar_sync(
-                datetime.min, datetime.max, 0, 0, False, str(e), 0,
+                datetime.min, datetime.max, 0, 0, False, detalle_redactado, 0,
                 dispositivo_id=dispositivo_id,
             )
             return 0, 0
@@ -290,8 +292,10 @@ def sincronizar(
                 tot_descargados += descargados
                 tot_insertados += insertados
             except Exception:  # noqa: BLE001
-                # Los errores ya los manejó sincronizar_con_reintento
-                pass
+                log.exception(
+                    "No se pudo obtener el resultado de sincronización del dispositivo %s",
+                    futures[future]["id"],
+                )
 
             # Informar progreso para compatibilidad Legacy
             _set_job(
@@ -370,6 +374,7 @@ def _get_tenant_slugs() -> list[str]:
             ).fetchall()
             return [r[0] for r in rows]
     except Exception:  # noqa: BLE001
+        log.exception("No se pudieron consultar tenants activos para el scheduler")
         return [os.getenv("TENANT_DEFAULT", "istpet")]
 
 

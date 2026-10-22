@@ -1,8 +1,11 @@
+import logging
 from datetime import datetime
 
 import requests
 
 from drivers.base import BiometricDriver
+
+log = logging.getLogger(__name__)
 
 
 class HikvisionDriver(BiometricDriver):
@@ -31,7 +34,8 @@ class HikvisionDriver(BiometricDriver):
         if pwd_enc:
             try:
                 self.password = decrypt_device_password(pwd_enc)
-            except Exception:
+            except Exception:  # noqa: BLE001
+                log.exception("No se pudo descifrar la contraseña del dispositivo Hikvision")
                 self.password = ""
         else:
             self.password = ""
@@ -47,7 +51,8 @@ class HikvisionDriver(BiometricDriver):
             resp = requests.get(url, auth=self._get_auth(), timeout=5)
             # 200 OK y aveces 401 si falla pero la IP si dio ping (aunque ISAPI restringe)
             return resp.status_code == 200
-        except Exception:
+        except Exception:  # noqa: BLE001
+            log.exception("Falló la prueba de conexión Hikvision a %s", self.base_url)
             return False
 
     def get_usuarios(self) -> list[dict]:
@@ -73,8 +78,8 @@ class HikvisionDriver(BiometricDriver):
                         "nombre": u.get("name", ""),
                         "privilegio": 0
                     })
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            log.exception("No se pudieron leer usuarios Hikvision desde %s", self.base_url)
         return res_usuarios
 
     def get_asistencias(self, desde: datetime = None) -> list[dict]:
@@ -122,8 +127,8 @@ class HikvisionDriver(BiometricDriver):
                         "tipo": "Entrada", # En Hikvision la dirección a veces viene en otro campo
                         "fuente": "hikvision"
                     })
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            log.exception("No se pudieron leer asistencias Hikvision desde %s", self.base_url)
 
         return registros
 

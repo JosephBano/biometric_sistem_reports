@@ -28,6 +28,7 @@ Auditoría:
 """
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from sqlalchemy import text
@@ -258,7 +259,9 @@ def aplicar_grupo_funcional_masivo(
         )
     except Exception:  # noqa: BLE001
         # No fallar la operación por un error de auditoría.
-        pass
+        logging.getLogger(__name__).exception(
+            "No se pudo registrar auditoría de asignación masiva"
+        )
 
     return {
         "matched_count": len(persona_ids),

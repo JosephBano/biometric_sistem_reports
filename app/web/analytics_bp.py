@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request
 
 from app.domain import ai_narrative
 from app.domain import analytics as analytics_svc
@@ -74,8 +74,9 @@ def api_narrativo():
     try:
         texto = ai_narrative.generar_narrativo(hallazgos)
         return jsonify({"narrativo": texto})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error generando narrativo de analytics")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 # ── Analitica entradas/salidas por persona ──────────────────────────────────────

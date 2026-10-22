@@ -102,8 +102,9 @@ def insertar_break_categorizado(
         t1 = datetime.strptime(hora_inicio, "%H:%M")
         t2 = datetime.strptime(hora_fin, "%H:%M")
         duracion = int((t2 - t1).total_seconds() / 60)
-    except Exception:
-        pass
+    except (TypeError, ValueError):
+        # Una hora ausente o malformada no impide guardar el break.
+        duracion = None
 
     with get_connection() as conn:
         dispositivo_id = _get_dispositivo_id(conn)

@@ -52,6 +52,7 @@ def _alembic_applied() -> bool:
             """)).scalar()
         return bool(row)
     except Exception:
+        log.exception("No se pudo consultar la versión de Alembic")
         return False
 
 

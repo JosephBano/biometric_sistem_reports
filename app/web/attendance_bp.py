@@ -146,8 +146,9 @@ def crear_justificacion():
             hora_recuperacion_fin=hora_recuperacion_fin,
         )
         return jsonify({"success": True, "justificacion": result}), 201
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando justificación")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.patch("/api/justificaciones/<int:jid>")
@@ -224,8 +225,9 @@ def actualizar_justificacion(jid: int):
         if actualizar_justificacion_completa(jid, **campos):
             return jsonify({"success": True})
         return jsonify({"error": "No se realizaron cambios o campos inválidos"}), 400
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": f"Error al actualizar: {str(e)}"}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando asistencia")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.delete("/api/justificaciones/<int:jid>")
@@ -269,8 +271,9 @@ def crear_feriado():
     try:
         result = insertar_feriado(fecha, descripcion, tipo)
         return jsonify({"success": True, "feriado": result}), 201
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error registrando feriado")
+        return jsonify({"error": "Error interno del servidor"}), 500
 
 
 @bp.delete("/api/feriados/<fecha>")
@@ -295,8 +298,9 @@ def importar_feriados():
     try:
         count = importar_feriados_csv(filepath)
         return jsonify({"success": True, "total_importados": count})
-    except Exception as e:  # noqa: BLE001
-        return jsonify({"error": str(e)}), 500
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error importando feriados")
+        return jsonify({"error": "Error interno del servidor"}), 500
     finally:
         try:
             import os

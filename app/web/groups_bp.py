@@ -11,7 +11,16 @@ Rutas (6):
 """
 from __future__ import annotations
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from app.domain.groups import (
     actualizar_grupo as svc_actualizar_grupo,
@@ -68,10 +77,11 @@ def crear_grupo():
         if is_ajax:
             return jsonify({"ok": True, "grupo": nuevo})
         flash("Grupo creado exitosamente", "success")
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando grupo operativo")
         if is_ajax:
-            return jsonify({"ok": False, "error": str(e)}), 400
-        flash(f"Error: {e}", "danger")
+            return jsonify({"ok": False, "error": "Error interno del servidor"}), 500
+        flash("Error al crear el grupo", "danger")
     return redirect(url_for("groups.listar_grupos"))
 
 
@@ -89,8 +99,9 @@ def actualizar_grupo(id: str):
     try:
         svc_actualizar_grupo(id, datos)
         flash("Grupo actualizado", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando grupo operativo")
+        flash("Error al actualizar el grupo", "danger")
     return redirect(url_for("groups.listar_grupos"))
 
 
@@ -130,10 +141,11 @@ def crear_grupo_funcional():
         if is_ajax:
             return jsonify({"ok": True, "grupo_funcional": nuevo})
         flash("Grupo funcional creado exitosamente", "success")
-    except Exception as e:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error creando grupo funcional")
         if is_ajax:
-            return jsonify({"ok": False, "error": str(e)}), 400
-        flash(f"Error: {e}", "danger")
+            return jsonify({"ok": False, "error": "Error interno del servidor"}), 500
+        flash("Error al crear el grupo funcional", "danger")
     return redirect(url_for("groups.listar_grupos_funcionales"))
 
 
@@ -149,6 +161,7 @@ def actualizar_grupo_funcional(id: str):
     try:
         svc_actualizar_grupo_funcional(id, datos)
         flash("Grupo funcional actualizado", "success")
-    except Exception as e:  # noqa: BLE001
-        flash(f"Error: {e}", "danger")
+    except Exception:  # noqa: BLE001
+        current_app.logger.exception("Error actualizando grupo funcional")
+        flash("Error al actualizar el grupo funcional", "danger")
     return redirect(url_for("groups.listar_grupos_funcionales"))
